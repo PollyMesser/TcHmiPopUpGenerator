@@ -1,0 +1,11 @@
+name: Runner Test
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  hello:
+    runs-on: docker
+    steps:
+      - run: echo "Runner läuft!"
+      - run: node --version
