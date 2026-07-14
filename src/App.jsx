@@ -2,7 +2,7 @@ import React, { useState, useRef, useMemo } from "react";
 import {
   Plus, Trash2, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Copy, Check,
   Type, Eye, CircleDot, MousePointerClick, PencilLine, ToggleLeft, Columns2, Code2,
-  Monitor, Sun, Moon, GripVertical, Braces, Zap, Box, List, ChevronsUpDown
+  Monitor, Sun, Moon, GripVertical, Braces, Zap, Box, List, ChevronsUpDown, Tag
 } from "lucide-react";
 
 // ── Design-Tokens des Generators (nicht des erzeugten Popups) ──
@@ -38,6 +38,7 @@ const BLOCK_META = {
   row:    { label: "Zeile",           icon: Columns2,          hint: "2 Elemente nebeneinander" },
   enum:   { label: "Enum-Anzeige",    icon: List,              hint: "Wert → Klartext (Loc)" },
   enumset:{ label: "Enum setzen",     icon: ChevronsUpDown,    hint: "Dropdown, Wert → Klartext" },
+  status: { label: "Status (Bools)",  icon: Tag,               hint: "Mehrere Bools → Tag/Text mit Farbe" },
 };
 
 const WRITE_OPTS = [
@@ -56,7 +57,7 @@ const ITEM_KINDS = [
 let _id = 1;
 const nid = () => "b" + (_id++);
 
-const mkButton = () => ({ label: "OK", loc: "", symbol: "ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::xConfirm", writeMode: "pulse", pulseMs: 500, closeAfter: true, color: "blue" });
+const mkButton = () => ({ label: "OK", loc: "", symbol: "ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::xConfirm", writeMode: "pulse", pulseMs: 500, closeAfter: true, color: "blue", visSym: "", enableIf: [] });
 const mkItem = (kind) => {
   const base = { id: nid(), kind };
   if (kind === "input") return { ...base, label: "Sollwert", loc: "", symbol: "ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::nSetpoint", dataType: "number", sendLabel: "Setzen", sendLoc: "", sendColor: "blue" };
@@ -65,7 +66,9 @@ const mkItem = (kind) => {
 };
 
 let _eid = 1;
-const mkEnumEntry = (value, text) => ({ id: "e" + (_eid++), value: value == null ? "" : String(value), loc: "", text: text || "" });
+const mkCond = () => ({ id: "c" + (_eid++), symbol: "", op: "==", value: "true" });
+const mkEnumEntry = (value, text, color) => ({ id: "e" + (_eid++), value: value == null ? "" : String(value), loc: "", text: text || "", color: color || "blue" });
+const mkStatusEntry = (symbol, text, color) => ({ id: "s" + (_eid++), symbol: symbol || "ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::xState", loc: "", text: text || "Status", color: color || "green" });
 
 const newBlock = (type) => {
   switch (type) {
@@ -76,8 +79,11 @@ const newBlock = (type) => {
     case "input":  return { id: nid(), type, col: 0, label: "Sollwert", loc: "", symbol: "ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::nSetpoint", dataType: "number", sendLabel: "Setzen", sendLoc: "", sendColor: "blue" };
     case "button": return { id: nid(), type, col: 0, buttons: [mkButton()] };
     case "row":    return { id: nid(), type, col: 0, items: [mkItem("read"), mkItem("input")] };
-    case "enum":    return { id: nid(), type, col: 0, label: "Status", loc: "", symbol: "ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::eState", numeric: true, map: [mkEnumEntry(0, "Aus"), mkEnumEntry(1, "Ein")], fbLoc: "", fbText: "" };
+    case "enum":    return { id: nid(), type, col: 0, label: "Status", loc: "", symbol: "ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::eState", numeric: true, display: "text", map: [mkEnumEntry(0, "Aus", "grey"), mkEnumEntry(1, "Ein", "green")], fbLoc: "", fbText: "", fbColor: "grey" };
     case "enumset": return { id: nid(), type, col: 0, label: "Modus", loc: "", symbol: "ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::eMode", numeric: true, map: [mkEnumEntry(0, "Hand"), mkEnumEntry(1, "Automatik")] };
+    case "status":  return { id: nid(), type, col: 0, label: "Status", loc: "", display: "badge",
+      map: [mkStatusEntry("ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::xRunning", "Läuft", "green"), mkStatusEntry("ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::xFault", "Störung", "red")],
+      fbLoc: "", fbText: "Bereit", fbColor: "grey" };
     default:       return { id: nid(), type: "text", col: 0, text: "", loc: "" };
   }
 };
@@ -116,6 +122,28 @@ const attrName = (s) => {
 };
 const dedent = (s, n) => s.replace(new RegExp("^ {" + n + "}", "gm"), "");
 const I = "                    "; // 20 Leerzeichen
+
+// ── Bedingungs-Vergleich (bool / int / enum) ──
+const litValue = (s) => {
+  s = (s == null ? "" : String(s)).trim();
+  if (s === "true") return "true";
+  if (s === "false") return "false";
+  if (s !== "" && !isNaN(Number(s))) return String(Number(s));
+  return JSON.stringify(s);
+};
+const cmpExpr = (readExpr, op, valueStr) => {
+  const lit = litValue(valueStr);
+  switch (op) {
+    case "!=": return `${readExpr} != ${lit}`;
+    case "<":  return `Number(${readExpr}) < ${lit}`;
+    case "<=": return `Number(${readExpr}) <= ${lit}`;
+    case ">":  return `Number(${readExpr}) > ${lit}`;
+    case ">=": return `Number(${readExpr}) >= ${lit}`;
+    default:   return `${readExpr} == ${lit}`;
+  }
+};
+const condOp = (c) => (c.op || "==");
+const condVal = (c) => (c.op != null ? c.value : (c.equals ? "true" : "false"));
 
 const REF = '/// <reference path="./../../Packages/Beckhoff.TwinCAT.HMI.Framework.14.3.500/runtimes/native1.12-tchmi/TcHmi.d.ts" />';
 
@@ -156,7 +184,19 @@ function emitButtons(parent, b, mb) {
     const col = COLORS[btn.color] || COLORS.blue;
     const close = btn.closeAfter ? `\n${I}        hideDialog();` : "";
     const v = "btn" + idx;
-    return `${I}    // ${btn.writeMode}: ${btn.symbol}\n${I}    var ${v} = document.createElement('button');\n${I}    ${v}.style.cssText = 'flex:1;padding:12px 0;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;background:${col.bg};color:${col.text};';\n${I}    ${v}.textContent = ${locExpr(btn.loc, btn.label)};\n${I}    ${v}.addEventListener('pointerdown', function (e) { e.stopPropagation(); });\n${I}    ${v}.onclick = function (e) { e.stopPropagation(); ${action};${close} };\n${I}    row.appendChild(${v});`;
+    const vis = (btn.visSym || "").trim()
+      ? `\n${I}    ${v}.style.display = 'none';\n${I}    subscribe(${jsStr(wrapSym(btn.visSym))}, function (vis) { ${v}.style.display = vis ? '' : 'none'; });`
+      : "";
+    const press = `\n${I}    ${v}.style.transition = 'transform .08s ease, filter .08s ease';\n${I}    ${v}.addEventListener('pointerdown', function () { ${v}.style.transform = 'scale(0.96)'; ${v}.style.filter = 'brightness(0.88)'; });\n${I}    var rel_${v} = function () { ${v}.style.transform = ''; ${v}.style.filter = ''; };\n${I}    ${v}.addEventListener('pointerup', rel_${v});\n${I}    ${v}.addEventListener('pointerleave', rel_${v});`;
+    const conds = btn.enableIf || [];
+    let enable = "";
+    if (conds.length) {
+      const valsInit = conds.map(() => "null").join(", ");
+      const expr = conds.map((c, ci) => `(${cmpExpr("vals[" + ci + "]", condOp(c), condVal(c))})`).join(" && ");
+      const subs = conds.map((c, ci) => `${I}        subscribe(${jsStr(wrapSym(c.symbol))}, function (v) { vals[${ci}] = v; upd(); });`).join("\n");
+      enable = `\n${I}    (function () {\n${I}        var vals = [${valsInit}];\n${I}        function upd() {\n${I}            var enabled = ${expr};\n${I}            ${v}.disabled = !enabled;\n${I}            ${v}.style.opacity = enabled ? '1' : '0.45';\n${I}            ${v}.style.cursor = enabled ? 'pointer' : 'not-allowed';\n${I}        }\n${subs}\n${I}        upd();\n${I}    })();`;
+    }
+    return `${I}    // ${btn.writeMode}: ${btn.symbol}\n${I}    var ${v} = document.createElement('button');\n${I}    ${v}.style.cssText = 'flex:1;padding:12px 0;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;background:${col.bg};color:${col.text};';\n${I}    ${v}.textContent = ${locExpr(btn.loc, btn.label)};\n${I}    ${v}.addEventListener('pointerdown', function (e) { e.stopPropagation(); });\n${I}    ${v}.onclick = function (e) { e.stopPropagation(); ${action};${close} };${vis}${press}${enable}\n${I}    row.appendChild(${v});`;
   }).join("\n");
   return `${I}// Buttons\n${I}(function () {\n${I}    var row = document.createElement('div');\n${I}    row.style.cssText = 'display:flex;gap:10px;margin-bottom:${mb};';\n${lines}\n${I}    ${parent}.appendChild(row);\n${I}})();`;
 }
@@ -168,7 +208,7 @@ function emitItem(parent, it, mb) {
   return "";
 }
 function emitRow(parent, b) {
-  const items = (b.items || []).slice(0, 2);
+  const items = (b.items || []).slice(0, 4);
   const cols = items.map((it, idx) => {
     const cv = "rc" + idx;
     return `${I}    var ${cv} = document.createElement('div');\n${I}    ${cv}.style.cssText = 'flex:1;min-width:0;';\n${I}    rrow.appendChild(${cv});\n${emitItem(cv, it, "0px")}`;
@@ -177,15 +217,45 @@ function emitRow(parent, b) {
 }
 function emitEnum(parent, b, mb) {
   const sym = jsStr(wrapSym(b.symbol));
-  const cmp = (b.map || []).map((e) => `${I}        if (String(v) === ${jsStr(String(e.value))}) return ${locExpr(e.loc, e.text)};`).join("\n");
-  const fb = (b.fbLoc || b.fbText) ? locExpr(b.fbLoc, b.fbText) : "String(v)";
-  return `${I}// Enum-Anzeige: ${b.symbol}\n${I}(function () {\n${I}    var lbl = ${locExpr(b.loc, b.label)};\n${I}    var el = document.createElement('div');\n${I}    el.style.cssText = 'font-size:14px;color:' + p.bodyText + ';line-height:1.5;margin-bottom:${mb};';\n${I}    el.textContent = lbl + ': …';\n${I}    ${parent}.appendChild(el);\n${I}    function mapVal(v) {\n${cmp}\n${I}        return ${fb};\n${I}    }\n${I}    subscribe(${sym}, function (v) { el.textContent = lbl + ': ' + mapVal(v); });\n${I}})();`;
+  const entries = b.map || [];
+  const isBadge = b.display === "badge";
+  const paintBody = isBadge
+    ? `${I}        badge.style.cssText = 'display:inline-block;padding:3px 10px;border-radius:999px;font-size:13px;font-weight:600;background:' + bg + ';color:' + fg + ';';`
+    : `${I}        badge.style.cssText = 'font-size:14px;font-weight:600;color:' + bg + ';';`;
+  const labelCode = (b.label || b.loc)
+    ? `${I}    var lblEl = document.createElement('span');\n${I}    lblEl.style.cssText = 'font-size:14px;color:' + p.bodyText + ';';\n${I}    lblEl.textContent = ${locExpr(b.loc, b.label)} + ':';\n${I}    row.appendChild(lblEl);\n`
+    : "";
+  const chain = entries.map((e) => {
+    const col = COLORS[e.color] || COLORS.grey;
+    return `${I}        if (String(v) === ${jsStr(String(e.value))}) { paint(${locExpr(e.loc, e.text)}, ${jsStr(col.bg)}, ${jsStr(col.text)}); return; }`;
+  }).join("\n");
+  const fbCol = COLORS[b.fbColor] || COLORS.grey;
+  const fbText = (b.fbLoc || b.fbText) ? locExpr(b.fbLoc, b.fbText) : "String(v)";
+  return `${I}// Enum-Anzeige (${isBadge ? "Badge" : "Text"}): ${b.symbol}\n${I}(function () {\n${I}    var row = document.createElement('div');\n${I}    row.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:${mb};';\n${labelCode}${I}    var badge = document.createElement('span');\n${I}    row.appendChild(badge);\n${I}    ${parent}.appendChild(row);\n${I}    function paint(text, bg, fg) {\n${I}        badge.textContent = text;\n${paintBody}\n${I}    }\n${I}    function apply(v) {\n${chain}\n${I}        paint(${fbText}, ${jsStr(fbCol.bg)}, ${jsStr(fbCol.text)});\n${I}    }\n${I}    subscribe(${sym}, function (v) { apply(v); });\n${I}})();`;
 }
 function emitEnumSet(parent, b, mb) {
   const sym = jsStr(wrapSym(b.symbol));
   const opts = (b.map || []).map((e, i) => `${I}    var o${i} = document.createElement('option'); o${i}.value = ${jsStr(String(e.value))}; o${i}.textContent = ${locExpr(e.loc, e.text)}; sel.appendChild(o${i});`).join("\n");
   const parse = b.numeric ? "parseInt(sel.value, 10)" : "sel.value";
   return `${I}// Enum setzen (Dropdown): ${b.symbol}\n${I}(function () {\n${I}    var wrap = document.createElement('div');\n${I}    wrap.style.cssText = 'margin-bottom:${mb};';\n${I}    var lbl = document.createElement('div');\n${I}    lbl.style.cssText = 'font-size:13px;color:' + p.bodyText + ';margin-bottom:6px;';\n${I}    lbl.textContent = ${locExpr(b.loc, b.label)};\n${I}    var sel = document.createElement('select');\n${I}    sel.style.cssText = 'width:100%;box-sizing:border-box;padding:9px 10px;border-radius:8px;font-size:14px;outline:none;cursor:pointer;' +\n${I}        'border:1px solid ' + p.border + ';background:' + p.boxBg + ';color:' + p.bodyText + ';';\n${opts}\n${I}    sel.addEventListener('pointerdown', function (e) { e.stopPropagation(); });\n${I}    sel.addEventListener('change', function () { writeSymbol(${sym}, ${parse}); });\n${I}    wrap.appendChild(lbl); wrap.appendChild(sel);\n${I}    ${parent}.appendChild(wrap);\n${I}    subscribe(${sym}, function (v) { if (document.activeElement !== sel) sel.value = String(v); });\n${I}})();`;
+}
+function emitStatus(parent, b, mb) {
+  const entries = b.map || [];
+  const isBadge = b.display !== "text";
+  const paintBody = isBadge
+    ? `${I}        badge.style.cssText = 'display:inline-block;padding:3px 10px;border-radius:999px;font-size:13px;font-weight:600;background:' + bg + ';color:' + fg + ';';`
+    : `${I}        badge.style.cssText = 'font-size:14px;font-weight:600;color:' + bg + ';';`;
+  const labelCode = (b.label || b.loc)
+    ? `${I}    var lblEl = document.createElement('span');\n${I}    lblEl.style.cssText = 'font-size:14px;color:' + p.bodyText + ';';\n${I}    lblEl.textContent = ${locExpr(b.loc, b.label)} + ':';\n${I}    row.appendChild(lblEl);\n`
+    : "";
+  const stateInit = entries.map(() => "false").join(", ");
+  const chain = entries.map((e, i) => {
+    const col = COLORS[e.color] || COLORS.grey;
+    return `${I}        if (states[${i}]) { paint(${locExpr(e.loc, e.text)}, ${jsStr(col.bg)}, ${jsStr(col.text)}); return; }`;
+  }).join("\n");
+  const fbCol = COLORS[b.fbColor] || COLORS.grey;
+  const subs = entries.map((e, i) => `${I}    subscribe(${jsStr(wrapSym(e.symbol))}, function (v) { states[${i}] = v; apply(); });`).join("\n");
+  return `${I}// Statusanzeige (${isBadge ? "Badge" : "Text"}) aus ${entries.length} Bools\n${I}(function () {\n${I}    var row = document.createElement('div');\n${I}    row.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:${mb};';\n${labelCode}${I}    var badge = document.createElement('span');\n${I}    row.appendChild(badge);\n${I}    ${parent}.appendChild(row);\n${I}    function paint(text, bg, fg) {\n${I}        badge.textContent = text;\n${paintBody}\n${I}    }\n${I}    var states = [${stateInit}];\n${I}    function apply() {\n${chain}\n${I}        paint(${locExpr(b.fbLoc, b.fbText)}, ${jsStr(fbCol.bg)}, ${jsStr(fbCol.text)});\n${I}    }\n${subs}\n${I}    apply();\n${I}})();`;
 }
 function blockCodeSym(b, parent) {
   if (b.type === "text") return emitText(parent, b, "16px");
@@ -197,6 +267,7 @@ function blockCodeSym(b, parent) {
   if (b.type === "row") return emitRow(parent, b);
   if (b.type === "enum") return emitEnum(parent, b, "16px");
   if (b.type === "enumset") return emitEnumSet(parent, b, "16px");
+  if (b.type === "status") return emitStatus(parent, b, "16px");
   return "";
 }
 
@@ -236,7 +307,17 @@ function emitButtonsUC(parent, b, mb) {
     const col = COLORS[btn.color] || COLORS.blue;
     const close = btn.closeAfter ? `\n${I}        hideDialog();` : "";
     const v = "btn" + idx;
-    return `${I}    // ${btn.writeMode}: ${attrName(btn.symbol)}\n${I}    var ${v} = document.createElement('button');\n${I}    ${v}.style.cssText = 'flex:1;padding:12px 0;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;background:${col.bg};color:${col.text};';\n${I}    ${v}.textContent = ${locExpr(btn.loc, btn.label)};\n${I}    ${v}.addEventListener('pointerdown', function (e) { e.stopPropagation(); });\n${I}    ${v}.onclick = function (e) { e.stopPropagation(); ${action};${close} };\n${I}    row.appendChild(${v});`;
+    const vis = (btn.visSym || "").trim()
+      ? `\n${I}    ${v}.style.display = 'none';\n${I}    updaters.push(function () { ${v}.style.display = gv(${jsStr(attrName(btn.visSym))}, false) ? '' : 'none'; });`
+      : "";
+    const press = `\n${I}    ${v}.style.transition = 'transform .08s ease, filter .08s ease';\n${I}    ${v}.addEventListener('pointerdown', function () { ${v}.style.transform = 'scale(0.96)'; ${v}.style.filter = 'brightness(0.88)'; });\n${I}    var rel_${v} = function () { ${v}.style.transform = ''; ${v}.style.filter = ''; };\n${I}    ${v}.addEventListener('pointerup', rel_${v});\n${I}    ${v}.addEventListener('pointerleave', rel_${v});`;
+    const conds = btn.enableIf || [];
+    let enable = "";
+    if (conds.length) {
+      const expr = conds.map((c) => `(${cmpExpr(`gv(${jsStr(attrName(c.symbol))}, null)`, condOp(c), condVal(c))})`).join(" && ");
+      enable = `\n${I}    (function () {\n${I}        function upd() {\n${I}            var enabled = ${expr};\n${I}            ${v}.disabled = !enabled;\n${I}            ${v}.style.opacity = enabled ? '1' : '0.45';\n${I}            ${v}.style.cursor = enabled ? 'pointer' : 'not-allowed';\n${I}        }\n${I}        updaters.push(upd);\n${I}        upd();\n${I}    })();`;
+    }
+    return `${I}    // ${btn.writeMode}: ${attrName(btn.symbol)}\n${I}    var ${v} = document.createElement('button');\n${I}    ${v}.style.cssText = 'flex:1;padding:12px 0;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;background:${col.bg};color:${col.text};';\n${I}    ${v}.textContent = ${locExpr(btn.loc, btn.label)};\n${I}    ${v}.addEventListener('pointerdown', function (e) { e.stopPropagation(); });\n${I}    ${v}.onclick = function (e) { e.stopPropagation(); ${action};${close} };${vis}${press}${enable}\n${I}    row.appendChild(${v});`;
   }).join("\n");
   return `${I}// Buttons (Attribut)\n${I}(function () {\n${I}    var row = document.createElement('div');\n${I}    row.style.cssText = 'display:flex;gap:10px;margin-bottom:${mb};';\n${lines}\n${I}    ${parent}.appendChild(row);\n${I}})();`;
 }
@@ -248,7 +329,7 @@ function emitItemUC(parent, it, mb) {
   return "";
 }
 function emitRowUC(parent, b) {
-  const items = (b.items || []).slice(0, 2);
+  const items = (b.items || []).slice(0, 4);
   const cols = items.map((it, idx) => {
     const cv = "rc" + idx;
     return `${I}    var ${cv} = document.createElement('div');\n${I}    ${cv}.style.cssText = 'flex:1;min-width:0;';\n${I}    rrow.appendChild(${cv});\n${emitItemUC(cv, it, "0px")}`;
@@ -257,15 +338,43 @@ function emitRowUC(parent, b) {
 }
 function emitEnumUC(parent, b, mb) {
   const a = jsStr(attrName(b.symbol));
-  const cmp = (b.map || []).map((e) => `${I}        if (String(v) === ${jsStr(String(e.value))}) return ${locExpr(e.loc, e.text)};`).join("\n");
-  const fb = (b.fbLoc || b.fbText) ? locExpr(b.fbLoc, b.fbText) : "String(v)";
-  return `${I}// Enum-Anzeige (Attribut): ${attrName(b.symbol)}\n${I}(function () {\n${I}    var lbl = ${locExpr(b.loc, b.label)};\n${I}    var el = document.createElement('div');\n${I}    el.style.cssText = 'font-size:14px;color:' + p.bodyText + ';line-height:1.5;margin-bottom:${mb};';\n${I}    el.textContent = lbl + ': …';\n${I}    ${parent}.appendChild(el);\n${I}    function mapVal(v) {\n${cmp}\n${I}        return ${fb};\n${I}    }\n${I}    updaters.push(function () { el.textContent = lbl + ': ' + mapVal(gv(${a}, null)); });\n${I}})();`;
+  const entries = b.map || [];
+  const isBadge = b.display === "badge";
+  const paintBody = isBadge
+    ? `${I}        badge.style.cssText = 'display:inline-block;padding:3px 10px;border-radius:999px;font-size:13px;font-weight:600;background:' + bg + ';color:' + fg + ';';`
+    : `${I}        badge.style.cssText = 'font-size:14px;font-weight:600;color:' + bg + ';';`;
+  const labelCode = (b.label || b.loc)
+    ? `${I}    var lblEl = document.createElement('span');\n${I}    lblEl.style.cssText = 'font-size:14px;color:' + p.bodyText + ';';\n${I}    lblEl.textContent = ${locExpr(b.loc, b.label)} + ':';\n${I}    row.appendChild(lblEl);\n`
+    : "";
+  const chain = entries.map((e) => {
+    const col = COLORS[e.color] || COLORS.grey;
+    return `${I}        if (String(v) === ${jsStr(String(e.value))}) { paint(${locExpr(e.loc, e.text)}, ${jsStr(col.bg)}, ${jsStr(col.text)}); return; }`;
+  }).join("\n");
+  const fbCol = COLORS[b.fbColor] || COLORS.grey;
+  const fbText = (b.fbLoc || b.fbText) ? locExpr(b.fbLoc, b.fbText) : "String(v)";
+  return `${I}// Enum-Anzeige (${isBadge ? "Badge" : "Text"}, Attribut): ${attrName(b.symbol)}\n${I}(function () {\n${I}    var row = document.createElement('div');\n${I}    row.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:${mb};';\n${labelCode}${I}    var badge = document.createElement('span');\n${I}    row.appendChild(badge);\n${I}    ${parent}.appendChild(row);\n${I}    function paint(text, bg, fg) {\n${I}        badge.textContent = text;\n${paintBody}\n${I}    }\n${I}    function apply(v) {\n${chain}\n${I}        paint(${fbText}, ${jsStr(fbCol.bg)}, ${jsStr(fbCol.text)});\n${I}    }\n${I}    updaters.push(function () { apply(gv(${a}, null)); });\n${I}})();`;
 }
 function emitEnumSetUC(parent, b, mb) {
   const a = jsStr(attrName(b.symbol));
   const opts = (b.map || []).map((e, i) => `${I}    var o${i} = document.createElement('option'); o${i}.value = ${jsStr(String(e.value))}; o${i}.textContent = ${locExpr(e.loc, e.text)}; sel.appendChild(o${i});`).join("\n");
   const parse = b.numeric ? "parseInt(sel.value, 10)" : "sel.value";
   return `${I}// Enum setzen (Attribut, Dropdown): ${attrName(b.symbol)}\n${I}(function () {\n${I}    var wrap = document.createElement('div');\n${I}    wrap.style.cssText = 'margin-bottom:${mb};';\n${I}    var lbl = document.createElement('div');\n${I}    lbl.style.cssText = 'font-size:13px;color:' + p.bodyText + ';margin-bottom:6px;';\n${I}    lbl.textContent = ${locExpr(b.loc, b.label)};\n${I}    var sel = document.createElement('select');\n${I}    sel.style.cssText = 'width:100%;box-sizing:border-box;padding:9px 10px;border-radius:8px;font-size:14px;outline:none;cursor:pointer;' +\n${I}        'border:1px solid ' + p.border + ';background:' + p.boxBg + ';color:' + p.bodyText + ';';\n${opts}\n${I}    sel.addEventListener('pointerdown', function (e) { e.stopPropagation(); });\n${I}    sel.addEventListener('change', function () { sv(${a}, ${parse}); });\n${I}    wrap.appendChild(lbl); wrap.appendChild(sel);\n${I}    ${parent}.appendChild(wrap);\n${I}    updaters.push(function () { if (document.activeElement !== sel) sel.value = String(gv(${a}, '')); });\n${I}})();`;
+}
+function emitStatusUC(parent, b, mb) {
+  const entries = b.map || [];
+  const isBadge = b.display !== "text";
+  const paintBody = isBadge
+    ? `${I}        badge.style.cssText = 'display:inline-block;padding:3px 10px;border-radius:999px;font-size:13px;font-weight:600;background:' + bg + ';color:' + fg + ';';`
+    : `${I}        badge.style.cssText = 'font-size:14px;font-weight:600;color:' + bg + ';';`;
+  const labelCode = (b.label || b.loc)
+    ? `${I}    var lblEl = document.createElement('span');\n${I}    lblEl.style.cssText = 'font-size:14px;color:' + p.bodyText + ';';\n${I}    lblEl.textContent = ${locExpr(b.loc, b.label)} + ':';\n${I}    row.appendChild(lblEl);\n`
+    : "";
+  const chain = entries.map((e) => {
+    const col = COLORS[e.color] || COLORS.grey;
+    return `${I}        if (gv(${jsStr(attrName(e.symbol))}, false)) { paint(${locExpr(e.loc, e.text)}, ${jsStr(col.bg)}, ${jsStr(col.text)}); return; }`;
+  }).join("\n");
+  const fbCol = COLORS[b.fbColor] || COLORS.grey;
+  return `${I}// Statusanzeige (${isBadge ? "Badge" : "Text"}) aus ${entries.length} Attribut-Bools\n${I}(function () {\n${I}    var row = document.createElement('div');\n${I}    row.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:${mb};';\n${labelCode}${I}    var badge = document.createElement('span');\n${I}    row.appendChild(badge);\n${I}    ${parent}.appendChild(row);\n${I}    function paint(text, bg, fg) {\n${I}        badge.textContent = text;\n${paintBody}\n${I}    }\n${I}    function apply() {\n${chain}\n${I}        paint(${locExpr(b.fbLoc, b.fbText)}, ${jsStr(fbCol.bg)}, ${jsStr(fbCol.text)});\n${I}    }\n${I}    updaters.push(apply);\n${I}    apply();\n${I}})();`;
 }
 function blockCodeUC(b, parent) {
   if (b.type === "text") return emitText(parent, b, "16px");
@@ -277,30 +386,51 @@ function blockCodeUC(b, parent) {
   if (b.type === "row") return emitRowUC(parent, b);
   if (b.type === "enum") return emitEnumUC(parent, b, "16px");
   if (b.type === "enumset") return emitEnumSetUC(parent, b, "16px");
+  if (b.type === "status") return emitStatusUC(parent, b, "16px");
   return "";
 }
 
-// ── Body-Inhalt (Spalten-Grid + Bausteine), Basis-Einrückung 20 ──
-function buildBodyContent(blocks, cols, emit) {
-  const grouped = groupByCol(blocks, cols);
+// ── Ein Spalten-Grid-Segment (nur Nicht-Zeilen-Bausteine), Basis 20 ──
+function gridSegment(items, cols, emit, gi) {
   if (cols <= 1) {
-    const arr = grouped[0];
-    return arr.length ? arr.map((b) => emit(b, "body")).join("\n\n") : `${I}// (noch keine Bausteine)`;
+    return items.map((b) => emit(b, "body")).join("\n\n");
   }
-  let out = `${I}var grid = document.createElement('div');\n${I}grid.style.cssText = 'display:grid;grid-template-columns:repeat(${cols},minmax(0,1fr));gap:0;align-items:start;';\n`;
+  const grouped = groupByCol(items, cols);
+  const g = "grid" + gi;
+  let out = `${I}var ${g} = document.createElement('div');\n${I}${g}.style.cssText = 'display:grid;grid-template-columns:repeat(${cols},minmax(0,1fr));gap:0;align-items:start;';\n`;
   for (let c = 0; c < cols; c++) {
-    const pv = "col" + c;
+    const pv = `g${gi}c${c}`;
     const padL = c === 0 ? 0 : 24;
     const padR = c === cols - 1 ? 0 : 24;
     const borderExpr = c > 0 ? ` + 'border-left:1px solid ' + p.border + ';'` : "";
     out += `${I}var ${pv} = document.createElement('div');\n`;
     out += `${I}${pv}.style.cssText = 'min-width:0;padding-left:${padL}px;padding-right:${padR}px;'${borderExpr};\n`;
-    out += `${I}grid.appendChild(${pv});\n`;
+    out += `${I}${g}.appendChild(${pv});\n`;
     const arr = grouped[c];
     out += arr.length ? "\n" + arr.map((b) => emit(b, pv)).join("\n\n") + "\n" : `${I}// (Spalte ${c + 1} leer)\n`;
   }
-  out += `${I}body.appendChild(grid);`;
+  out += `${I}body.appendChild(${g});`;
   return out;
+}
+
+// ── Body-Inhalt: Zeilen (row) sind volle Breite und brechen das Spalten-Grid ──
+function buildBodyContent(blocks, cols, emit) {
+  const parts = [];
+  let seg = [];
+  const flush = () => { if (seg.length) { parts.push({ kind: "grid", items: seg }); seg = []; } };
+  blocks.forEach((b) => {
+    if (b.type === "row") { flush(); parts.push({ kind: "row", block: b }); }
+    else seg.push(b);
+  });
+  flush();
+  if (parts.length === 0) return `${I}// (noch keine Bausteine)`;
+
+  let gi = 0;
+  const chunks = parts.map((part) => {
+    if (part.kind === "row") return emit(part.block, "body"); // volle Breite
+    return gridSegment(part.items, cols, emit, gi++);
+  });
+  return chunks.join("\n\n");
 }
 
 // ── Innerer Rumpf (Symbol-Modus), Basis-Einrückung 16 ──
@@ -638,8 +768,38 @@ function buildTitleStmt(mode, source, field, fallback, titleExpr) {
   return `${pad}title.textContent = ${jsStr(fallback || "")};\n${pad}subscribe(${jsStr(wrapSym(field))}, function (v) { title.textContent = String(v); });`;
 }
 
+// ── Konfigurations-Kommentar für verlustfreien Re-Import ──
+function buildConfigComment(cfg) {
+  const c = {
+    v: 1, mode: cfg.mode, fnName: cfg.fnName, title: cfg.title, titleLoc: cfg.titleLoc,
+    titleSource: cfg.titleSource, titleField: cfg.titleField, titleFallback: cfg.titleFallback,
+    maxWidth: cfg.maxWidth, columns: cfg.columns, hostSuffix: cfg.hostSuffix, blocks: cfg.blocks,
+  };
+  return `\n// ── AC_PopUp Generator: Konfiguration für Re-Import (diese Zeilen nicht entfernen) ──\n// AC_POPUP_CONFIG_V1: ${JSON.stringify(c)}\n`;
+}
+function parseConfigComment(text) {
+  const key = "AC_POPUP_CONFIG_V1:";
+  const i = (text || "").indexOf(key);
+  if (i < 0) return null;
+  let rest = text.slice(i + key.length);
+  const nl = rest.indexOf("\n");
+  if (nl >= 0) rest = rest.slice(0, nl);
+  try { return JSON.parse(rest.trim()); } catch (e) { return null; }
+}
+// Beim Import frische IDs vergeben (verhindert Kollisionen mit späteren Bausteinen)
+function reidBlocks(blocks) {
+  return (blocks || []).map((b) => {
+    const nb = { ...b, id: nid() };
+    if (nb.buttons) nb.buttons = nb.buttons.map((bt) => ({ ...bt, enableIf: (bt.enableIf || []).map((c) => ({ ...c, id: "c" + (_eid++) })) }));
+    if (nb.items) nb.items = nb.items.map((it) => ({ ...it, id: nid() }));
+    if (nb.map) nb.map = nb.map.map((e) => ({ ...e, id: "m" + (_eid++) }));
+    return nb;
+  });
+}
+
 // ── Haupt-Generator ──
-function generate(cfg) {
+function generate(cfg) { return generateCode(cfg) + buildConfigComment(cfg); }
+function generateCode(cfg) {
   const fn = sanitizeFn(cfg.fnName) || "AC_PopUp";
   const titleExpr = locExpr(cfg.titleLoc, cfg.title);
   const mw = Math.max(320, parseInt(cfg.maxWidth) || 400);
@@ -807,8 +967,18 @@ function BlockPreview({ b, pal, on, onToggle }) {
     </div>
   );
   if (b.type === "enum") {
-    const first = (b.map && b.map[0]) ? (b.map[0].text || "…") : "…";
-    return <div style={{ fontSize: 14, color: pal.bodyText, lineHeight: 1.5, marginBottom: 16 }}>{b.label}: {first}</div>;
+    const e0 = (b.map && b.map[0]) || null;
+    const col = e0 ? (COLORS[e0.color] || COLORS.grey) : (COLORS[b.fbColor] || COLORS.grey);
+    const txt = e0 ? (e0.text || "…") : (b.fbText || "…");
+    const badgeStyle = b.display === "badge"
+      ? { display: "inline-block", padding: "3px 10px", borderRadius: 999, fontSize: 13, fontWeight: 600, background: col.bg, color: col.text }
+      : { fontSize: 14, fontWeight: 600, color: col.bg };
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+        {(b.label || b.loc) ? <span style={{ fontSize: 14, color: pal.bodyText }}>{b.label}:</span> : null}
+        <span style={badgeStyle}>{txt}</span>
+      </div>
+    );
   }
   if (b.type === "enumset") return (
     <div style={{ marginBottom: 16 }}>
@@ -819,6 +989,20 @@ function BlockPreview({ b, pal, on, onToggle }) {
       </div>
     </div>
   );
+  if (b.type === "status") {
+    const e0 = (b.map && b.map[0]) || null;
+    const col = e0 ? (COLORS[e0.color] || COLORS.grey) : (COLORS[b.fbColor] || COLORS.grey);
+    const txt = e0 ? (e0.text || "…") : (b.fbText || "…");
+    const badgeStyle = b.display === "text"
+      ? { fontSize: 14, fontWeight: 600, color: col.bg }
+      : { display: "inline-block", padding: "3px 10px", borderRadius: 999, fontSize: 13, fontWeight: 600, background: col.bg, color: col.text };
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+        {(b.label || b.loc) ? <span style={{ fontSize: 14, color: pal.bodyText }}>{b.label}:</span> : null}
+        <span style={badgeStyle}>{txt}</span>
+      </div>
+    );
+  }
   return <div style={{ marginBottom: 16 }}><ItemPreview cfg={{ ...b, kind: b.type }} pal={pal} on={!!on[b.id]} onToggle={() => onToggle(b.id)} /></div>;
 }
 
@@ -843,7 +1027,7 @@ export default function App() {
   const [fnName, setFnName] = useState("AC_PopUp");
   const [title, setTitle] = useState("Freigabe");
   const [titleLoc, setTitleLoc] = useState("L_SkipReleaseTitle");
-  const [titleSource, setTitleSource] = useState("static"); // static | dynamic
+  const [titleSource, setTitleSource] = useState("static");
   const [titleField, setTitleField] = useState("TagName");
   const [titleFallback, setTitleFallback] = useState("Titel");
   const [maxWidth, setMaxWidth] = useState(400);
@@ -859,6 +1043,8 @@ export default function App() {
   const [previewDark, setPreviewDark] = useState(true);
   const [tab, setTab] = useState("preview");
   const [copied, setCopied] = useState(false);
+  const [importText, setImportText] = useState("");
+  const [importErr, setImportErr] = useState("");
   const [previewBools, setPreviewBools] = useState({});
   const [openId, setOpenId] = useState(blocks[0] ? blocks[0].id : null);
   const [dragId, setDragId] = useState(null);
@@ -870,19 +1056,27 @@ export default function App() {
   const code = useMemo(() => generate(cfg), [mode, fnName, title, titleLoc, titleSource, titleField, titleFallback, maxWidth, columns, hostSuffix, blocks]);
   const pal = previewDark ? PAL.dark : PAL.light;
   const boxW = Math.max(320, parseInt(maxWidth) || 400);
-  const grouped = groupByCol(blocks, columns);
   const sm = symMeta(mode);
   const dynLabel = mode === "usercontrol" ? "Aus Attribut" : "Aus Symbol";
   const previewTitle = titleSource === "dynamic" ? (titleFallback || "(dynamisch)") : (title || "Titel");
   const toggleBool = (id) => setPreviewBools((s) => ({ ...s, [id]: !s[id] }));
 
+  // Segmente: Zeilen (row) sind volle Breite und brechen das Spalten-Grid
+  const segments = useMemo(() => {
+    const parts = []; let seg = [];
+    const flush = () => { if (seg.length) { parts.push({ kind: "grid", items: seg }); seg = []; } };
+    blocks.forEach((b) => { if (b.type === "row") { flush(); parts.push({ kind: "row", block: b }); } else seg.push(b); });
+    flush();
+    return parts;
+  }, [blocks]);
+  const firstGrid = segments.findIndex((p) => p.kind === "grid");
+
   const patch = (id, p) => setBlocks((bs) => bs.map((b) => (b.id === id ? { ...b, ...p } : b)));
   const remove = (id) => setBlocks((bs) => bs.filter((b) => b.id !== id));
-
   const moveVertical = (id, dir) => setBlocks((bs) => {
     const b = bs.find((x) => x.id === id); if (!b) return bs;
     const col = clampCol(b, columns);
-    const inCol = bs.filter((x) => clampCol(x, columns) === col);
+    const inCol = bs.filter((x) => x.type !== "row" && clampCol(x, columns) === col);
     const pos = inCol.findIndex((x) => x.id === id);
     const swapWith = inCol[pos + dir];
     if (!swapWith) return bs;
@@ -892,27 +1086,34 @@ export default function App() {
     const tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp;
     return arr;
   });
+  const moveFlat = (id, dir) => setBlocks((bs) => {
+    const i = bs.findIndex((b) => b.id === id); if (i < 0) return bs;
+    const j = i + dir; if (j < 0 || j >= bs.length) return bs;
+    const arr = bs.slice(); const t = arr[i]; arr[i] = arr[j]; arr[j] = t; return arr;
+  });
   const moveHorizontal = (id, dir) => setBlocks((bs) => bs.map((b) =>
     b.id === id ? { ...b, col: Math.min(Math.max(clampCol(b, columns) + dir, 0), columns - 1) } : b
   ));
-
   const changeColumns = (n) => {
     setColumns(n);
     setBlocks((bs) => bs.map((b) => ({ ...b, col: Math.min(b.col || 0, n - 1) })));
     if (addTargetCol > n - 1) setAddTargetCol(n - 1);
   };
-
   const add = (type) => { const nb = { ...newBlock(type), col: addTargetCol }; setBlocks((bs) => [...bs, nb]); setOpenId(nb.id); };
   const patchBtn = (id, idx, p) => setBlocks((bs) => bs.map((b) => b.id === id ? { ...b, buttons: b.buttons.map((bt, i) => (i === idx ? { ...bt, ...p } : bt)) } : b));
   const addBtn = (id) => setBlocks((bs) => bs.map((b) => (b.id === id && b.buttons.length < 2) ? { ...b, buttons: [...b.buttons, mkButton()] } : b));
   const removeBtn = (id, idx) => setBlocks((bs) => bs.map((b) => b.id === id ? { ...b, buttons: b.buttons.filter((_, i) => i !== idx) } : b));
+  const addCond = (id, bi) => setBlocks((bs) => bs.map((b) => b.id === id ? { ...b, buttons: b.buttons.map((bt, i) => i === bi ? { ...bt, enableIf: [...(bt.enableIf || []), mkCond()] } : bt) } : b));
+  const removeCond = (id, bi, cid) => setBlocks((bs) => bs.map((b) => b.id === id ? { ...b, buttons: b.buttons.map((bt, i) => i === bi ? { ...bt, enableIf: (bt.enableIf || []).filter((c) => c.id !== cid) } : bt) } : b));
+  const patchCond = (id, bi, cid, p) => setBlocks((bs) => bs.map((b) => b.id === id ? { ...b, buttons: b.buttons.map((bt, i) => i === bi ? { ...bt, enableIf: (bt.enableIf || []).map((c) => (c.id === cid ? { ...c, ...p } : c)) } : bt) } : b));
   const patchItem = (id, idx, p) => setBlocks((bs) => bs.map((b) => b.id === id ? { ...b, items: b.items.map((it, i) => (i === idx ? { ...it, ...p } : it)) } : b));
-  const addItem = (id) => setBlocks((bs) => bs.map((b) => (b.id === id && b.items.length < 2) ? { ...b, items: [...b.items, mkItem("input")] } : b));
-  const removeItem = (id, idx) => setBlocks((bs) => bs.map((b) => b.id === id ? { ...b, items: b.items.filter((_, i) => i !== idx) } : b));
+  const addItem = (id) => setBlocks((bs) => bs.map((b) => (b.id === id && b.items.length < 4) ? { ...b, items: [...b.items, mkItem("read")] } : b));
+  const removeItem = (id, idx) => setBlocks((bs) => bs.map((b) => (b.id === id && b.items.length > 1) ? { ...b, items: b.items.filter((_, i) => i !== idx) } : b));
   const setItemKind = (id, idx, kind) => setBlocks((bs) => bs.map((b) => b.id === id ? { ...b, items: b.items.map((it, i) => i === idx ? { ...mkItem(kind), id: it.id, label: it.label, loc: it.loc, symbol: it.symbol } : it) } : b));
-  const patchEnumEntry = (id, eid, p) => setBlocks((bs) => bs.map((b) => b.id === id ? { ...b, map: b.map.map((e) => (e.id === eid ? { ...e, ...p } : e)) } : b));
+  const patchEntry = (id, eid, p) => setBlocks((bs) => bs.map((b) => b.id === id ? { ...b, map: b.map.map((e) => (e.id === eid ? { ...e, ...p } : e)) } : b));
   const addEnumEntry = (id) => setBlocks((bs) => bs.map((b) => b.id === id ? { ...b, map: [...b.map, mkEnumEntry("", "")] } : b));
-  const removeEnumEntry = (id, eid) => setBlocks((bs) => bs.map((b) => b.id === id ? { ...b, map: b.map.filter((e) => e.id !== eid) } : b));
+  const addStatusEntry = (id) => setBlocks((bs) => bs.map((b) => b.id === id ? { ...b, map: [...b.map, mkStatusEntry("", "Status", "grey")] } : b));
+  const removeEntry = (id, eid) => setBlocks((bs) => bs.map((b) => b.id === id ? { ...b, map: b.map.filter((e) => e.id !== eid) } : b));
 
   const handleDrop = (targetCol, beforeId) => {
     const id = dragId;
@@ -924,16 +1125,269 @@ export default function App() {
       const moved = { ...moving, col: targetCol };
       let idx;
       if (beforeId) { idx = rest.findIndex((b) => b.id === beforeId); if (idx < 0) idx = rest.length; }
-      else { let last = -1; rest.forEach((b, i) => { if (clampCol(b, columns) === targetCol) last = i; }); idx = last + 1; }
+      else { let last = -1; rest.forEach((b, i) => { if (b.type !== "row" && clampCol(b, columns) === targetCol) last = i; }); idx = last + 1; }
       rest.splice(idx, 0, moved);
       return rest;
     });
   };
-
   const doCopy = async () => {
     try { await navigator.clipboard.writeText(code); setCopied(true); setTimeout(() => setCopied(false), 1600); }
     catch { try { const ta = codeRef.current; if (ta) { ta.focus(); ta.select(); document.execCommand("copy"); setCopied(true); setTimeout(() => setCopied(false), 1600); } } catch {} }
   };
+  const doImport = () => {
+    const c = parseConfigComment(importText);
+    if (!c) { setImportErr("Keine gültige Konfiguration gefunden. Bitte den kompletten vom Generator erzeugten Code einfügen (inklusive der Kommentarzeile „AC_POPUP_CONFIG_V1:“ am Ende)."); return; }
+    setMode(c.mode || "registered");
+    setFnName(c.fnName || "AC_PopUp");
+    setTitle(c.title || "");
+    setTitleLoc(c.titleLoc || "");
+    setTitleSource(c.titleSource || "static");
+    setTitleField(c.titleField || "TagName");
+    setTitleFallback(c.titleFallback || "");
+    setMaxWidth(c.maxWidth || 400);
+    setColumns(Math.min(Math.max(parseInt(c.columns) || 1, 1), 3));
+    setHostSuffix(c.hostSuffix || ".btn_PopUp");
+    const nb = reidBlocks(c.blocks || []);
+    setBlocks(nb);
+    setOpenId(nb[0] ? nb[0].id : null);
+    setAddTargetCol(0);
+    setImportErr(""); setImportText(""); setTab("preview");
+  };
+
+  // ── Karte (Accordion + Griff-Drag), auch für volle-Breite-Zeilen ──
+  const renderCard = (b, opts) => {
+    const { c, i, colLen, fullWidth } = opts;
+    const meta = BLOCK_META[b.type]; const Icon = meta.icon; const open = openId === b.id;
+    const isDropBefore = dropTarget && dropTarget.beforeId === b.id;
+    const dropCol = fullWidth ? clampCol(b, columns) : c;
+    return (
+      <div key={b.id}
+        draggable={grabbedId === b.id}
+        onDragStart={() => setDragId(b.id)}
+        onDragEnd={() => { setDragId(null); setGrabbedId(null); setDropTarget(null); }}
+        onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setDropTarget({ col: dropCol, beforeId: b.id }); }}
+        onDrop={(e) => { e.preventDefault(); e.stopPropagation(); handleDrop(dropCol, b.id); }}
+        style={{
+          background: open ? T.panel2 : T.panel, border: `1px solid ${open ? T.accentDim : T.border}`,
+          borderTop: isDropBefore ? `2px solid ${T.accent}` : `1px solid ${open ? T.accentDim : T.border}`,
+          borderRadius: 7, padding: 8, marginBottom: 8, opacity: dragId === b.id ? 0.4 : 1,
+        }}>
+        <div onClick={() => setOpenId(open ? null : b.id)} style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+          <span onMouseDown={(e) => { e.stopPropagation(); setGrabbedId(b.id); }} onMouseUp={() => setGrabbedId(null)} onClick={(e) => e.stopPropagation()} title="Ziehen zum Verschieben" style={{ flex: "0 0 auto", cursor: "grab", display: "flex" }}>
+            <GripVertical size={14} color={T.muted} />
+          </span>
+          <ChevronRight size={14} color={T.muted} style={{ flex: "0 0 auto", transform: open ? "rotate(90deg)" : "none", transition: "transform .15s" }} />
+          <Icon size={14} color={T.accent} style={{ flex: "0 0 auto" }} />
+          <span style={{ fontSize: 12, fontWeight: 600, flex: "0 0 auto" }}>{meta.label}</span>
+          {fullWidth && <span style={{ fontSize: 9, fontWeight: 700, color: T.accent, border: `1px solid ${T.accentDim}`, borderRadius: 4, padding: "1px 4px", flex: "0 0 auto" }}>VOLLE BREITE</span>}
+          {!open && <span style={{ fontSize: 11, color: T.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>· {blockSummary(b)}</span>}
+          <div style={{ marginLeft: "auto", display: "flex", gap: 2, flex: "0 0 auto" }}>
+            {fullWidth ? (
+              <>
+                <IconBtn onClick={() => moveFlat(b.id, -1)} title="Nach oben"><ChevronUp size={14} /></IconBtn>
+                <IconBtn onClick={() => moveFlat(b.id, 1)} title="Nach unten"><ChevronDown size={14} /></IconBtn>
+              </>
+            ) : (
+              <>
+                <IconBtn disabled={i === 0} onClick={() => moveVertical(b.id, -1)} title="Nach oben"><ChevronUp size={14} /></IconBtn>
+                <IconBtn disabled={i === colLen - 1} onClick={() => moveVertical(b.id, 1)} title="Nach unten"><ChevronDown size={14} /></IconBtn>
+                {columns > 1 && <IconBtn disabled={c === 0} onClick={() => moveHorizontal(b.id, -1)} title="Spalte links"><ChevronLeft size={14} /></IconBtn>}
+                {columns > 1 && <IconBtn disabled={c === columns - 1} onClick={() => moveHorizontal(b.id, 1)} title="Spalte rechts"><ChevronRight size={14} /></IconBtn>}
+              </>
+            )}
+            <IconBtn danger onClick={() => remove(b.id)} title="Löschen"><Trash2 size={14} /></IconBtn>
+          </div>
+        </div>
+
+        {open && (
+          <div style={{ marginTop: 10 }}>
+            {b.type === "text" && <Field label="TEXT"><TextArea value={b.text} onChange={(e) => patch(b.id, { text: e.target.value })} /></Field>}
+            {(b.type === "read" || b.type === "bool" || b.type === "check") && <ReadBoolFields cfg={b} mode={mode} onPatch={(o) => patch(b.id, o)} />}
+            {b.type === "input" && <InputFields cfg={b} mode={mode} onPatch={(o) => patch(b.id, o)} />}
+
+            {b.type === "button" && (
+              <>
+                {b.buttons.map((bt, bi) => (
+                  <div key={bi} style={{ border: `1px solid ${T.border}`, borderRadius: 6, padding: 10, marginBottom: 8 }}>
+                    <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
+                      <span style={{ fontSize: 11, color: T.muted, fontWeight: 600 }}>Button {bi + 1}</span>
+                      {b.buttons.length > 1 && <div style={{ marginLeft: "auto" }}><IconBtn danger onClick={() => removeBtn(b.id, bi)}><Trash2 size={13} /></IconBtn></div>}
+                    </div>
+                    <div style={{ display: "flex", gap: 10 }}>
+                      <div style={{ flex: 2 }}><Field label="BESCHRIFTUNG"><TextInput value={bt.label} onChange={(e) => patchBtn(b.id, bi, { label: e.target.value })} /></Field></div>
+                      <div style={{ flex: 2 }}><Field label="LOC-KEY (optional)"><TextInput value={bt.loc} onChange={(e) => patchBtn(b.id, bi, { loc: e.target.value })} placeholder="L_…" /></Field></div>
+                    </div>
+                    <Field label={sm.label}><TextInput value={bt.symbol} onChange={(e) => patchBtn(b.id, bi, { symbol: e.target.value })} placeholder={sm.ph} /></Field>
+                    <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
+                      <div style={{ flex: 1 }}><Field label="AKTION"><Select value={bt.writeMode} onChange={(e) => patchBtn(b.id, bi, { writeMode: e.target.value })} options={WRITE_OPTS} /></Field></div>
+                      {bt.writeMode === "pulse" && <div style={{ width: 90 }}><Field label="DAUER (ms)"><TextInput type="number" value={bt.pulseMs} onChange={(e) => patchBtn(b.id, bi, { pulseMs: e.target.value })} /></Field></div>}
+                    </div>
+                    <Field label="FARBE"><ColorSwatches value={bt.color} onChange={(cc) => patchBtn(b.id, bi, { color: cc })} /></Field>
+                    <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: T.muted, cursor: "pointer", marginTop: 2, marginBottom: 8 }}>
+                      <input type="checkbox" checked={!!bt.closeAfter} onChange={(e) => patchBtn(b.id, bi, { closeAfter: e.target.checked })} /> Popup nach Klick schließen
+                    </label>
+                    <Field label={`NUR SICHTBAR WENN ${mode === "usercontrol" ? "(Attribut-Bool)" : "(Symbol-Bool)"} – optional`}>
+                      <TextInput value={bt.visSym || ""} onChange={(e) => patchBtn(b.id, bi, { visSym: e.target.value })} placeholder={mode === "usercontrol" ? "z.B. Fault (leer = immer sichtbar)" : "ADS.…::xFault (leer = immer sichtbar)"} />
+                    </Field>
+                    <div style={{ fontSize: 11, color: T.muted, fontWeight: 600, margin: "6px 0 6px" }}>AKTIV WENN (alle Bedingungen erfüllt)</div>
+                    {(bt.enableIf || []).map((cnd) => (
+                      <div key={cnd.id} style={{ display: "flex", gap: 6, marginBottom: 6, alignItems: "flex-end" }}>
+                        <div style={{ flex: 1 }}><Field label={mode === "usercontrol" ? "ATTRIBUT" : "SYMBOL"}><TextInput value={cnd.symbol} onChange={(e) => patchCond(b.id, bi, cnd.id, { symbol: e.target.value })} placeholder={mode === "usercontrol" ? "z.B. Mode" : "ADS.…::eMode"} /></Field></div>
+                        <div style={{ width: 62 }}><Field label="OP"><Select value={condOp(cnd)} onChange={(e) => patchCond(b.id, bi, cnd.id, { op: e.target.value })} options={[{ value: "==", label: "=" }, { value: "!=", label: "≠" }, { value: "<", label: "<" }, { value: "<=", label: "≤" }, { value: ">", label: ">" }, { value: ">=", label: "≥" }]} /></Field></div>
+                        <div style={{ width: 72 }}><Field label="WERT"><TextInput value={condVal(cnd)} onChange={(e) => patchCond(b.id, bi, cnd.id, { value: e.target.value })} placeholder="1 / true" /></Field></div>
+                        <div style={{ marginBottom: 10 }}><IconBtn danger onClick={() => removeCond(b.id, bi, cnd.id)}><Trash2 size={13} /></IconBtn></div>
+                      </div>
+                    ))}
+                    <button onClick={() => addCond(b.id, bi)} style={{ display: "flex", alignItems: "center", gap: 6, background: "transparent", color: T.text, border: `1px dashed ${T.border}`, borderRadius: 6, padding: "6px 10px", fontSize: 12, cursor: "pointer" }}>
+                      <Plus size={12} color={T.accent} /> Bedingung {(bt.enableIf || []).length ? "(UND)" : ""}
+                    </button>
+                    <div style={{ fontSize: 11, color: T.muted, marginTop: 4 }}>Keine Bedingung = immer aktiv. Wert kann bool (true/false), Zahl oder Enum sein – z.B. Mode ≠ 1.</div>
+                  </div>
+                ))}
+                {b.buttons.length < 2 && (
+                  <button onClick={() => addBtn(b.id)} style={{ display: "flex", alignItems: "center", gap: 6, background: "transparent", color: T.text, border: `1px dashed ${T.border}`, borderRadius: 6, padding: "6px 10px", fontSize: 12, cursor: "pointer" }}>
+                    <Plus size={12} color={T.accent} /> Zweiter Button
+                  </button>
+                )}
+              </>
+            )}
+
+            {b.type === "row" && (
+              <>
+                <div style={{ fontSize: 11, color: T.muted, marginBottom: 8 }}>Volle Breite · 1–4 Elemente nebeneinander</div>
+                {b.items.map((it, ii) => (
+                  <div key={it.id} style={{ border: `1px solid ${T.border}`, borderRadius: 6, padding: 10, marginBottom: 8 }}>
+                    <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
+                      <span style={{ fontSize: 11, color: T.muted, fontWeight: 600 }}>Element {ii + 1}</span>
+                      {b.items.length > 1 && <div style={{ marginLeft: "auto" }}><IconBtn danger onClick={() => removeItem(b.id, ii)}><Trash2 size={13} /></IconBtn></div>}
+                    </div>
+                    <Field label="TYP"><Select value={it.kind} onChange={(e) => setItemKind(b.id, ii, e.target.value)} options={ITEM_KINDS} /></Field>
+                    {it.kind === "input"
+                      ? <InputFields cfg={it} mode={mode} onPatch={(o) => patchItem(b.id, ii, o)} />
+                      : <ReadBoolFields cfg={it} mode={mode} onPatch={(o) => patchItem(b.id, ii, o)} />}
+                  </div>
+                ))}
+                {b.items.length < 4 && (
+                  <button onClick={() => addItem(b.id)} style={{ display: "flex", alignItems: "center", gap: 6, background: "transparent", color: T.text, border: `1px dashed ${T.border}`, borderRadius: 6, padding: "6px 10px", fontSize: 12, cursor: "pointer" }}>
+                    <Plus size={12} color={T.accent} /> Element ({b.items.length}/4)
+                  </button>
+                )}
+              </>
+            )}
+
+            {(b.type === "enum" || b.type === "enumset") && (
+              <>
+                <div style={{ display: "flex", gap: 10 }}>
+                  <div style={{ flex: 2 }}><Field label="LABEL"><TextInput value={b.label} onChange={(e) => patch(b.id, { label: e.target.value })} /></Field></div>
+                  <div style={{ flex: 2 }}><Field label="LOC-KEY (optional)"><TextInput value={b.loc} onChange={(e) => patch(b.id, { loc: e.target.value })} placeholder="L_…" /></Field></div>
+                </div>
+                <Field label={sm.label}><TextInput value={b.symbol} onChange={(e) => patch(b.id, { symbol: e.target.value })} placeholder={sm.ph} /></Field>
+                <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: T.muted, cursor: "pointer", marginBottom: 8 }}>
+                  <input type="checkbox" checked={!!b.numeric} onChange={(e) => patch(b.id, { numeric: e.target.checked })} /> Wert ist numerisch (parseInt beim Schreiben)
+                </label>
+                {b.type === "enum" && (
+                  <Field label="DARSTELLUNG">
+                    <div style={{ display: "flex", gap: 8 }}>
+                      {[["text", "Text"], ["badge", "Tag / Badge"]].map(([v, lab]) => {
+                        const selD = (b.display || "text") === v;
+                        return <button key={v} onClick={() => patch(b.id, { display: v })}
+                          style={{ flex: 1, background: selD ? T.panel2 : "transparent", color: selD ? T.text : T.muted, border: `1px solid ${selD ? T.accentDim : T.border}`, borderRadius: 6, padding: "7px 0", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{lab}</button>;
+                      })}
+                    </div>
+                  </Field>
+                )}
+                <div style={{ fontSize: 11, color: T.muted, fontWeight: 600, margin: "4px 0 6px" }}>WERT → TEXT{b.type === "enum" ? " → FARBE" : ""}</div>
+                {b.map.map((e) => (
+                  <div key={e.id} style={{ marginBottom: 8 }}>
+                    <div style={{ display: "flex", gap: 6, alignItems: "flex-end" }}>
+                      <div style={{ width: 64 }}><Field label="WERT"><TextInput value={e.value} onChange={(ev) => patchEntry(b.id, e.id, { value: ev.target.value })} /></Field></div>
+                      <div style={{ flex: 1 }}><Field label="LOC-KEY"><TextInput value={e.loc} onChange={(ev) => patchEntry(b.id, e.id, { loc: ev.target.value })} placeholder="L_…" /></Field></div>
+                      <div style={{ flex: 1 }}><Field label="TEXT"><TextInput value={e.text} onChange={(ev) => patchEntry(b.id, e.id, { text: ev.target.value })} /></Field></div>
+                      <div style={{ marginBottom: 10 }}><IconBtn danger onClick={() => removeEntry(b.id, e.id)}><Trash2 size={13} /></IconBtn></div>
+                    </div>
+                    {b.type === "enum" && <div style={{ paddingLeft: 2 }}><ColorSwatches value={e.color} onChange={(cc) => patchEntry(b.id, e.id, { color: cc })} /></div>}
+                  </div>
+                ))}
+                <button onClick={() => addEnumEntry(b.id)} style={{ display: "flex", alignItems: "center", gap: 6, background: "transparent", color: T.text, border: `1px dashed ${T.border}`, borderRadius: 6, padding: "6px 10px", fontSize: 12, cursor: "pointer" }}>
+                  <Plus size={12} color={T.accent} /> Wert
+                </button>
+                {b.type === "enum" && (
+                  <>
+                    <div style={{ fontSize: 11, color: T.muted, fontWeight: 600, margin: "10px 0 6px" }}>FALLBACK (unbekannter Wert)</div>
+                    <div style={{ display: "flex", gap: 10 }}>
+                      <div style={{ flex: 1 }}><Field label="LOC-KEY (optional)"><TextInput value={b.fbLoc} onChange={(e) => patch(b.id, { fbLoc: e.target.value })} placeholder="L_…" /></Field></div>
+                      <div style={{ flex: 1 }}><Field label="TEXT (optional)"><TextInput value={b.fbText} onChange={(e) => patch(b.id, { fbText: e.target.value })} /></Field></div>
+                    </div>
+                    <Field label="FARBE"><ColorSwatches value={b.fbColor} onChange={(cc) => patch(b.id, { fbColor: cc })} /></Field>
+                    <div style={{ fontSize: 11, color: T.muted }}>Text leer lassen → Rohwert anzeigen.</div>
+                  </>
+                )}
+              </>
+            )}
+
+            {b.type === "status" && (
+              <>
+                <div style={{ display: "flex", gap: 10 }}>
+                  <div style={{ flex: 2 }}><Field label="LABEL (optional)"><TextInput value={b.label} onChange={(e) => patch(b.id, { label: e.target.value })} /></Field></div>
+                  <div style={{ flex: 2 }}><Field label="LOC-KEY (optional)"><TextInput value={b.loc} onChange={(e) => patch(b.id, { loc: e.target.value })} placeholder="L_…" /></Field></div>
+                </div>
+                <Field label="DARSTELLUNG">
+                  <div style={{ display: "flex", gap: 8 }}>
+                    {[["badge", "Tag / Badge"], ["text", "Text"]].map(([v, lab]) => {
+                      const sel = (b.display || "badge") === v;
+                      return <button key={v} onClick={() => patch(b.id, { display: v })}
+                        style={{ flex: 1, background: sel ? T.panel2 : "transparent", color: sel ? T.text : T.muted, border: `1px solid ${sel ? T.accentDim : T.border}`, borderRadius: 6, padding: "7px 0", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{lab}</button>;
+                    })}
+                  </div>
+                </Field>
+                <div style={{ fontSize: 11, color: T.muted, fontWeight: 600, margin: "4px 0 6px" }}>BOOLS (erster true gewinnt)</div>
+                {b.map.map((e) => (
+                  <div key={e.id} style={{ border: `1px solid ${T.border}`, borderRadius: 6, padding: 10, marginBottom: 8 }}>
+                    <div style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
+                      <span style={{ fontSize: 11, color: T.muted, fontWeight: 600 }}>Bool</span>
+                      {b.map.length > 1 && <div style={{ marginLeft: "auto" }}><IconBtn danger onClick={() => removeEntry(b.id, e.id)}><Trash2 size={13} /></IconBtn></div>}
+                    </div>
+                    <Field label={sm.label}><TextInput value={e.symbol} onChange={(ev) => patchEntry(b.id, e.id, { symbol: ev.target.value })} placeholder={sm.ph} /></Field>
+                    <div style={{ display: "flex", gap: 10 }}>
+                      <div style={{ flex: 2 }}><Field label="TEXT"><TextInput value={e.text} onChange={(ev) => patchEntry(b.id, e.id, { text: ev.target.value })} /></Field></div>
+                      <div style={{ flex: 2 }}><Field label="LOC-KEY (optional)"><TextInput value={e.loc} onChange={(ev) => patchEntry(b.id, e.id, { loc: ev.target.value })} placeholder="L_…" /></Field></div>
+                    </div>
+                    <Field label="FARBE"><ColorSwatches value={e.color} onChange={(cc) => patchEntry(b.id, e.id, { color: cc })} /></Field>
+                  </div>
+                ))}
+                {b.map.length < 6 && (
+                  <button onClick={() => addStatusEntry(b.id)} style={{ display: "flex", alignItems: "center", gap: 6, background: "transparent", color: T.text, border: `1px dashed ${T.border}`, borderRadius: 6, padding: "6px 10px", fontSize: 12, cursor: "pointer" }}>
+                    <Plus size={12} color={T.accent} /> Bool
+                  </button>
+                )}
+                <div style={{ fontSize: 11, color: T.muted, fontWeight: 600, margin: "10px 0 6px" }}>FALLBACK (keiner true)</div>
+                <div style={{ display: "flex", gap: 10 }}>
+                  <div style={{ flex: 2 }}><Field label="TEXT"><TextInput value={b.fbText} onChange={(e) => patch(b.id, { fbText: e.target.value })} /></Field></div>
+                  <div style={{ flex: 2 }}><Field label="LOC-KEY (optional)"><TextInput value={b.fbLoc} onChange={(e) => patch(b.id, { fbLoc: e.target.value })} placeholder="L_…" /></Field></div>
+                </div>
+                <Field label="FARBE"><ColorSwatches value={b.fbColor} onChange={(cc) => patch(b.id, { fbColor: cc })} /></Field>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderPreviewBody = () => segments.map((part, pi) => {
+    if (part.kind === "row") return <BlockPreview key={part.block.id} b={part.block} pal={pal} on={previewBools} onToggle={toggleBool} />;
+    if (columns <= 1) return <div key={"g" + pi}>{part.items.map((b) => <BlockPreview key={b.id} b={b} pal={pal} on={previewBools} onToggle={toggleBool} />)}</div>;
+    const g = groupByCol(part.items, columns);
+    return (
+      <div key={"g" + pi} style={{ display: "grid", gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, gap: 0 }}>
+        {g.map((colBlocks, c) => (
+          <div key={c} style={{ minWidth: 0, paddingLeft: c === 0 ? 0 : 24, paddingRight: c === columns - 1 ? 0 : 24, borderLeft: c > 0 ? `1px solid ${pal.border}` : "none" }}>
+            {colBlocks.map((b) => <BlockPreview key={b.id} b={b} pal={pal} on={previewBools} onToggle={toggleBool} />)}
+          </div>
+        ))}
+      </div>
+    );
+  });
 
   return (
     <div style={{ background: T.bg, color: T.text, minHeight: 600, fontFamily: "system-ui, -apple-system, sans-serif", padding: 20, borderRadius: 12 }}>
@@ -947,10 +1401,8 @@ export default function App() {
 
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "flex-start" }}>
         <div style={{ flex: "1 1 460px", minWidth: 340 }}>
-          {/* Allgemein */}
           <div style={{ background: T.panel, border: `1px solid ${T.border}`, borderRadius: 10, padding: 16, marginBottom: 14 }}>
             <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Allgemein</div>
-
             <Field label="AUSGABE-MODUS">
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 {Object.keys(OUTPUT_MODES).map((k) => {
@@ -965,11 +1417,9 @@ export default function App() {
               </div>
             </Field>
             <div style={{ fontSize: 11, color: T.muted, marginTop: -4, marginBottom: 12 }}>{OUTPUT_MODES[mode].hint}</div>
-
             <Field label={mode === "registered" ? "FUNKTIONSNAME (registerFunctionEx)" : "NAME / UID"}>
               <TextInput value={fnName} onChange={(e) => setFnName(e.target.value)} placeholder="AC_PopUp" />
             </Field>
-
             {mode === "usercontrol" && (
               <>
                 <Field label="AUSLÖSER-SUFFIX (id-Endung der Trigger-Fläche)">
@@ -980,7 +1430,6 @@ export default function App() {
                 </div>
               </>
             )}
-
             <Field label="TITEL-QUELLE">
               <div style={{ display: "flex", gap: 8 }}>
                 {[["static", "Statisch"], ["dynamic", dynLabel]].map(([v, lab]) => {
@@ -990,7 +1439,6 @@ export default function App() {
                 })}
               </div>
             </Field>
-
             {titleSource === "static" ? (
               <div style={{ display: "flex", gap: 10 }}>
                 <div style={{ flex: 2 }}><Field label="TITEL"><TextInput value={title} onChange={(e) => setTitle(e.target.value)} /></Field></div>
@@ -1004,7 +1452,6 @@ export default function App() {
                 <div style={{ width: 100 }}><Field label="BREITE (px)"><TextInput type="number" value={maxWidth} onChange={(e) => setMaxWidth(e.target.value)} /></Field></div>
               </div>
             )}
-
             <Field label="SPALTEN">
               <div style={{ display: "flex", gap: 8 }}>
                 {[1, 2, 3].map((n) => {
@@ -1019,171 +1466,48 @@ export default function App() {
               </div>
             </Field>
             {columns > 1 && parseInt(maxWidth) < 560 && (
-              <div style={{ fontSize: 11, color: T.muted }}>Tipp: Bei {columns} Spalten wirkt eine größere Breite (z.B. 700–900 px) meist besser.</div>
+              <div style={{ fontSize: 11, color: T.muted }}>Tipp: Bei {columns} Spalten wirkt eine größere Breite (z.B. 700–900 px) meist besser. „Zeile“-Bausteine sind immer volle Breite.</div>
             )}
           </div>
 
-          {/* Layout mit Accordion-Karten + Drag & Drop */}
           <div style={{ background: T.panel, border: `1px solid ${T.border}`, borderRadius: 10, padding: 16 }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
               <div style={{ fontSize: 13, fontWeight: 600 }}>Bausteine &amp; Layout</div>
               <div style={{ fontSize: 11, color: T.muted }}>{blocks.length} Stück · Griff ⠿ zum Ziehen</div>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, gap: 8, alignItems: "start" }}>
-              {Array.from({ length: columns }).map((_, c) => (
-                <div key={c}
-                  onDragOver={(e) => { e.preventDefault(); setDropTarget({ col: c, beforeId: null }); }}
-                  onDrop={(e) => { e.preventDefault(); handleDrop(c, null); }}
-                  style={{ background: T.bg, border: `1px dashed ${dropTarget && dropTarget.col === c ? T.accentDim : T.border}`, borderRadius: 8, padding: 8, minHeight: 90 }}>
-                  {columns > 1 && <div style={{ fontSize: 10, color: T.muted, fontWeight: 600, letterSpacing: 0.4, marginBottom: 6, paddingLeft: 2 }}>SPALTE {c + 1}</div>}
-                  {grouped[c].length === 0 && (
-                    <div style={{ fontSize: 11, color: T.muted, opacity: 0.6, textAlign: "center", padding: "16px 0" }}>leer</div>
-                  )}
-                  {grouped[c].map((b, i) => {
-                    const meta = BLOCK_META[b.type]; const Icon = meta.icon; const open = openId === b.id;
-                    const isDropBefore = dropTarget && dropTarget.beforeId === b.id;
-                    return (
-                      <div key={b.id}
-                        draggable={grabbedId === b.id}
-                        onDragStart={() => setDragId(b.id)}
-                        onDragEnd={() => { setDragId(null); setGrabbedId(null); setDropTarget(null); }}
-                        onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setDropTarget({ col: c, beforeId: b.id }); }}
-                        onDrop={(e) => { e.preventDefault(); e.stopPropagation(); handleDrop(c, b.id); }}
-                        style={{
-                          background: open ? T.panel2 : T.panel, border: `1px solid ${open ? T.accentDim : T.border}`,
-                          borderTop: isDropBefore ? `2px solid ${T.accent}` : `1px solid ${open ? T.accentDim : T.border}`,
-                          borderRadius: 7, padding: 8, marginBottom: 8, opacity: dragId === b.id ? 0.4 : 1,
-                        }}>
-                        {/* Kopf */}
-                        <div onClick={() => setOpenId(open ? null : b.id)} style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
-                          <span
-                            onMouseDown={(e) => { e.stopPropagation(); setGrabbedId(b.id); }}
-                            onMouseUp={() => setGrabbedId(null)}
-                            onClick={(e) => e.stopPropagation()}
-                            title="Ziehen zum Verschieben"
-                            style={{ flex: "0 0 auto", cursor: "grab", display: "flex", alignItems: "center" }}>
-                            <GripVertical size={14} color={T.muted} />
-                          </span>
-                          <ChevronRight size={14} color={T.muted} style={{ flex: "0 0 auto", transform: open ? "rotate(90deg)" : "none", transition: "transform .15s" }} />
-                          <Icon size={14} color={T.accent} style={{ flex: "0 0 auto" }} />
-                          <span style={{ fontSize: 12, fontWeight: 600, flex: "0 0 auto" }}>{meta.label}</span>
-                          {!open && <span style={{ fontSize: 11, color: T.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>· {blockSummary(b)}</span>}
-                          <div style={{ marginLeft: "auto", display: "flex", gap: 2, flex: "0 0 auto" }}>
-                            <IconBtn disabled={i === 0} onClick={() => moveVertical(b.id, -1)} title="Nach oben"><ChevronUp size={14} /></IconBtn>
-                            <IconBtn disabled={i === grouped[c].length - 1} onClick={() => moveVertical(b.id, 1)} title="Nach unten"><ChevronDown size={14} /></IconBtn>
-                            {columns > 1 && <IconBtn disabled={c === 0} onClick={() => moveHorizontal(b.id, -1)} title="Spalte links"><ChevronLeft size={14} /></IconBtn>}
-                            {columns > 1 && <IconBtn disabled={c === columns - 1} onClick={() => moveHorizontal(b.id, 1)} title="Spalte rechts"><ChevronRight size={14} /></IconBtn>}
-                            <IconBtn danger onClick={() => remove(b.id)} title="Löschen"><Trash2 size={14} /></IconBtn>
-                          </div>
-                        </div>
-
-                        {/* Editor (Accordion) */}
-                        {open && (
-                          <div style={{ marginTop: 10 }}>
-                            {b.type === "text" && <Field label="TEXT"><TextArea value={b.text} onChange={(e) => patch(b.id, { text: e.target.value })} /></Field>}
-
-                            {(b.type === "read" || b.type === "bool" || b.type === "check") && <ReadBoolFields cfg={b} mode={mode} onPatch={(o) => patch(b.id, o)} />}
-
-                            {b.type === "input" && <InputFields cfg={b} mode={mode} onPatch={(o) => patch(b.id, o)} />}
-
-                            {b.type === "button" && (
-                              <>
-                                {b.buttons.map((bt, bi) => (
-                                  <div key={bi} style={{ border: `1px solid ${T.border}`, borderRadius: 6, padding: 10, marginBottom: 8 }}>
-                                    <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
-                                      <span style={{ fontSize: 11, color: T.muted, fontWeight: 600 }}>Button {bi + 1}</span>
-                                      {b.buttons.length > 1 && <div style={{ marginLeft: "auto" }}><IconBtn danger onClick={() => removeBtn(b.id, bi)}><Trash2 size={13} /></IconBtn></div>}
-                                    </div>
-                                    <div style={{ display: "flex", gap: 10 }}>
-                                      <div style={{ flex: 2 }}><Field label="BESCHRIFTUNG"><TextInput value={bt.label} onChange={(e) => patchBtn(b.id, bi, { label: e.target.value })} /></Field></div>
-                                      <div style={{ flex: 2 }}><Field label="LOC-KEY (optional)"><TextInput value={bt.loc} onChange={(e) => patchBtn(b.id, bi, { loc: e.target.value })} placeholder="L_…" /></Field></div>
-                                    </div>
-                                    <Field label={sm.label}><TextInput value={bt.symbol} onChange={(e) => patchBtn(b.id, bi, { symbol: e.target.value })} placeholder={sm.ph} /></Field>
-                                    <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
-                                      <div style={{ flex: 1 }}><Field label="AKTION"><Select value={bt.writeMode} onChange={(e) => patchBtn(b.id, bi, { writeMode: e.target.value })} options={WRITE_OPTS} /></Field></div>
-                                      {bt.writeMode === "pulse" && <div style={{ width: 90 }}><Field label="DAUER (ms)"><TextInput type="number" value={bt.pulseMs} onChange={(e) => patchBtn(b.id, bi, { pulseMs: e.target.value })} /></Field></div>}
-                                    </div>
-                                    <Field label="FARBE"><ColorSwatches value={bt.color} onChange={(cc) => patchBtn(b.id, bi, { color: cc })} /></Field>
-                                    <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: T.muted, cursor: "pointer", marginTop: 2 }}>
-                                      <input type="checkbox" checked={!!bt.closeAfter} onChange={(e) => patchBtn(b.id, bi, { closeAfter: e.target.checked })} /> Popup nach Klick schließen
-                                    </label>
-                                  </div>
-                                ))}
-                                {b.buttons.length < 2 && (
-                                  <button onClick={() => addBtn(b.id)} style={{ display: "flex", alignItems: "center", gap: 6, background: "transparent", color: T.text, border: `1px dashed ${T.border}`, borderRadius: 6, padding: "6px 10px", fontSize: 12, cursor: "pointer" }}>
-                                    <Plus size={12} color={T.accent} /> Zweiter Button
-                                  </button>
-                                )}
-                              </>
-                            )}
-
-                            {b.type === "row" && (
-                              <>
-                                {b.items.map((it, ii) => (
-                                  <div key={it.id} style={{ border: `1px solid ${T.border}`, borderRadius: 6, padding: 10, marginBottom: 8 }}>
-                                    <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
-                                      <span style={{ fontSize: 11, color: T.muted, fontWeight: 600 }}>Element {ii + 1}</span>
-                                      {b.items.length > 1 && <div style={{ marginLeft: "auto" }}><IconBtn danger onClick={() => removeItem(b.id, ii)}><Trash2 size={13} /></IconBtn></div>}
-                                    </div>
-                                    <Field label="TYP"><Select value={it.kind} onChange={(e) => setItemKind(b.id, ii, e.target.value)} options={ITEM_KINDS} /></Field>
-                                    {it.kind === "input"
-                                      ? <InputFields cfg={it} mode={mode} onPatch={(o) => patchItem(b.id, ii, o)} />
-                                      : <ReadBoolFields cfg={it} mode={mode} onPatch={(o) => patchItem(b.id, ii, o)} />}
-                                  </div>
-                                ))}
-                                {b.items.length < 2 && (
-                                  <button onClick={() => addItem(b.id)} style={{ display: "flex", alignItems: "center", gap: 6, background: "transparent", color: T.text, border: `1px dashed ${T.border}`, borderRadius: 6, padding: "6px 10px", fontSize: 12, cursor: "pointer" }}>
-                                    <Plus size={12} color={T.accent} /> Zweites Element
-                                  </button>
-                                )}
-                              </>
-                            )}
-
-                            {(b.type === "enum" || b.type === "enumset") && (
-                              <>
-                                <div style={{ display: "flex", gap: 10 }}>
-                                  <div style={{ flex: 2 }}><Field label="LABEL"><TextInput value={b.label} onChange={(e) => patch(b.id, { label: e.target.value })} /></Field></div>
-                                  <div style={{ flex: 2 }}><Field label="LOC-KEY (optional)"><TextInput value={b.loc} onChange={(e) => patch(b.id, { loc: e.target.value })} placeholder="L_…" /></Field></div>
-                                </div>
-                                <Field label={sm.label}><TextInput value={b.symbol} onChange={(e) => patch(b.id, { symbol: e.target.value })} placeholder={sm.ph} /></Field>
-                                <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: T.muted, cursor: "pointer", marginBottom: 8 }}>
-                                  <input type="checkbox" checked={!!b.numeric} onChange={(e) => patch(b.id, { numeric: e.target.checked })} /> Wert ist numerisch (parseInt beim Schreiben)
-                                </label>
-                                <div style={{ fontSize: 11, color: T.muted, fontWeight: 600, margin: "4px 0 6px" }}>WERT → TEXT</div>
-                                {b.map.map((e) => (
-                                  <div key={e.id} style={{ display: "flex", gap: 6, marginBottom: 6, alignItems: "flex-end" }}>
-                                    <div style={{ width: 64 }}><Field label="WERT"><TextInput value={e.value} onChange={(ev) => patchEnumEntry(b.id, e.id, { value: ev.target.value })} /></Field></div>
-                                    <div style={{ flex: 1 }}><Field label="LOC-KEY"><TextInput value={e.loc} onChange={(ev) => patchEnumEntry(b.id, e.id, { loc: ev.target.value })} placeholder="L_…" /></Field></div>
-                                    <div style={{ flex: 1 }}><Field label="TEXT"><TextInput value={e.text} onChange={(ev) => patchEnumEntry(b.id, e.id, { text: ev.target.value })} /></Field></div>
-                                    <div style={{ marginBottom: 10 }}><IconBtn danger onClick={() => removeEnumEntry(b.id, e.id)}><Trash2 size={13} /></IconBtn></div>
-                                  </div>
-                                ))}
-                                <button onClick={() => addEnumEntry(b.id)} style={{ display: "flex", alignItems: "center", gap: 6, background: "transparent", color: T.text, border: `1px dashed ${T.border}`, borderRadius: 6, padding: "6px 10px", fontSize: 12, cursor: "pointer" }}>
-                                  <Plus size={12} color={T.accent} /> Wert
-                                </button>
-                                {b.type === "enum" && (
-                                  <>
-                                    <div style={{ fontSize: 11, color: T.muted, fontWeight: 600, margin: "10px 0 6px" }}>FALLBACK (unbekannter Wert)</div>
-                                    <div style={{ display: "flex", gap: 10 }}>
-                                      <div style={{ flex: 1 }}><Field label="LOC-KEY (optional)"><TextInput value={b.fbLoc} onChange={(e) => patch(b.id, { fbLoc: e.target.value })} placeholder="L_…" /></Field></div>
-                                      <div style={{ flex: 1 }}><Field label="TEXT (optional)"><TextInput value={b.fbText} onChange={(e) => patch(b.id, { fbText: e.target.value })} /></Field></div>
-                                    </div>
-                                    <div style={{ fontSize: 11, color: T.muted }}>Leer lassen → Rohwert anzeigen.</div>
-                                  </>
-                                )}
-                              </>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+            {segments.map((part, pi) => {
+              if (part.kind === "row") {
+                return (
+                  <div key={"r" + part.block.id}
+                    onDragOver={(e) => { e.preventDefault(); setDropTarget({ col: clampCol(part.block, columns), beforeId: part.block.id }); }}
+                    onDrop={(e) => { e.preventDefault(); handleDrop(clampCol(part.block, columns), part.block.id); }}
+                    style={{ background: T.bg, border: `1px dashed ${T.border}`, borderRadius: 8, padding: 8, marginBottom: 8 }}>
+                    {renderCard(part.block, { fullWidth: true })}
+                  </div>
+                );
+              }
+              const g = groupByCol(part.items, columns);
+              return (
+                <div key={"g" + pi} style={{ display: "grid", gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, gap: 8, alignItems: "start", marginBottom: 8 }}>
+                  {Array.from({ length: columns }).map((_, c) => (
+                    <div key={c}
+                      onDragOver={(e) => { e.preventDefault(); setDropTarget({ col: c, beforeId: null }); }}
+                      onDrop={(e) => { e.preventDefault(); handleDrop(c, null); }}
+                      style={{ background: T.bg, border: `1px dashed ${dropTarget && dropTarget.col === c && dropTarget.beforeId === null ? T.accentDim : T.border}`, borderRadius: 8, padding: 8, minHeight: 60 }}>
+                      {columns > 1 && pi === firstGrid && <div style={{ fontSize: 10, color: T.muted, fontWeight: 600, letterSpacing: 0.4, marginBottom: 6, paddingLeft: 2 }}>SPALTE {c + 1}</div>}
+                      {g[c].length === 0 && pi === firstGrid && (
+                        <div style={{ fontSize: 11, color: T.muted, opacity: 0.6, textAlign: "center", padding: "10px 0" }}>leer</div>
+                      )}
+                      {g[c].map((b, i) => renderCard(b, { c, i, colLen: g[c].length }))}
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              );
+            })}
+            {segments.length === 0 && <div style={{ fontSize: 12, color: T.muted, padding: "8px 0" }}>Noch keine Bausteine – unten hinzufügen.</div>}
 
-            <div style={{ marginTop: 12 }}>
+            <div style={{ marginTop: 8 }}>
               {columns > 1 && (
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
                   <span style={{ fontSize: 11, color: T.muted }}>Neu in Spalte:</span>
@@ -1208,11 +1532,11 @@ export default function App() {
           </div>
         </div>
 
-        {/* Vorschau / Code */}
         <div style={{ flex: "1 1 400px", minWidth: 320 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 12 }}>
             <Tab active={tab === "preview"} onClick={() => setTab("preview")}><Monitor size={14} /> Vorschau</Tab>
             <Tab active={tab === "code"} onClick={() => setTab("code")}><Code2 size={14} /> Code</Tab>
+            <Tab active={tab === "import"} onClick={() => setTab("import")}><Braces size={14} /> Import</Tab>
             {tab === "preview" && (
               <button onClick={() => setPreviewDark((v) => !v)} style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6, background: T.panel2, color: T.text, border: `1px solid ${T.border}`, borderRadius: 6, padding: "6px 10px", fontSize: 12, cursor: "pointer" }}>
                 {previewDark ? <Moon size={13} /> : <Sun size={13} />} {previewDark ? "Dark" : "Light"}
@@ -1224,8 +1548,7 @@ export default function App() {
               </button>
             )}
           </div>
-
-          {tab === "preview" ? (
+          {tab === "preview" && (
             <div style={{ background: previewDark ? "#0f1117" : "#dfe3e8", border: `1px solid ${T.border}`, borderRadius: 10, padding: 32, display: "flex", justifyContent: "center", minHeight: 300, overflow: "auto" }}>
               <div style={{ background: pal.boxBg, border: `1px solid ${pal.border}`, borderRadius: 12, width: boxW, boxShadow: pal.shadow, overflow: "hidden", alignSelf: "flex-start" }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 20px", background: pal.headerBg, fontSize: 15, fontWeight: 600, color: pal.titleColor }}>
@@ -1234,24 +1557,39 @@ export default function App() {
                 </div>
                 <div style={{ padding: 20 }}>
                   {blocks.length === 0 && <div style={{ fontSize: 13, color: pal.bodyText, opacity: 0.6 }}>Noch keine Bausteine.</div>}
-                  {columns <= 1
-                    ? grouped[0].map((b) => <BlockPreview key={b.id} b={b} pal={pal} on={previewBools} onToggle={toggleBool} />)
-                    : (
-                      <div style={{ display: "grid", gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, gap: 0 }}>
-                        {grouped.map((colBlocks, c) => (
-                          <div key={c} style={{ minWidth: 0, paddingLeft: c === 0 ? 0 : 24, paddingRight: c === columns - 1 ? 0 : 24, borderLeft: c > 0 ? `1px solid ${pal.border}` : "none" }}>
-                            {colBlocks.map((b) => <BlockPreview key={b.id} b={b} pal={pal} on={previewBools} onToggle={toggleBool} />)}
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                  {renderPreviewBody()}
                 </div>
               </div>
             </div>
-          ) : (
+          )}
+          {tab === "code" && (
             <pre style={{ background: T.code, border: `1px solid ${T.border}`, borderRadius: 10, padding: 16, margin: 0, fontSize: 11.5, lineHeight: 1.5, color: "#c8d0e0", overflow: "auto", maxHeight: 640, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>
               {code}
             </pre>
+          )}
+          {tab === "import" && (
+            <div style={{ background: T.panel, border: `1px solid ${T.border}`, borderRadius: 10, padding: 16 }}>
+              <div style={{ fontSize: 12, color: T.muted, marginBottom: 8, lineHeight: 1.5 }}>
+                Vom Generator erzeugten Code hier einfügen (komplett, inkl. der Kommentarzeile „AC_POPUP_CONFIG_V1:“ am Ende). Die App liest die Konfiguration daraus zurück und lädt sie in den Editor – zum Anpassen und erneut Erzeugen.
+              </div>
+              <textarea value={importText} onChange={(e) => { setImportText(e.target.value); setImportErr(""); }}
+                placeholder="// Auto-generiert vom AC_PopUp Generator …"
+                style={{ width: "100%", boxSizing: "border-box", minHeight: 320, background: T.code, color: "#c8d0e0", border: `1px solid ${importErr ? T.danger : T.border}`, borderRadius: 8, padding: 12, fontSize: 11.5, lineHeight: 1.5, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", outline: "none", resize: "vertical" }} />
+              {importErr && <div style={{ fontSize: 12, color: T.danger, marginTop: 8, lineHeight: 1.5 }}>{importErr}</div>}
+              <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                <button onClick={doImport} disabled={!importText.trim()}
+                  style={{ display: "flex", alignItems: "center", gap: 6, background: importText.trim() ? T.accent : T.panel2, color: importText.trim() ? "#062611" : T.muted, border: "none", borderRadius: 6, padding: "8px 14px", fontSize: 12, fontWeight: 600, cursor: importText.trim() ? "pointer" : "default" }}>
+                  In Editor laden
+                </button>
+                <button onClick={() => { setImportText(""); setImportErr(""); }}
+                  style={{ background: "transparent", color: T.muted, border: `1px solid ${T.border}`, borderRadius: 6, padding: "8px 14px", fontSize: 12, cursor: "pointer" }}>
+                  Leeren
+                </button>
+              </div>
+              <div style={{ fontSize: 11, color: T.muted, marginTop: 10, lineHeight: 1.5 }}>
+                Geladen wird die eingebettete Konfiguration – nicht etwaige manuelle Änderungen am JS-Code selbst.
+              </div>
+            </div>
           )}
         </div>
       </div>
