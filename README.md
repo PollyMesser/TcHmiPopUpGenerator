@@ -137,4 +137,4 @@ Wichtig: Geladen wird die eingebettete Konfiguration, nicht der umgebende JavaSc
 
 ## Lizenz
 
-MIT
+Dieses Projekt steht unter der MIT-Lizenz - siehe [LICENSE](LICENCE)
