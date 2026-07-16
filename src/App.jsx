@@ -89,7 +89,7 @@ const mkStatusEntry = (symbol, text, color) => ({ id: "s" + (_eid++), symbol: sy
 
 const newBlock = (type) => {
   switch (type) {
-    case "text":   return { id: nid(), type, col: 0, text: "Hinweis…", loc: "" };
+    case "text":   return { id: nid(), type, col: 0, heading: "", headingLoc: "", text: "Hinweis…", loc: "", bgColor: "" };
     case "read":   return { id: nid(), type, col: 0, label: "Wert", loc: "", symbol: "ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::xValue", unit: "" };
     case "bool":   return { id: nid(), type, col: 0, label: "Freigabe angeboten", loc: "", symbol: "ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::xSkipReleaseOffered" };
     case "check":  return { id: nid(), type, col: 0, label: "Freigabe", loc: "", symbol: "ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::xEnable" };
@@ -201,7 +201,17 @@ const REF = '/// <reference path="./../../Packages/Beckhoff.TwinCAT.HMI.Framewor
 //  EMIT: Symbol-Modus (registered + event) – subscribe/writeSymbol/…
 // ─────────────────────────────────────────────────────────────
 function emitText(parent, b, mb) {
-  return `${I}// Text\n${I}(function () {\n${I}    var el = document.createElement('div');\n${I}    el.style.cssText = 'font-size:14px;color:' + p.bodyText + ';line-height:1.5;padding-bottom:3px;margin-bottom:${mb};white-space:pre-wrap;';\n${I}    el.textContent = ${locExpr(b.loc, b.text)};\n${I}    ${parent}.appendChild(el);\n${I}})();`;
+  const bgc = b.bgColor && COLORS[b.bgColor];
+  const bgCss = bgc ? `background:${bgc.bg};color:${bgc.text};padding:8px 10px;border-radius:6px;` : '';
+  const textColor = bgc ? jsStr(bgc.text) : `p.bodyText`;
+  const hasHeading = (b.heading || "").trim() || (b.headingLoc || "").trim();
+  // Umbruch-Normalisierung: Sprachvariablen enthalten teils literales Backslash-n
+  // statt echter Umbrueche. Wir ersetzen es (backslash-frei via fromCharCode 92/10),
+  // white-space:pre-wrap sorgt dann fuer den echten Zeilenumbruch.
+  const headingBlock = hasHeading
+    ? `\n${I}    var hd = document.createElement('div');\n${I}    hd.style.cssText = 'font-size:14px;font-weight:600;color:' + ${textColor} + ';margin-bottom:4px;white-space:pre-wrap;';\n${I}    var _h = ${locExpr(b.headingLoc, b.heading)};\n${I}    hd.textContent = (typeof _h === 'string' ? _h : String(_h)).split(String.fromCharCode(92) + 'n').join(String.fromCharCode(10));\n${I}    el.appendChild(hd);`
+    : '';
+  return `${I}// Text\n${I}(function () {\n${I}    var el = document.createElement('div');\n${I}    el.style.cssText = 'margin-bottom:${mb};${bgCss}';${headingBlock}\n${I}    var body = document.createElement('div');\n${I}    body.style.cssText = 'font-size:14px;color:' + ${textColor} + ';line-height:1.5;white-space:pre-wrap;';\n${I}    var _t = ${locExpr(b.loc, b.text)};\n${I}    body.textContent = (typeof _t === 'string' ? _t : String(_t)).split(String.fromCharCode(92) + 'n').join(String.fromCharCode(10));\n${I}    el.appendChild(body);\n${I}    ${parent}.appendChild(el);\n${I}})();`;
 }
 function emitRead(parent, b, mb) {
   const uStr = unitSuffix(b.unit);
@@ -529,6 +539,10 @@ function emitPlot(parent, b) {
     var PLOTLY_SRC       = 'Assets/plotly-3.6.0.min.js'; // Pfad ab HMI-Root – ggf. anpassen
 
     var watchers = [], symbols = [], plotDiv = null, wrapper = null, ro = null, onWinResize = null, trendHandle = null;
+    // Eindeutiger chartName pro Popup-Instanz (Zeit + Zufall), damit mehrere gleichzeitig
+    // offene Trend-Popups/Embeds niemals denselben chartName teilen (serverseitiges
+    // Verhalten bei gleichzeitig gleichem chartName war im Test nicht geprueft).
+    var trendChartName = 'AC_HMI_TrendPopup_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
     var followMode = ${c.initialFollow}, suppressRelayout = false, initialXRange = null, lastNewestMs = 0, setupDone = false;
     var refValues = {}, eventLines = [], markerLast = {}, currentPalette = null;
 
@@ -560,7 +574,7 @@ function emitPlot(parent, b) {
     // Contract per WS-Mitschnitt bestaetigt (16.07.2026): chartName frei waehlbar,
     // Aufschluesselung erfolgt ueber yAxes; readValue.axesData ist positionsgleich zu yAxes.
     // Der Server liefert bei jedem Push das komplette Fenster (serverseitig auf displayWidth ausgeduennt).
-    function subscribeTrendData(symbolList, lookbackIso, displayWidth, onSeries) {
+    function subscribeTrendData(symbolList, lookbackIso, displayWidth, chartName, onSeries) {
         try {
             var yAxes = symbolList.map(function (s) { return { symbol: plainSym(s) }; });
             var handle = { subscriptionId: null };
@@ -571,7 +585,7 @@ function emitPlot(parent, b) {
                     symbol: 'TcHmiSqliteHistorize.GetTrendLineData',
                     version: 1,
                     commandOptions: ['SendErrorMessage', 'SendWriteValue'],
-                    writeValue: { chartName: 'AC_HMI_TrendPopup', xAxisStart: lookbackIso, xAxisEnd: 'Latest', yAxes: yAxes, displayWidth: displayWidth || 960, analyticsType: [] }
+                    writeValue: { chartName: chartName, xAxisStart: lookbackIso, xAxisEnd: 'Latest', yAxes: yAxes, displayWidth: displayWidth || 960, analyticsType: [] }
                 }]
             }, {}, function (data) {
                 if (!data || data.error !== TcHmi.Errors.NONE) return;
@@ -700,7 +714,7 @@ function emitPlot(parent, b) {
                 suppressRelayout = true; window.Plotly.relayout(plotDiv, { 'xaxis.range': [new Date(startMs), new Date(endMs)] }).then(function () { suppressRelayout = false; }).catch(function () { suppressRelayout = false; });
                 var lookbackIso = 'PT' + Math.max(1, Math.round(HISTORY_LOAD_MS / 1000)) + 'S';
                 var symbolList = series.map(function (s) { return s.symbol; });
-                trendHandle = subscribeTrendData(symbolList, lookbackIso, Math.max(200, plotDiv.clientWidth || 960), function (seriesData) {
+                trendHandle = subscribeTrendData(symbolList, lookbackIso, Math.max(200, plotDiv.clientWidth || 960), trendChartName, function (seriesData) {
                     if (!plotDiv || !window.Plotly || !seriesData || !seriesData.length) return;
                     var xs = [], ys = [], idx = [], newestMs = 0;
                     seriesData.forEach(function (arr, i) {
@@ -1421,7 +1435,7 @@ function ItemPreview({ cfg, pal, on, onToggle }) {
   );
 }
 function BlockPreview({ b, pal, on, onToggle }) {
-  if (b.type === "text") return <div style={{ fontSize: 14, color: pal.bodyText, lineHeight: 1.5, paddingBottom: 3, marginBottom: 16, whiteSpace: "pre-wrap" }}>{b.text}</div>;
+  if (b.type === "text") { const bgc = b.bgColor && COLORS[b.bgColor]; const hc = bgc ? bgc.text : pal.bodyText; return <div style={{ padding: bgc ? "8px 10px" : "0 0 3px", marginBottom: 16, background: bgc ? bgc.bg : "transparent", borderRadius: bgc ? 6 : 0 }}>{b.heading ? <div style={{ fontSize: 14, fontWeight: 600, color: hc, marginBottom: 4 }}>{b.heading}</div> : null}<div style={{ fontSize: 14, color: hc, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{b.text}</div></div>; }
   if (b.type === "button") return (
     <div style={{ display: "flex", gap: 10, marginBottom: 12 }}>
       {b.buttons.map((bt, bi) => { const c = COLORS[bt.color] || COLORS.blue; return <div key={bi} style={{ flex: 1, padding: "12px 0", borderRadius: 8, fontSize: 14, fontWeight: 600, background: c.bg, color: c.text, textAlign: "center" }}>{bt.label}</div>; })}
@@ -1770,7 +1784,36 @@ export default function App() {
 
         {open && (
           <div style={{ marginTop: 10 }}>
-            {b.type === "text" && <Field label="TEXT"><TextArea value={b.text} onChange={(e) => patch(b.id, { text: e.target.value })} /></Field>}
+            {b.type === "text" && (
+              <>
+                <div style={{ display: "flex", gap: 10 }}>
+                  <div style={{ flex: 2 }}><Field label="ÜBERSCHRIFT (optional)"><TextInput value={b.heading || ""} onChange={(e) => patch(b.id, { heading: e.target.value })} placeholder="leer = keine Überschrift" /></Field></div>
+                  <div style={{ flex: 2 }}><Field label="ÜBERSCHRIFT LOC-KEY (optional)"><TextInput value={b.headingLoc || ""} onChange={(e) => patch(b.id, { headingLoc: e.target.value })} placeholder="L_…" /></Field></div>
+                </div>
+                <Field label="TEXT"><TextArea value={b.text} onChange={(e) => patch(b.id, { text: e.target.value })} /></Field>
+                <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+                  <div style={{ flex: 2 }}><Field label="LOC-KEY (optional)"><TextInput value={b.loc} onChange={(e) => patch(b.id, { loc: e.target.value })} placeholder="L_…" /></Field></div>
+                  <div style={{ flex: 2 }}>
+                    <Field label="HINTERGRUND">
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <button type="button" onClick={() => patch(b.id, { bgColor: "" })}
+                          title="Normaler Hintergrund"
+                          style={{ width: 26, height: 26, borderRadius: 6, cursor: "pointer", background: T.input, border: `2px solid ${!b.bgColor ? T.accent : T.border}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          {!b.bgColor && <Check size={13} color={T.accent} />}
+                        </button>
+                        {Object.entries(COLORS).map(([key, c]) => (
+                          <button type="button" key={key} onClick={() => patch(b.id, { bgColor: key })}
+                            title={c.label}
+                            style={{ width: 26, height: 26, borderRadius: 6, cursor: "pointer", background: c.bg, border: `2px solid ${b.bgColor === key ? T.text : "transparent"}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            {b.bgColor === key && <Check size={13} color={c.text} />}
+                          </button>
+                        ))}
+                      </div>
+                    </Field>
+                  </div>
+                </div>
+              </>
+            )}
             {(b.type === "read" || b.type === "bool" || b.type === "check") && <ReadBoolFields cfg={b} mode={mode} onPatch={(o) => patch(b.id, o)} />}
             {b.type === "input" && <InputFields cfg={b} mode={mode} onPatch={(o) => patch(b.id, o)} />}
 
