@@ -96,7 +96,7 @@ const newBlock = (type) => {
     case "input":  return { id: nid(), type, col: 0, label: "Sollwert", loc: "", symbol: "ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::nSetpoint", dataType: "number", unit: "", sendLabel: "Setzen", sendLoc: "", sendColor: "blue" };
     case "divider": return { id: nid(), type, col: 0, label: "", loc: "" };
     case "progress": return { id: nid(), type, col: 0, label: "Ventilstellung", loc: "", symbol: "ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::rPosition", min: 0, max: 100, unit: "%", decimals: 0, showValue: true, color: "blue" };
-    case "plot": { const ax = mkAxis(PLOT_COLORS[0].hex); return { id: nid(), type, col: 0, caption: "Verlauf", captionLoc: "", dataMode: "live", followSec: 300, historyLoadSec: 3600, maxPoints: 3600, plotHeight: 360, showRangeslider: true, showToolbar: true, zoomEnabled: true, nowLabel: "Jetzt", nowLoc: "", resetLabel: "Zurücksetzen", resetLoc: "", timeButtons: defaultTimeButtons(), axes: [ax], series: [mkSeries(ax.id, PLOT_COLORS[1].hex)], refLines: [], eventMarkers: [] }; }
+    case "plot": { const ax = mkAxis(PLOT_COLORS[0].hex); return { id: nid(), type, col: 0, caption: "Verlauf", captionLoc: "", dataMode: "live", followSec: 300, historyLoadSec: 3600, maxPoints: 3600, plotHeight: 360, showRangeslider: true, showXAxis: true, showToolbar: true, zoomEnabled: true, nowLabel: "Jetzt", nowLoc: "", resetLabel: "Zurücksetzen", resetLoc: "", timeButtons: defaultTimeButtons(), axes: [ax], series: [mkSeries(ax.id, PLOT_COLORS[1].hex)], refLines: [], eventMarkers: [] }; }
     case "button": return { id: nid(), type, col: 0, buttons: [mkButton()] };
     case "row":    return { id: nid(), type, col: 0, items: [mkItem("read"), mkItem("input")] };
     case "enum":    return { id: nid(), type, col: 0, label: "Status", loc: "", symbol: "ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::eState", numeric: true, display: "text", map: [mkEnumEntry(0, "Aus", "grey"), mkEnumEntry(1, "Ein", "green")], fbLoc: "", fbText: "", fbColor: "grey" };
@@ -497,6 +497,7 @@ function plotBlockConfig(b) {
     maxPoints: Math.max(10, Number(b.maxPoints) || 3600),
     plotHeight: Math.max(200, Number(b.plotHeight) || 360),
     showRs: b.showRangeslider ? "true" : "false",
+    showXAxis: b.showXAxis !== false ? "true" : "false",
     showToolbar: b.showToolbar ? "true" : "false",
     showZoom: b.zoomEnabled !== false ? "true" : "false",
     initialFollow: b.dataMode === "history" ? "false" : "true",
@@ -521,13 +522,14 @@ function emitPlot(parent, b) {
     var MAX_POINTS       = ${c.maxPoints};
     var MAX_EVENT_LINES  = 40;
     var SHOW_RANGESLIDER = ${c.showRs};
+    var SHOW_X_AXIS      = ${c.showXAxis};
     var SHOW_TOOLBAR     = ${c.showToolbar};
     var PLOT_HEIGHT      = ${c.plotHeight};
     var ZOOM_ENABLED     = ${c.showZoom};
     var PLOTLY_SRC       = 'Assets/plotly-3.6.0.min.js'; // Pfad ab HMI-Root – ggf. anpassen
 
-    var watchers = [], symbols = [], plotDiv = null, wrapper = null, ro = null, onWinResize = null;
-    var followMode = ${c.initialFollow}, suppressRelayout = false, initialXRange = null;
+    var watchers = [], symbols = [], plotDiv = null, wrapper = null, ro = null, onWinResize = null, trendHandle = null;
+    var followMode = ${c.initialFollow}, suppressRelayout = false, initialXRange = null, lastNewestMs = 0, setupDone = false;
     var refValues = {}, eventLines = [], markerLast = {}, currentPalette = null;
 
     function locP(key, fallback) {
@@ -546,21 +548,49 @@ function emitPlot(parent, b) {
     function subscribeP(symbolStr, onChange) {
         try { var sym = new TcHmi.Symbol(symbolStr); symbols.push(sym); watchers.push(sym.watch(function (data) { if (data.error !== TcHmi.Errors.NONE) return; onChange(data.value); })); } catch (e) {}
     }
-    function loadHistory(symbolStr, startMs, endMs, cb) {
+    // Schlichten ADS-Pfad aus '%s%...%/s%' herausschaelen (backslash-frei, keine Regex).
+    function plainSym(symbolStr) {
+        var plain = symbolStr || '';
+        if (plain.indexOf('%s%') === 0) plain = plain.slice(3);
+        var suf = '%/s%';
+        if (plain.length >= suf.length && plain.slice(-suf.length) === suf) plain = plain.slice(0, -suf.length);
+        return plain;
+    }
+    // History + Live in EINEM Stream: TcHmiSqliteHistorize.GetTrendLineData als Subscription.
+    // Contract per WS-Mitschnitt bestaetigt (16.07.2026): chartName frei waehlbar,
+    // Aufschluesselung erfolgt ueber yAxes; readValue.axesData ist positionsgleich zu yAxes.
+    // Der Server liefert bei jedem Push das komplette Fenster (serverseitig auf displayWidth ausgeduennt).
+    function subscribeTrendData(symbolList, lookbackIso, displayWidth, onSeries) {
         try {
-            // Backslash-frei entpacken: '%s%' vorn und '%/s%' hinten entfernen (Regex mit maskiertem Slash bricht in der TcHMI-Einbettung)
-            var plain = symbolStr;
-            if (plain.indexOf('%s%') === 0) plain = plain.slice(3);
-            var suf = '%/s%';
-            if (plain.length >= suf.length && plain.slice(-suf.length) === suf) plain = plain.slice(0, -suf.length);
-            TcHmi.Server.requestEx({ requestType: 'ReadWrite', commands: [{ symbol: 'TcHmiSqliteHistorize.Query', writeValue: { symbols: [plain], startTime: new Date(startMs).toISOString(), endTime: new Date(endMs).toISOString() } }] }, {}, function (data) {
-                if (!data || data.error !== TcHmi.Errors.NONE) { cb([]); return; }
-                var cmd = data.response && data.response.commands && data.response.commands[0];
-                var rv = cmd && cmd.readValue, points = [];
-                if (rv && rv.values && rv.values.length) { points = rv.values.map(function (row) { return { t: (row.timestamp != null ? row.timestamp : (row.time != null ? row.time : row.t)), v: Number(row.value != null ? row.value : row.v) }; }); }
-                cb(points);
+            var yAxes = symbolList.map(function (s) { return { symbol: plainSym(s) }; });
+            var handle = { subscriptionId: null };
+            TcHmi.Server.requestEx({
+                requestType: 'Subscription',
+                intervalTime: 1000,
+                commands: [{
+                    symbol: 'TcHmiSqliteHistorize.GetTrendLineData',
+                    version: 1,
+                    commandOptions: ['SendErrorMessage', 'SendWriteValue'],
+                    writeValue: { chartName: 'AC_HMI_TrendPopup', xAxisStart: lookbackIso, xAxisEnd: 'Latest', yAxes: yAxes, displayWidth: displayWidth || 960, analyticsType: [] }
+                }]
+            }, {}, function (data) {
+                if (!data || data.error !== TcHmi.Errors.NONE) return;
+                var resp = data.response;
+                if (!resp || !resp.commands || !resp.commands.length) return;
+                if (resp.id != null) handle.subscriptionId = resp.id;
+                var cmd = resp.commands[0];
+                if (cmd.error != null && cmd.error !== 0) return;
+                var rv = cmd.readValue;
+                if (!rv || !rv.axesData) return;
+                onSeries(rv.axesData.map(function (arr) { return (arr || []).map(function (pt) { return { t: pt.x, v: pt.y }; }); }));
             });
-        } catch (e) { cb([]); }
+            return handle;
+        } catch (e) { return { subscriptionId: null }; }
+    }
+    function unsubscribeTrend(handle) {
+        if (!handle || handle.subscriptionId == null) return;
+        try { TcHmi.Server.requestEx({ requestType: 'ReadWrite', commands: [{ symbol: 'Unsubscribe', commandOptions: ['SendErrorMessage'], writeValue: handle.subscriptionId }] }, {}, function () {}); } catch (e) {}
+        handle.subscriptionId = null;
     }
     function ensurePlotly(cb) {
         if (window.Plotly) { cb(); return; }
@@ -611,8 +641,8 @@ function emitPlot(parent, b) {
         axes.forEach(function (a, i) { if (i % 2 === 0) leftCount++; else rightCount++; });
         var leftInset = leftCount > 1 ? (leftCount - 1) * AX_STEP : 0;
         var rightInset = rightCount > 1 ? (rightCount - 1) * AX_STEP : 0;
-        var layout = { autosize: true, margin: { l: 56, r: 56, t: 14, b: SHOW_RANGESLIDER ? 14 : 34 }, paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)', font: { color: pp.bodyText, size: 11 }, dragmode: ZOOM_ENABLED ? 'zoom' : false, showlegend: false, shapes: buildShapes(), annotations: buildAnnotations(pp),
-            xaxis: { type: 'date', gridcolor: pp.grid, zeroline: false, fixedrange: !ZOOM_ENABLED, domain: [leftInset, 1 - rightInset], rangeselector: (TIME_BUTTONS && TIME_BUTTONS.length) ? { x: 0, y: 1.12, bgcolor: pp.headerBg, activecolor: pp.accent, bordercolor: pp.border, borderwidth: 1, font: { color: pp.bodyText, size: 11 }, buttons: TIME_BUTTONS } : { visible: false }, rangeslider: SHOW_RANGESLIDER ? { visible: true, thickness: 0.10, bgcolor: pp.headerBg, bordercolor: pp.border, borderwidth: 1 } : { visible: false } } };
+        var layout = { autosize: true, margin: { l: 56, r: 56, t: 14, b: SHOW_RANGESLIDER ? (SHOW_X_AXIS ? 14 : 10) : (SHOW_X_AXIS ? 34 : 8) }, paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)', font: { color: pp.bodyText, size: 11 }, dragmode: ZOOM_ENABLED ? 'zoom' : false, showlegend: false, shapes: buildShapes(), annotations: buildAnnotations(pp),
+            xaxis: { type: 'date', gridcolor: pp.grid, zeroline: false, fixedrange: !ZOOM_ENABLED, domain: [leftInset, 1 - rightInset], showticklabels: SHOW_X_AXIS, ticks: SHOW_X_AXIS ? 'outside' : '', rangeselector: (TIME_BUTTONS && TIME_BUTTONS.length) ? { x: 0, y: 1.12, bgcolor: pp.headerBg, activecolor: pp.accent, bordercolor: pp.border, borderwidth: 1, font: { color: pp.bodyText, size: 11 }, buttons: TIME_BUTTONS } : { visible: false }, rangeslider: SHOW_RANGESLIDER ? { visible: true, thickness: 0.10, bgcolor: pp.headerBg, bordercolor: pp.border, borderwidth: 1 } : { visible: false } } };
         var li = 0, ri = 0;
         axes.forEach(function (a, i) {
             var key = i === 0 ? 'yaxis' : ('yaxis' + (i + 1));
@@ -629,7 +659,11 @@ function emitPlot(parent, b) {
         return layout;
     }
     function applyFollow() { if (!followMode || !plotDiv || !window.Plotly) return; var now = Date.now(); suppressRelayout = true; window.Plotly.relayout(plotDiv, { 'xaxis.range': [new Date(now - FOLLOW_WINDOW_MS), new Date(now)] }).then(function () { suppressRelayout = false; }).catch(function () { suppressRelayout = false; }); }
-    function jumpToNow() { followMode = true; applyFollow(); }
+    // History: Fenster (Breite HISTORY_LOAD_MS) ans neueste Datum schieben.
+    // Breite des mitlaufenden Live-Ausschnitts (kann kleiner sein als die geladene Historie).
+    function liveWinMs() { return Math.min(FOLLOW_WINDOW_MS, HISTORY_LOAD_MS); }
+    function rollHistory() { if (!plotDiv || !window.Plotly || !lastNewestMs) return; var w = liveWinMs(); suppressRelayout = true; window.Plotly.relayout(plotDiv, { 'xaxis.range': [new Date(lastNewestMs - w), new Date(lastNewestMs)] }).then(function () { suppressRelayout = false; }).catch(function () { suppressRelayout = false; }); }
+    function jumpToNow() { followMode = true; if (DATA_MODE === 'history') rollHistory(); else applyFollow(); }
     function resetView() {
         if (!plotDiv || !window.Plotly) return;
         var upd = {};
@@ -638,28 +672,62 @@ function emitPlot(parent, b) {
             if (!a.autoscale) { upd[key + '.range'] = [a.min, a.max]; upd[key + '.autorange'] = false; }
             else { upd[key + '.autorange'] = true; }
         });
-        if (DATA_MODE === 'history' && initialXRange) { upd['xaxis.range'] = initialXRange; followMode = false; }
+        if (DATA_MODE === 'history') { followMode = true; }
         else { followMode = true; } // Live: zurück zum Mitlaufen
         suppressRelayout = true;
-        window.Plotly.relayout(plotDiv, upd).then(function () { suppressRelayout = false; if (followMode) applyFollow(); }).catch(function () { suppressRelayout = false; });
+        window.Plotly.relayout(plotDiv, upd).then(function () { suppressRelayout = false; if (followMode) { if (DATA_MODE === 'history') rollHistory(); else applyFollow(); } }).catch(function () { suppressRelayout = false; });
     }
-    function resize() { if (plotDiv && window.Plotly) { try { window.Plotly.Plots.resize(plotDiv); } catch (e) {} } }
+    function isDisplayed() { return !!plotDiv && plotDiv.offsetParent !== null && plotDiv.clientWidth > 1 && plotDiv.clientHeight > 1; }
+    function resize() { if (!window.Plotly || !isDisplayed()) return; try { var p = window.Plotly.Plots.resize(plotDiv); if (p && p.catch) p.catch(function () {}); } catch (e) {} }
+    // Sichtbaren Zustand herstellen: nach echtem Layout den beabsichtigten x-Bereich neu anwenden.
+    function reapplyView() {
+        if (!isDisplayed() || !window.Plotly || !plotDiv) return;
+        if (DATA_MODE === 'history') { if (followMode) rollHistory(); }
+        else if (followMode) applyFollow();
+    }
     function initPlot(pp) {
         currentPalette = pp;
         ensurePlotly(function () {
             if (!plotDiv) return;
             window.Plotly.newPlot(plotDiv, buildTraces(), buildLayout(pp), { displayModeBar: false, responsive: true, scrollZoom: ZOOM_ENABLED });
-            plotDiv.on('plotly_relayout', function (ev) { if (suppressRelayout) return; if (ev['xaxis.autorange'] === true) { followMode = true; applyFollow(); } else if (ev['xaxis.range'] !== undefined || ev['xaxis.range[0]'] !== undefined) { followMode = false; } });
+            plotDiv.on('plotly_relayout', function (ev) { if (suppressRelayout || !setupDone) return; if (ev['xaxis.autorange'] === true) { followMode = true; reapplyView(); } else if (ev['xaxis.range'] !== undefined || ev['xaxis.range[0]'] !== undefined) { followMode = false; } });
             if (DATA_MODE === 'history') {
-                var endMs = Date.now(), startMs = endMs - HISTORY_LOAD_MS;
+                // History + Live in EINEM Subscription-Stream. Fenster (Breite HISTORY_LOAD_MS)
+                // läuft mit den neuesten Daten mit, solange nicht manuell gezoomt/gepannt wurde.
+                followMode = true;
+                var endMs = Date.now(), startMs = endMs - liveWinMs();
                 initialXRange = [new Date(startMs), new Date(endMs)];
-                series.forEach(function (s, i) { loadHistory(s.symbol, startMs, endMs, function (points) { if (!plotDiv || !window.Plotly || !points || !points.length) return; var xs = points.map(function (pt) { return new Date(pt.t); }); var ys = points.map(function (pt) { return pt.v; }); window.Plotly.extendTraces(plotDiv, { x: [xs], y: [ys] }, [i], MAX_POINTS); }); });
                 suppressRelayout = true; window.Plotly.relayout(plotDiv, { 'xaxis.range': [new Date(startMs), new Date(endMs)] }).then(function () { suppressRelayout = false; }).catch(function () { suppressRelayout = false; });
+                var lookbackIso = 'PT' + Math.max(1, Math.round(HISTORY_LOAD_MS / 1000)) + 'S';
+                var symbolList = series.map(function (s) { return s.symbol; });
+                trendHandle = subscribeTrendData(symbolList, lookbackIso, Math.max(200, plotDiv.clientWidth || 960), function (seriesData) {
+                    if (!plotDiv || !window.Plotly || !seriesData || !seriesData.length) return;
+                    var xs = [], ys = [], idx = [], newestMs = 0;
+                    seriesData.forEach(function (arr, i) {
+                        if (i >= series.length) return; // Sicherheit: nur bekannte Traces bedienen
+                        var xarr = arr.map(function (pt) { return new Date(pt.t); });
+                        if (xarr.length) { var lm = xarr[xarr.length - 1].getTime(); if (lm > newestMs) newestMs = lm; }
+                        xs.push(xarr); ys.push(arr.map(function (pt) { return pt.v; })); idx.push(i);
+                    });
+                    if (newestMs) lastNewestMs = newestMs;
+                    // Suppress ueber restyle UND Roll halten, damit der Relayout-Handler
+                    // die programmatische Aenderung nicht als Nutzer-Zoom missversteht.
+                    suppressRelayout = true;
+                    var afterData = idx.length ? window.Plotly.restyle(plotDiv, { x: xs, y: ys }, idx) : Promise.resolve();
+                    afterData.then(function () {
+                        if (followMode && newestMs && isDisplayed()) {
+                            return window.Plotly.relayout(plotDiv, { 'xaxis.range': [new Date(newestMs - liveWinMs()), new Date(newestMs)] });
+                        }
+                    }).then(function () { suppressRelayout = false; }).catch(function () { suppressRelayout = false; });
+                });
+            } else {
+                // Reiner Live-Modus (unveraendert): pro Signal per TcHmi.Symbol.watch anhaengen.
+                series.forEach(function (s, i) { subscribeP(s.symbol, function (v) { if (!plotDiv) return; var num = Number(v); if (isNaN(num)) return; window.Plotly.extendTraces(plotDiv, { x: [[new Date()]], y: [[num]] }, [i], MAX_POINTS); applyFollow(); }); });
             }
-            series.forEach(function (s, i) { subscribeP(s.symbol, function (v) { if (!plotDiv) return; var num = Number(v); if (isNaN(num)) return; window.Plotly.extendTraces(plotDiv, { x: [[new Date()]], y: [[num]] }, [i], MAX_POINTS); applyFollow(); }); });
             refLines.forEach(function (r, k) { if (r.mode === 'symbol' && r.symbol) { subscribeP(r.symbol, function (v) { var num = Number(v); if (isNaN(num)) return; refValues[k] = num; if (!plotDiv || !window.Plotly) return; var upd = {}; upd['shapes[' + k + '].y0'] = num; upd['shapes[' + k + '].y1'] = num; upd['annotations[' + k + '].y'] = num; suppressRelayout = true; window.Plotly.relayout(plotDiv, upd).then(function () { suppressRelayout = false; }).catch(function () { suppressRelayout = false; }); }); } });
             eventMarkers.forEach(function (m, k) { if (!m.symbol) return; subscribeP(m.symbol, function (v) { var key = 'm' + k; var first = !(key in markerLast); if (!first && String(markerLast[key]) === String(v)) return; markerLast[key] = v; if (first && !m.markInitial) return; pushEventLine(m, k, v); }); });
-            resize(); if (DATA_MODE === 'live') applyFollow();
+            resize(); setupDone = true;
+            if (DATA_MODE === 'live') applyFollow(); else reapplyView();
         });
     }
 
@@ -711,14 +779,15 @@ function emitPlot(parent, b) {
     wrapper.appendChild(plotDiv);
     ${parent}.appendChild(wrapper);
 
-    if (typeof ResizeObserver !== 'undefined') { ro = new ResizeObserver(function () { resize(); }); ro.observe(wrapper); }
-    else { onWinResize = function () { resize(); }; window.addEventListener('resize', onWinResize); }
+    if (typeof ResizeObserver !== 'undefined') { ro = new ResizeObserver(function () { resize(); reapplyView(); }); ro.observe(wrapper); }
+    else { onWinResize = function () { resize(); reapplyView(); }; window.addEventListener('resize', onWinResize); }
 
     // Aufräumen beim Schließen des Popups (siehe hideDialog -> teardowns)
     teardowns.push(function () {
         for (var i = 0; i < watchers.length; i++) { try { watchers[i](); } catch (e) {} }
         for (var j = 0; j < symbols.length; j++) { try { symbols[j].destroy(); } catch (e) {} }
         watchers = []; symbols = [];
+        if (trendHandle) { unsubscribeTrend(trendHandle); trendHandle = null; }
         if (ro) { try { ro.disconnect(); } catch (e) {} ro = null; }
         if (onWinResize) { window.removeEventListener('resize', onWinResize); onWinResize = null; }
         try { if (window.Plotly && plotDiv) window.Plotly.purge(plotDiv); } catch (e) {}
@@ -1758,6 +1827,9 @@ export default function App() {
                     <input type="checkbox" checked={!!b.showRangeslider} onChange={(e) => patch(b.id, { showRangeslider: e.target.checked })} /> Range-Slider
                   </label>
                   <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: T.muted, cursor: "pointer" }}>
+                    <input type="checkbox" checked={b.showXAxis !== false} onChange={(e) => patch(b.id, { showXAxis: e.target.checked })} /> X-Achse anzeigen
+                  </label>
+                  <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: T.muted, cursor: "pointer" }}>
                     <input type="checkbox" checked={!!b.showToolbar} onChange={(e) => patch(b.id, { showToolbar: e.target.checked })} /> Überschrift + „Jetzt"
                   </label>
                   <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: T.muted, cursor: "pointer" }}>
@@ -1785,7 +1857,7 @@ export default function App() {
 
                 {b.dataMode === "history" && (
                   <div style={{ fontSize: 11, color: T.accent, border: `1px solid ${T.accentDim}`, borderRadius: 6, padding: "6px 8px", marginBottom: 10, lineHeight: 1.5 }}>
-                    Hinweis: Die <code style={{ color: T.text }}>TcHmiSqliteHistorize.Query</code>-API ist bei uns noch nicht bestätigt – History-Modus ungetestet. Live läuft sicher.
+                    Hinweis: History läuft über <code style={{ color: T.text }}>TcHmiSqliteHistorize.GetTrendLineData</code> (Subscription, History + Live in einem Stream). <b>Live-Fenster (s)</b> = Breite des mitlaufenden Ausschnitts; <b>History laden (s)</b> = wie tief geladen wird bzw. wie weit die Zeitraum-Buttons zurückreichen (Live-Fenster ≤ History laden). Buttons frieren die Ansicht ein und zeigen den statischen Ausschnitt; „Jetzt"/„Zurücksetzen" gehen zurück ins Live-Fenster. Voraussetzung: die Symbole müssen historisiert sein.
                   </div>
                 )}
 
