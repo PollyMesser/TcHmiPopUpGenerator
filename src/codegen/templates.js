@@ -134,12 +134,13 @@ function innerSymbol(uidStr, titleStmt, mw, bodyContent) {
                     var box = document.createElement('div');
                     box.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);' +
                         'background:' + p.boxBg + ';border:1px solid ' + p.border + ';border-radius:12px;' +
-                        'min-width:320px;width:${mw}px;max-width:calc(100vw - 32px);box-shadow:' + p.shadow + ';pointer-events:auto;';
+                        'min-width:320px;width:${mw}px;max-width:calc(100vw - 32px);max-height:calc(100vh - 48px);' +
+                        'display:flex;flex-direction:column;overflow:hidden;box-shadow:' + p.shadow + ';pointer-events:auto;';
 
                     var header = document.createElement('div');
                     header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;' +
                         'padding:14px 20px;background:' + p.headerBg + ';border-radius:12px 12px 0 0;' +
-                        'font-size:15px;font-weight:600;color:' + p.titleColor + ';';
+                        'flex:0 0 auto;font-size:15px;font-weight:600;color:' + p.titleColor + ';';
 
                     var title = document.createElement('span');
 ${titleStmt}
@@ -156,7 +157,7 @@ ${titleStmt}
                     header.appendChild(closeBtn);
 
                     var body = document.createElement('div');
-                    body.style.cssText = 'padding:20px;';
+                    body.style.cssText = 'padding:20px;overflow-y:auto;flex:1 1 auto;min-height:0;';
 
 ${bodyContent}
 
@@ -291,12 +292,13 @@ function innerUC(baseName, titleStmt, mw, bodyContent) {
                     var box = document.createElement('div');
                     box.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);' +
                         'background:' + p.boxBg + ';border:1px solid ' + p.border + ';border-radius:12px;' +
-                        'min-width:320px;width:${mw}px;max-width:calc(100vw - 32px);box-shadow:' + p.shadow + ';pointer-events:auto;';
+                        'min-width:320px;width:${mw}px;max-width:calc(100vw - 32px);max-height:calc(100vh - 48px);' +
+                        'display:flex;flex-direction:column;overflow:hidden;box-shadow:' + p.shadow + ';pointer-events:auto;';
 
                     var header = document.createElement('div');
                     header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;' +
                         'padding:14px 20px;background:' + p.headerBg + ';border-radius:12px 12px 0 0;' +
-                        'font-size:15px;font-weight:600;color:' + p.titleColor + ';';
+                        'flex:0 0 auto;font-size:15px;font-weight:600;color:' + p.titleColor + ';';
 
                     var title = document.createElement('span');
 ${titleStmt}
@@ -313,7 +315,7 @@ ${titleStmt}
                     header.appendChild(closeBtn);
 
                     var body = document.createElement('div');
-                    body.style.cssText = 'padding:20px;';
+                    body.style.cssText = 'padding:20px;overflow-y:auto;flex:1 1 auto;min-height:0;';
 
 ${bodyContent}
 

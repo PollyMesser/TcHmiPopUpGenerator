@@ -135,8 +135,83 @@ function BlockPreview({ b, pal, on, onToggle }) {
             Plotly-Vorschau {axLabel ? "· " + axLabel : ""}
           </span>
         </div>
+        {!!b.showStats && (
+          <div style={{ marginTop: 8, border: `1px solid ${pal.border}`, borderRadius: 8, overflow: "hidden" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", fontSize: 12, fontWeight: 600, color: pal.bodyText }}>
+              <span>▾</span><span style={{ flex: 1 }}>Statistik</span><span style={{ fontWeight: 400, opacity: 0.75 }}>Zeitraum:</span><span style={{ fontVariantNumeric: "tabular-nums" }}>3 h 30 min</span>
+            </div>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, color: pal.bodyText }}>
+              <thead><tr>
+                {["", "Min", "Max", "Mittel", "Median", "Aktuell"].map((h, hi) => (
+                  <th key={hi} style={{ textAlign: hi === 0 ? "left" : "right", padding: "5px 10px", borderTop: `1px solid ${pal.border}`, fontWeight: 600, opacity: 0.8, whiteSpace: "nowrap" }}>{h}</th>
+                ))}
+              </tr></thead>
+              <tbody>
+                {(b.series || []).map((s) => (
+                  <tr key={s.id}>
+                    <td style={{ padding: "5px 10px", borderTop: `1px solid ${pal.border}`, whiteSpace: "nowrap" }}>
+                      <span style={{ display: "inline-block", width: 10, height: 3, borderRadius: 2, background: s.color, marginRight: 6, verticalAlign: "middle" }} />{s.label || "Signal"}
+                    </td>
+                    {["–", "–", "–", "–", "–"].map((v, vi) => (
+                      <td key={vi} style={{ padding: "5px 10px", borderTop: `1px solid ${pal.border}`, textAlign: "right", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{v}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
         <div style={{ fontSize: 11, color: pal.bodyText, opacity: 0.55, marginTop: 4 }}>
           {b.dataMode === "history" ? "History + Live" : "Live"} · {(b.series || []).length} Signal(e){(b.eventMarkers || []).length ? " · " + b.eventMarkers.length + " Marker" : ""}
+        </div>
+      </div>
+    );
+  }
+  if (b.type === "table") {
+    const nRows = b.dataSource === "array" ? Math.min(4, Math.max(1, parseInt(b.arrayCount) || 3)) : Math.min(4, (b.rows || []).length || 1);
+    const cellPrev = (cl, ri) => {
+      if (cl.kind === "text") { const cell = b.dataSource === "array" ? {} : (((b.rows || [])[ri] || {}).cells || [])[b.columns.indexOf(cl)] || {}; return <span>{cell.text || "Text"}</span>; }
+      if (cl.kind === "bool") return <span style={{ display: "inline-block", width: 11, height: 11, borderRadius: "50%", background: pal.inactive || "#9ca3af" }} />;
+      if (cl.kind === "check") return <input type="checkbox" readOnly checked={false} style={{ pointerEvents: "none" }} />;
+      if (cl.kind === "input") return <span style={{ display: "inline-block", width: 56, padding: "1px 5px", border: `1px solid ${pal.border}`, borderRadius: 4, textAlign: "right", opacity: 0.7 }}>–</span>;
+      if (cl.kind === "button") return <span style={{ display: "inline-block", padding: "2px 10px", border: `1px solid ${pal.border}`, borderRadius: 6, fontSize: 11, fontWeight: 600 }}>{cl.label || "OK"}</span>;
+      if (cl.kind === "enum") { const e = (cl.map || [])[ri % Math.max(1, (cl.map || []).length)] ; const col = COLORS[e?.color] || COLORS.grey; return <span style={{ display: "inline-block", padding: "1px 8px", borderRadius: 9, fontSize: 11, fontWeight: 600, background: col.bg, color: col.text }}>{e?.label || "?"}</span>; }
+      if (cl.kind === "icon") { const e = (cl.map || [])[ri % Math.max(1, (cl.map || []).length)]; const col = COLORS[e?.color] || COLORS.grey; const ic = ICONS[e?.icon] || ICONS.info; return <span style={{ display: "inline-flex", color: col.bg, verticalAlign: "middle" }} dangerouslySetInnerHTML={{ __html: ic.svg }} />; }
+      return <span style={{ opacity: 0.6, fontVariantNumeric: "tabular-nums" }}>–</span>;
+    };
+    return (
+      <div style={{ marginBottom: 16 }}>
+        {(b.caption || b.search !== false) && (
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+            <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: pal.titleColor }}>{b.caption || ""}</span>
+            {b.search !== false && <span style={{ width: 120, padding: "3px 8px", border: `1px solid ${pal.border}`, borderRadius: 6, fontSize: 11, color: pal.bodyText, opacity: 0.6 }}>Suchen…</span>}
+          </div>
+        )}
+        <div style={{ border: `1px solid ${pal.border}`, borderRadius: 8, overflow: "hidden" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, color: pal.bodyText }}>
+            {b.showHeader !== false && (
+              <thead><tr style={{ background: pal.headerBg }}>
+                {!!b.showIndex && <th style={{ padding: "6px 10px", fontSize: 11, textAlign: "right", color: pal.titleColor }}>#</th>}
+                {(b.columns || []).map((cl, ci) => (
+                  <th key={cl.id} style={{ padding: "6px 10px", fontSize: 11, fontWeight: 600, color: pal.titleColor, textAlign: cl.kind === "read" || cl.kind === "input" ? "right" : "left", whiteSpace: "nowrap" }}>{cl.header || `Spalte ${ci + 1}`}</th>
+                ))}
+              </tr></thead>
+            )}
+            <tbody>
+              {Array.from({ length: nRows }, (_, ri) => (
+                <tr key={ri} style={{ background: b.striped !== false && ri % 2 === 1 ? "rgba(127,127,127,0.06)" : "transparent" }}>
+                  {!!b.showIndex && <td style={{ padding: "5px 10px", borderTop: `1px solid ${pal.border}`, fontSize: 11, opacity: 0.6, textAlign: "right" }}>{(parseInt(b.startIndex) || 0) + ri}</td>}
+                  {(b.columns || []).map((cl) => (
+                    <td key={cl.id} style={{ padding: "5px 10px", borderTop: `1px solid ${pal.border}`, textAlign: cl.kind === "read" || cl.kind === "input" ? "right" : cl.kind === "text" ? "left" : "center", whiteSpace: "nowrap" }}>{cellPrev(cl, ri)}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: pal.bodyText, opacity: 0.55, marginTop: 4 }}>
+          <span>{b.dataSource === "array" ? `PLC-Array (max. ${b.arrayCount})` : `${(b.rows || []).length} feste Zeile(n)`}{(b.rules || []).length ? ` · ${b.rules.length} Regel(n)` : ""}</span>
+          {Number(b.pageSize) > 0 && <span>‹ 1 / n ›</span>}
         </div>
       </div>
     );

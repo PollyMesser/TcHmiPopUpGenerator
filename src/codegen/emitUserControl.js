@@ -2,6 +2,7 @@ import { jsStr, locExpr, unitSuffix, attrName, I, cmpExpr, condOp, condVal } fro
 import { COLORS } from "../constants/palette.js";
 import { emitText, emitButtonItemUC, progressParams, trigActionUC } from "./emitSymbol.js";
 import { emitPlot } from "./emitPlot.js";
+import { emitTable } from "./emitTable.js";
 import { emitDivider } from "./shared.js";
 
 // ─────────────────────────────────────────────────────────────
@@ -157,6 +158,7 @@ function blockCodeUC(b, parent) {
   if (b.type === "input") return emitInputUC(parent, b, "16px");
   if (b.type === "progress") return emitProgressUC(parent, b, "16px");
   if (b.type === "plot") return emitPlot(parent, b);
+  if (b.type === "table") return emitTable(parent, b);
   if (b.type === "divider") return emitDivider(parent, b);
   if (b.type === "row") return emitRowUC(parent, b);
   if (b.type === "enum") return emitEnumUC(parent, b, "16px");

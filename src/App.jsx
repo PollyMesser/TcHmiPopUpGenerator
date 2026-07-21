@@ -5,7 +5,7 @@ import { T, PAL } from "./constants/theme.js";
 import { PLOT_COLORS, MAX_AXES } from "./constants/palette.js";
 import { OUTPUT_MODES, BLOCK_META } from "./constants/options.js";
 import { nid } from "./model/ids.js";
-import { mkButton, mkItem, mkCond, mkEnumEntry, mkStatusEntry, newBlock, mkAxis, mkSeries, mkRef, mkMapping, mkMarker, mkTimeBtn } from "./model/factories.js";
+import { mkButton, mkItem, mkCond, mkEnumEntry, mkStatusEntry, newBlock, mkAxis, mkSeries, mkRef, mkMapping, mkMarker, mkTimeBtn, mkTableCol, mkTableMapEntry, mkTableRow, mkTableRule } from "./model/factories.js";
 import { clampCol, groupByCol } from "./model/layout.js";
 
 import { generate } from "./codegen/index.js";
@@ -108,6 +108,27 @@ export default function App() {
   const patchItemCond = (id, idx, cid, p) => setBlocks((bs) => bs.map((b) => b.id === id ? { ...b, items: b.items.map((it, i) => i === idx ? { ...it, enableIf: (it.enableIf || []).map((c) => (c.id === cid ? { ...c, ...p } : c)) } : it) } : b));
   const patchEntry = (id, eid, p) => setBlocks((bs) => bs.map((b) => b.id === id ? { ...b, map: b.map.map((e) => (e.id === eid ? { ...e, ...p } : e)) } : b));
   const addEnumEntry = (id) => setBlocks((bs) => bs.map((b) => b.id === id ? { ...b, map: [...b.map, mkEnumEntry("", "")] } : b));
+
+  // ── Tabellen-Handler ──
+  const patchTblCol = (id, colId, p) => setBlocks((bs) => bs.map((b) => b.id === id ? { ...b, columns: b.columns.map((c) => (c.id === colId ? { ...c, ...p } : c)) } : b));
+  const addTblCol = (id) => setBlocks((bs) => bs.map((b) => b.id === id ? { ...b, columns: [...b.columns, mkTableCol("read")], rows: (b.rows || []).map((r) => ({ ...r, cells: [...r.cells, { symbol: "", text: "", loc: "" }] })) } : b));
+  const removeTblCol = (id, colIdx) => setBlocks((bs) => bs.map((b) => {
+    if (b.id !== id || b.columns.length <= 1) return b;
+    return { ...b,
+      columns: b.columns.filter((_, i) => i !== colIdx),
+      rows: (b.rows || []).map((r) => ({ ...r, cells: r.cells.filter((_, i) => i !== colIdx) })),
+      rules: (b.rules || []).filter((u) => u.colIndex !== colIdx).map((u) => (u.colIndex > colIdx ? { ...u, colIndex: u.colIndex - 1 } : u)),
+    };
+  }));
+  const addTblRow = (id) => setBlocks((bs) => bs.map((b) => b.id === id ? { ...b, rows: [...(b.rows || []), mkTableRow(b.columns.length)] } : b));
+  const removeTblRow = (id, rowId) => setBlocks((bs) => bs.map((b) => b.id === id ? { ...b, rows: b.rows.filter((r) => r.id !== rowId) } : b));
+  const patchTblCell = (id, rowId, colIdx, p) => setBlocks((bs) => bs.map((b) => b.id === id ? { ...b, rows: b.rows.map((r) => (r.id === rowId ? { ...r, cells: r.cells.map((cl, i) => (i === colIdx ? { ...cl, ...p } : cl)) } : r)) } : b));
+  const addTblMap = (id, colId) => setBlocks((bs) => bs.map((b) => b.id === id ? { ...b, columns: b.columns.map((c) => (c.id === colId ? { ...c, map: [...(c.map || []), mkTableMapEntry("", "")] } : c)) } : b));
+  const removeTblMap = (id, colId, entryId) => setBlocks((bs) => bs.map((b) => b.id === id ? { ...b, columns: b.columns.map((c) => (c.id === colId ? { ...c, map: c.map.filter((e) => e.id !== entryId) } : c)) } : b));
+  const patchTblMap = (id, colId, entryId, p) => setBlocks((bs) => bs.map((b) => b.id === id ? { ...b, columns: b.columns.map((c) => (c.id === colId ? { ...c, map: c.map.map((e) => (e.id === entryId ? { ...e, ...p } : e)) } : c)) } : b));
+  const addTblRule = (id) => setBlocks((bs) => bs.map((b) => b.id === id ? { ...b, rules: [...(b.rules || []), mkTableRule()] } : b));
+  const removeTblRule = (id, ruleId) => setBlocks((bs) => bs.map((b) => b.id === id ? { ...b, rules: b.rules.filter((u) => u.id !== ruleId) } : b));
+  const patchTblRule = (id, ruleId, p) => setBlocks((bs) => bs.map((b) => b.id === id ? { ...b, rules: b.rules.map((u) => (u.id === ruleId ? { ...u, ...p } : u)) } : b));
   const addStatusEntry = (id) => setBlocks((bs) => bs.map((b) => b.id === id ? { ...b, map: [...b.map, mkStatusEntry("", "Status", "grey")] } : b));
   const removeEntry = (id, eid) => setBlocks((bs) => bs.map((b) => b.id === id ? { ...b, map: b.map.filter((e) => e.id !== eid) } : b));
 
@@ -177,7 +198,7 @@ export default function App() {
 
   // ── Karte (Accordion + Griff-Drag): ausgelagert nach components/editor/BlockCard.jsx ──
   const ui = { openId, setOpenId, dragId, setDragId, grabbedId, setGrabbedId, dropTarget, setDropTarget, columns, mode, sm };
-  const actions = { patch, remove, moveVertical, moveFlat, moveHorizontal, patchBtn, addBtn, removeBtn, addCond, removeCond, patchCond, patchItem, addItem, removeItem, setItemKind, addItemCond, removeItemCond, patchItemCond, patchEntry, addEnumEntry, addStatusEntry, removeEntry, addAxis, removeAxis, patchAxis, addSeries, removeSeries, patchSeries, addRef, removeRef, patchRef, addMarker, removeMarker, patchMarker, addMapping, removeMapping, patchMapping, addTimeBtn, removeTimeBtn, patchTimeBtn, handleDrop };
+  const actions = { patch, remove, moveVertical, moveFlat, moveHorizontal, patchBtn, addBtn, removeBtn, addCond, removeCond, patchCond, patchItem, addItem, removeItem, setItemKind, addItemCond, removeItemCond, patchItemCond, patchEntry, addEnumEntry, addStatusEntry, removeEntry, addAxis, removeAxis, patchAxis, addSeries, removeSeries, patchSeries, addRef, removeRef, patchRef, addMarker, removeMarker, patchMarker, addMapping, removeMapping, patchMapping, addTimeBtn, removeTimeBtn, patchTimeBtn, handleDrop, patchTblCol, addTblCol, removeTblCol, addTblRow, removeTblRow, patchTblCell, addTblMap, removeTblMap, patchTblMap, addTblRule, removeTblRule, patchTblRule };
   const renderCard = (b, opts) => <BlockCard key={b.id} b={b} opts={opts} ui={ui} actions={actions} />;
 
   const renderPreviewBody = () => segments.map((part, pi) => {

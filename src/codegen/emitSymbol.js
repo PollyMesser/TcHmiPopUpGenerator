@@ -1,6 +1,7 @@
 import { jsStr, wrapSym, locExpr, unitSuffix, attrName, I, cmpExpr, condOp, condVal } from "./helpers.js";
 import { COLORS, TEXT_BG, ICONS } from "../constants/palette.js";
 import { emitPlot } from "./emitPlot.js";
+import { emitTable } from "./emitTable.js";
 import { emitDivider } from "./shared.js";
 
 // ─────────────────────────────────────────────────────────────
@@ -283,6 +284,7 @@ function blockCodeSym(b, parent) {
   if (b.type === "input") return emitInput(parent, b, "16px");
   if (b.type === "progress") return emitProgress(parent, b, "16px");
   if (b.type === "plot") return emitPlot(parent, b);
+  if (b.type === "table") return emitTable(parent, b);
   if (b.type === "divider") return emitDivider(parent, b);
   if (b.type === "row") return emitRow(parent, b);
   if (b.type === "enum") return emitEnum(parent, b, "16px");

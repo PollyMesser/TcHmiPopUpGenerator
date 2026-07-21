@@ -1,6 +1,6 @@
 import {
   Type, Eye, CircleDot, MousePointerClick, PencilLine, ToggleLeft, Columns2,
-  Braces, Zap, Box, List, ChevronsUpDown, Tag, Gauge, LineChart, Minus,
+  Braces, Zap, Box, List, ChevronsUpDown, Tag, Gauge, LineChart, Minus, Table,
 } from "lucide-react";
 
 // ── Ausgabemodi ──
@@ -18,6 +18,7 @@ const BLOCK_META = {
   input:  { label: "Eingabefeld",     icon: PencilLine,        hint: "Wert schreiben + Senden" },
   progress:{ label: "Ladebalken",     icon: Gauge,             hint: "Prozent/Wert als Balken (z.B. Proportionalventil)" },
   plot:   { label: "Verlauf (Plot)",  icon: LineChart,         hint: "Plotly-Trend, volle Breite" },
+  table: { label: "Tabelle", icon: Table, hint: "Such-/blätterbare Tabelle (statisch oder aus PLC-Array)" },
   button: { label: "Buttons",         icon: MousePointerClick, hint: "1–2 Buttons, Variable schreiben" },
   row:    { label: "Zeile",           icon: Columns2,          hint: "2 Elemente nebeneinander" },
   enum:   { label: "Enum-Anzeige",    icon: List,              hint: "Wert → Klartext (Loc)" },

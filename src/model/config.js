@@ -26,6 +26,11 @@ function reidBlocks(blocks) {
     if (nb.buttons) nb.buttons = nb.buttons.map((bt) => ({ ...bt, enableIf: (bt.enableIf || []).map((c) => ({ ...c, id: eid("c") })) }));
     if (nb.items) nb.items = nb.items.map((it) => ({ ...it, id: nid() }));
     if (nb.map) nb.map = nb.map.map((e) => ({ ...e, id: eid("m") }));
+    if (nb.type === "table") {
+      nb.columns = (nb.columns || []).map((c) => ({ ...c, id: eid("tc"), map: (c.map || []).map((e) => ({ ...e, id: eid("tm") })) }));
+      nb.rows = (nb.rows || []).map((r) => ({ ...r, id: eid("tr"), cells: (r.cells || []).map((cl) => ({ ...cl })) }));
+      nb.rules = (nb.rules || []).map((u) => ({ ...u, id: eid("tu") }));
+    }
     if (nb.type === "plot") {
       const axMap = {};
       nb.axes = (nb.axes || []).map((a) => { const nid2 = pid("a"); axMap[a.id] = nid2; return { ...a, id: nid2 }; });

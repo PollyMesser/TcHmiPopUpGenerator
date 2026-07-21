@@ -32,6 +32,111 @@ function plotBlockConfig(b) {
 }
 function emitPlot(parent, b) {
   const c = plotBlockConfig(b);
+  // ── Statistik-Tabelle (optional): Alle Einfügepunkte sind leere Strings, wenn
+  //    showStats aus ist – der generierte Code bleibt dann byte-identisch. ──
+  const S = !!b.showStats;
+  const statsFns = !S ? "" : `    // ── Statistik-Tabelle (Bezug: sichtbarer x-Ausschnitt, live aktualisiert) ──
+    var statsWrap = null, statsCells = [], statsRangeEl = null, statsOpen = true;
+    function fmtStatNum(v) { var a = Math.abs(v); var d = a >= 100 ? 0 : (a >= 10 ? 1 : 2); return v.toFixed(d); }
+    function fmtStatDur(ms) {
+        if (!isFinite(ms) || ms < 0) ms = 0;
+        var s = Math.round(ms / 1000);
+        var d = Math.floor(s / 86400); s -= d * 86400;
+        var h = Math.floor(s / 3600); s -= h * 3600;
+        var m = Math.floor(s / 60); s -= m * 60;
+        var out = [];
+        if (d) out.push(d + ' d');
+        if (h) out.push(h + ' h');
+        if (m) out.push(m + ' min');
+        if (!d && !h && s) out.push(s + ' s');
+        return out.length ? out.join(' ') : '0 s';
+    }
+    function updateStats() {
+        if (!statsWrap || !plotDiv || !plotDiv.data) return;
+        var r = (plotDiv.layout && plotDiv.layout.xaxis) ? plotDiv.layout.xaxis.range : null;
+        var r0 = r ? new Date(r[0]).getTime() : NaN;
+        var r1 = r ? new Date(r[1]).getTime() : NaN;
+        if (isNaN(r0) || isNaN(r1)) {
+            // Fallback vor dem ersten Relayout: gesamte vorhandene Datenspanne
+            r0 = Infinity; r1 = -Infinity;
+            plotDiv.data.forEach(function (tr) { var xs = tr.x || []; if (xs.length) { var a = (xs[0] instanceof Date) ? xs[0].getTime() : new Date(xs[0]).getTime(); var z = (xs[xs.length - 1] instanceof Date) ? xs[xs.length - 1].getTime() : new Date(xs[xs.length - 1]).getTime(); if (a < r0) r0 = a; if (z > r1) r1 = z; } });
+            if (!isFinite(r0) || !isFinite(r1)) return;
+        }
+        if (statsRangeEl) statsRangeEl.textContent = fmtStatDur(r1 - r0);
+        series.forEach(function (s, i) {
+            var cells = statsCells[i]; var tr = plotDiv.data[i];
+            if (!cells || !tr) return;
+            var u = axes[s.axis] ? (axes[s.axis].unit || '') : '';
+            var suf = u ? (u === '%' ? u : ' ' + u) : '';
+            var xs = tr.x || [], ys = tr.y || [], vals = [];
+            for (var k = 0; k < xs.length; k++) {
+                var t = (xs[k] instanceof Date) ? xs[k].getTime() : new Date(xs[k]).getTime();
+                if (t >= r0 && t <= r1) { var v = Number(ys[k]); if (!isNaN(v) && isFinite(v)) vals.push(v); }
+            }
+            var cur = null;
+            for (var q = ys.length - 1; q >= 0; q--) { var cv = Number(ys[q]); if (!isNaN(cv) && isFinite(cv)) { cur = cv; break; } }
+            cells.cur.textContent = cur === null ? '–' : fmtStatNum(cur) + suf;
+            if (!vals.length) { cells.min.textContent = '–'; cells.max.textContent = '–'; cells.mean.textContent = '–'; cells.med.textContent = '–'; return; }
+            var mn = vals[0], mx = vals[0], sum = 0;
+            for (var w = 0; w < vals.length; w++) { var vv = vals[w]; if (vv < mn) mn = vv; if (vv > mx) mx = vv; sum += vv; }
+            var sorted = vals.slice().sort(function (a2, b2) { return a2 - b2; });
+            var med = (sorted.length % 2 === 1) ? sorted[(sorted.length - 1) / 2] : (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2;
+            cells.min.textContent = fmtStatNum(mn) + suf;
+            cells.max.textContent = fmtStatNum(mx) + suf;
+            cells.mean.textContent = fmtStatNum(sum / vals.length) + suf;
+            cells.med.textContent = fmtStatNum(med) + suf;
+        });
+    }
+`;
+  const statsDom = !S ? "" : `    // Statistik-Tabelle unter dem Plot (einklappbar)
+    statsWrap = document.createElement('div');
+    statsWrap.style.cssText = 'margin-top:8px;border:1px solid ' + pp.border + ';border-radius:8px;overflow:hidden;';
+    var stHead = document.createElement('div');
+    stHead.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 10px;cursor:pointer;font-size:12px;font-weight:600;color:' + pp.bodyText + ';';
+    var stArrow = document.createElement('span'); stArrow.textContent = '▾'; stArrow.style.cssText = 'flex:0 0 auto;transition:transform .15s;';
+    var stTitle = document.createElement('span'); stTitle.textContent = locP('L_Stat_Title', 'Statistik'); stTitle.style.cssText = 'flex:1 1 auto;';
+    var stRangeLbl = document.createElement('span'); stRangeLbl.style.cssText = 'flex:0 0 auto;font-weight:400;opacity:.75;'; stRangeLbl.textContent = locP('L_Stat_Range', 'Zeitraum') + ':';
+    statsRangeEl = document.createElement('span'); statsRangeEl.style.cssText = 'flex:0 0 auto;font-variant-numeric:tabular-nums;';
+    stHead.appendChild(stArrow); stHead.appendChild(stTitle); stHead.appendChild(stRangeLbl); stHead.appendChild(statsRangeEl);
+    statsWrap.appendChild(stHead);
+    var stTblWrap = document.createElement('div');
+    stTblWrap.style.cssText = 'overflow-x:auto;';
+    var stTbl = document.createElement('table');
+    stTbl.style.cssText = 'width:100%;border-collapse:collapse;font-size:12px;color:' + pp.bodyText + ';';
+    var stThead = document.createElement('tr');
+    ['', locP('L_Stat_Min', 'Min'), locP('L_Stat_Max', 'Max'), locP('L_Stat_Mean', 'Mittel'), locP('L_Stat_Median', 'Median'), locP('L_Stat_Now', 'Aktuell')].forEach(function (h, hi) {
+        var th = document.createElement('th');
+        th.textContent = h;
+        th.style.cssText = 'text-align:' + (hi === 0 ? 'left' : 'right') + ';padding:5px 10px;border-top:1px solid ' + pp.border + ';font-weight:600;opacity:.8;white-space:nowrap;';
+        stThead.appendChild(th);
+    });
+    stTbl.appendChild(stThead);
+    series.forEach(function (s) {
+        var strow = document.createElement('tr');
+        var tdName = document.createElement('td');
+        tdName.style.cssText = 'padding:5px 10px;border-top:1px solid ' + pp.border + ';white-space:nowrap;';
+        var stsw = document.createElement('span'); stsw.style.cssText = 'display:inline-block;width:10px;height:3px;border-radius:2px;background:' + s.color + ';margin-right:6px;vertical-align:middle;';
+        var stnm = document.createElement('span'); stnm.textContent = locP(s.loc, s.label);
+        tdName.appendChild(stsw); tdName.appendChild(stnm); strow.appendChild(tdName);
+        var cells = {};
+        ['min', 'max', 'mean', 'med', 'cur'].forEach(function (key) {
+            var td = document.createElement('td');
+            td.textContent = '–';
+            td.style.cssText = 'padding:5px 10px;border-top:1px solid ' + pp.border + ';text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;';
+            cells[key] = td; strow.appendChild(td);
+        });
+        statsCells.push(cells); stTbl.appendChild(strow);
+    });
+    stTblWrap.appendChild(stTbl); statsWrap.appendChild(stTblWrap);
+    stHead.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
+    stHead.onclick = function () { statsOpen = !statsOpen; stTblWrap.style.display = statsOpen ? '' : 'none'; stArrow.style.transform = statsOpen ? '' : 'rotate(-90deg)'; };
+    wrapper.appendChild(statsWrap);
+`;
+  const hookPush = S ? " updateStats();" : "";
+  const hookLive = S ? " updateStats();" : "";
+  const hookRelayout = S ? " updateStats();" : "";
+  const hookInit = S ? " updateStats();" : "";
+  const hookTear = S ? " statsWrap = null; statsCells = []; statsRangeEl = null;" : "";
   const core = `// Plotly-Verlauf (eigenständiges Modul, eigener Lebenszyklus)
 (function () {
     var axes = ${c.axes};
@@ -205,7 +310,7 @@ function emitPlot(parent, b) {
         suppressRelayout = true;
         window.Plotly.relayout(plotDiv, upd).then(function () { suppressRelayout = false; if (followMode) { if (DATA_MODE === 'history') rollHistory(); else applyFollow(); } }).catch(function () { suppressRelayout = false; });
     }
-    function isDisplayed() { return !!plotDiv && plotDiv.offsetParent !== null && plotDiv.clientWidth > 1 && plotDiv.clientHeight > 1; }
+${statsFns}    function isDisplayed() { return !!plotDiv && plotDiv.offsetParent !== null && plotDiv.clientWidth > 1 && plotDiv.clientHeight > 1; }
     function resize() { if (!window.Plotly || !isDisplayed()) return; try { var p = window.Plotly.Plots.resize(plotDiv); if (p && p.catch) p.catch(function () {}); } catch (e) {} }
     // Sichtbaren Zustand herstellen: nach echtem Layout den beabsichtigten x-Bereich neu anwenden.
     function reapplyView() {
@@ -218,7 +323,7 @@ function emitPlot(parent, b) {
         ensurePlotly(function () {
             if (!plotDiv) return;
             window.Plotly.newPlot(plotDiv, buildTraces(), buildLayout(pp), { displayModeBar: false, responsive: true, scrollZoom: ZOOM_ENABLED });
-            plotDiv.on('plotly_relayout', function (ev) { if (suppressRelayout || !setupDone) return; if (ev['xaxis.autorange'] === true) { followMode = true; reapplyView(); } else if (ev['xaxis.range'] !== undefined || ev['xaxis.range[0]'] !== undefined) { followMode = false; } });
+            plotDiv.on('plotly_relayout', function (ev) { if (suppressRelayout || !setupDone) return; if (ev['xaxis.autorange'] === true) { followMode = true; reapplyView(); } else if (ev['xaxis.range'] !== undefined || ev['xaxis.range[0]'] !== undefined) { followMode = false; }${hookRelayout} });
             if (DATA_MODE === 'history') {
                 // History + Live in EINEM Subscription-Stream. Fenster (Breite HISTORY_LOAD_MS)
                 // läuft mit den neuesten Daten mit, solange nicht manuell gezoomt/gepannt wurde.
@@ -246,15 +351,15 @@ function emitPlot(parent, b) {
                         if (followMode && newestMs && isDisplayed()) {
                             return window.Plotly.relayout(plotDiv, { 'xaxis.range': [new Date(newestMs - liveWinMs()), new Date(newestMs)] });
                         }
-                    }).then(function () { suppressRelayout = false; }).catch(function () { suppressRelayout = false; });
+                    }).then(function () { suppressRelayout = false;${hookPush} }).catch(function () { suppressRelayout = false; });
                 });
             } else {
                 // Reiner Live-Modus (unveraendert): pro Signal per TcHmi.Symbol.watch anhaengen.
-                series.forEach(function (s, i) { subscribeP(s.symbol, function (v) { if (!plotDiv) return; var num = Number(v); if (isNaN(num)) return; window.Plotly.extendTraces(plotDiv, { x: [[new Date()]], y: [[num]] }, [i], MAX_POINTS); applyFollow(); }); });
+                series.forEach(function (s, i) { subscribeP(s.symbol, function (v) { if (!plotDiv) return; var num = Number(v); if (isNaN(num)) return; window.Plotly.extendTraces(plotDiv, { x: [[new Date()]], y: [[num]] }, [i], MAX_POINTS); applyFollow();${hookLive} }); });
             }
             refLines.forEach(function (r, k) { if (r.mode === 'symbol' && r.symbol) { subscribeP(r.symbol, function (v) { var num = Number(v); if (isNaN(num)) return; refValues[k] = num; if (!plotDiv || !window.Plotly) return; var upd = {}; upd['shapes[' + k + '].y0'] = num; upd['shapes[' + k + '].y1'] = num; upd['annotations[' + k + '].y'] = num; suppressRelayout = true; window.Plotly.relayout(plotDiv, upd).then(function () { suppressRelayout = false; }).catch(function () { suppressRelayout = false; }); }); } });
             eventMarkers.forEach(function (m, k) { if (!m.symbol) return; subscribeP(m.symbol, function (v) { var key = 'm' + k; var first = !(key in markerLast); if (!first && String(markerLast[key]) === String(v)) return; markerLast[key] = v; if (first && !m.markInitial) return; pushEventLine(m, k, v); }); });
-            resize(); setupDone = true;
+            resize(); setupDone = true;${hookInit}
             if (DATA_MODE === 'live') applyFollow(); else reapplyView();
         });
     }
@@ -305,7 +410,7 @@ function emitPlot(parent, b) {
     plotDiv.style.cssText = 'width:100%;height:' + PLOT_HEIGHT + 'px;min-width:0;';
     plotDiv.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
     wrapper.appendChild(plotDiv);
-    ${parent}.appendChild(wrapper);
+${statsDom}    ${parent}.appendChild(wrapper);
 
     if (typeof ResizeObserver !== 'undefined') { ro = new ResizeObserver(function () { resize(); reapplyView(); }); ro.observe(wrapper); }
     else { onWinResize = function () { resize(); reapplyView(); }; window.addEventListener('resize', onWinResize); }
@@ -319,7 +424,7 @@ function emitPlot(parent, b) {
         if (ro) { try { ro.disconnect(); } catch (e) {} ro = null; }
         if (onWinResize) { window.removeEventListener('resize', onWinResize); onWinResize = null; }
         try { if (window.Plotly && plotDiv) window.Plotly.purge(plotDiv); } catch (e) {}
-        plotDiv = null; wrapper = null;
+        plotDiv = null; wrapper = null;${hookTear}
     });
 
     initPlot(pp);

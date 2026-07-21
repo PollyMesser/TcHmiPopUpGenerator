@@ -12,7 +12,7 @@ import { ButtonItemFields, InputFields, ReadBoolFields, TriggerFields } from "..
 // ui: Ansichts-Zustand aus App(); actions: alle Block-Handler aus App().
 function BlockCard({ b, opts, ui, actions }) {
   const { openId, setOpenId, dragId, setDragId, grabbedId, setGrabbedId, dropTarget, setDropTarget, columns, mode, sm } = ui;
-  const { patch, remove, moveVertical, moveFlat, moveHorizontal, patchBtn, addBtn, removeBtn, addCond, removeCond, patchCond, patchItem, addItem, removeItem, setItemKind, addItemCond, removeItemCond, patchItemCond, patchEntry, addEnumEntry, addStatusEntry, removeEntry, addAxis, removeAxis, patchAxis, addSeries, removeSeries, patchSeries, addRef, removeRef, patchRef, addMarker, removeMarker, patchMarker, addMapping, removeMapping, patchMapping, addTimeBtn, removeTimeBtn, patchTimeBtn, handleDrop } = actions;
+  const { patch, remove, moveVertical, moveFlat, moveHorizontal, patchBtn, addBtn, removeBtn, addCond, removeCond, patchCond, patchItem, addItem, removeItem, setItemKind, addItemCond, removeItemCond, patchItemCond, patchEntry, addEnumEntry, addStatusEntry, removeEntry, addAxis, removeAxis, patchAxis, addSeries, removeSeries, patchSeries, addRef, removeRef, patchRef, addMarker, removeMarker, patchMarker, addMapping, removeMapping, patchMapping, addTimeBtn, removeTimeBtn, patchTimeBtn, handleDrop, patchTblCol, addTblCol, removeTblCol, addTblRow, removeTblRow, patchTblCell, addTblMap, removeTblMap, patchTblMap, addTblRule, removeTblRule, patchTblRule } = actions;
     const { c, i, colLen, fullWidth } = opts;
     const meta = BLOCK_META[b.type]; const Icon = meta.icon; const open = openId === b.id;
     const isDropBefore = dropTarget && dropTarget.beforeId === b.id;
@@ -193,7 +193,13 @@ function BlockCard({ b, opts, ui, actions }) {
                   <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: T.muted, cursor: "pointer" }}>
                     <input type="checkbox" checked={b.zoomEnabled !== false} onChange={(e) => patch(b.id, { zoomEnabled: e.target.checked })} /> Zoom (Maus/Rad) + „Zurücksetzen"
                   </label>
+                  <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: T.muted, cursor: "pointer" }}>
+                    <input type="checkbox" checked={!!b.showStats} onChange={(e) => patch(b.id, { showStats: e.target.checked })} /> Statistik-Tabelle
+                  </label>
                 </div>
+                {!!b.showStats && (
+                  <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5, margin: "-2px 0 8px" }}>Min · Max · Mittel · Median · Aktuell je Signal, dazu der Zeitraum (z.&#8202;B. „3 h 30 min"). Bezug ist der sichtbare Ausschnitt (folgt Zoom und Zeitraum-Buttons), Aktualisierung live mit jedem Server-Push. Einklappbar im Popup. Spaltentitel lokalisierbar über die Keys L_Stat_Title, L_Stat_Range, L_Stat_Min, L_Stat_Max, L_Stat_Mean, L_Stat_Median, L_Stat_Now.</div>
+                )}
 
                 {(b.showToolbar || b.zoomEnabled !== false) && (
                   <div style={{ border: `1px solid ${T.border}`, borderRadius: 6, padding: 10, marginBottom: 10 }}>
@@ -476,6 +482,145 @@ function BlockCard({ b, opts, ui, actions }) {
                 )}
               </>
             )}
+
+            {b.type === "table" && (() => {
+              const KIND_OPTS = [["read", "Wert (lesen)"], ["text", "Text (statisch)"], ["bool", "LED (Bool)"], ["check", "Checkbox (schreiben)"], ["input", "Eingabe (schreiben)"], ["button", "Button"], ["enum", "Badge (Enum)"], ["icon", "Symbol (SVG)"]];
+              const OPS = ["==", "!=", ">", ">=", "<", "<="];
+              const isArr = b.dataSource === "array";
+              const boundKinds = ["read", "bool", "check", "input", "enum", "icon", "button"];
+              return (
+                <>
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <div style={{ flex: 2 }}><Field label="ÜBERSCHRIFT (optional)"><TextInput value={b.caption || ""} onChange={(e) => patch(b.id, { caption: e.target.value })} /></Field></div>
+                    <div style={{ flex: 2 }}><Field label="LOC-KEY (optional)"><TextInput value={b.captionLoc || ""} onChange={(e) => patch(b.id, { captionLoc: e.target.value })} placeholder="L_…" /></Field></div>
+                    <div style={{ flex: 2 }}>
+                      <Field label="DATENQUELLE">
+                        <Select value={b.dataSource || "static"} onChange={(e) => patch(b.id, { dataSource: e.target.value })} options={[{ value: "static", label: "Feste Zeilen (Editor)" }, { value: "array", label: "PLC-Array (dynamisch)" }]} />
+                      </Field>
+                    </div>
+                  </div>
+                  {isArr && (
+                    <>
+                      <div style={{ display: "flex", gap: 10 }}>
+                        <div style={{ flex: 4 }}><Field label="ARRAY-SYMBOL (Array of Struct)"><TextInput value={b.arraySymbol || ""} onChange={(e) => patch(b.id, { arraySymbol: e.target.value })} placeholder="ADS.AF_PLC.MAIN.GVL.aAlarms" /></Field></div>
+                        <div style={{ flex: 1 }}><Field label="MAX. ZEILEN"><TextInput value={b.arrayCount} onChange={(e) => patch(b.id, { arrayCount: e.target.value })} /></Field></div>
+                        <div style={{ flex: 1 }}><Field label="START-INDEX"><TextInput value={b.startIndex} onChange={(e) => patch(b.id, { startIndex: e.target.value })} /></Field></div>
+                        <div style={{ flex: 3 }}><Field label="ANZAHL-SYMBOL (optional)"><TextInput value={b.countSymbol || ""} onChange={(e) => patch(b.id, { countSymbol: e.target.value })} placeholder="…::nCount" /></Field></div>
+                      </div>
+                      <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5, margin: "-2px 0 8px" }}>Jede gebundene Zelle liest arraySymbol[i] + MEMBER (z. B. <code>::bTriggered</code>) — der per readEx2 bestätigte Element-Pfad. MEMBER ohne führendes „::", „." oder „[" bekommt automatisch „::" davor. Bis WATCH-LIMIT einzelne Watches (bestätigt), darüber EINE Sammel-Subscription (Standard-Protokollweg, in diesem Projekt noch nicht per WS-Mitschnitt verifiziert). ANZAHL-SYMBOL begrenzt die angezeigten Zeilen.</div>
+                    </>
+                  )}
+
+                  <div style={{ fontSize: 11, color: T.muted, fontWeight: 600, margin: "4px 0 6px" }}>SPALTEN</div>
+                  {(b.columns || []).map((cl, ci) => (
+                    <div key={cl.id} style={{ border: `1px solid ${T.border}`, borderRadius: 6, padding: 8, marginBottom: 6 }}>
+                      <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
+                        <div style={{ flex: 2 }}><Field label={`SPALTE ${ci + 1} – TYP`}><Select value={cl.kind} onChange={(e) => patchTblCol(b.id, cl.id, { kind: e.target.value })} options={KIND_OPTS.map(([v, l]) => ({ value: v, label: l }))} /></Field></div>
+                        <div style={{ flex: 2 }}><Field label="ÜBERSCHRIFT"><TextInput value={cl.header || ""} onChange={(e) => patchTblCol(b.id, cl.id, { header: e.target.value })} /></Field></div>
+                        <div style={{ flex: 2 }}><Field label="LOC-KEY"><TextInput value={cl.headerLoc || ""} onChange={(e) => patchTblCol(b.id, cl.id, { headerLoc: e.target.value })} placeholder="L_…" /></Field></div>
+                        {isArr && cl.kind !== "text" && <div style={{ flex: 2 }}><Field label="MEMBER"><TextInput value={cl.member || ""} onChange={(e) => patchTblCol(b.id, cl.id, { member: e.target.value })} placeholder="bAck" /></Field></div>}
+                        {(cl.kind === "read" || cl.kind === "input") && <div style={{ flex: 1 }}><Field label="EINHEIT"><TextInput value={cl.unit || ""} onChange={(e) => patchTblCol(b.id, cl.id, { unit: e.target.value })} /></Field></div>}
+                        {cl.kind === "read" && <div style={{ flex: 1 }}><Field label="DEZIMALEN"><TextInput value={cl.decimals} onChange={(e) => patchTblCol(b.id, cl.id, { decimals: e.target.value })} placeholder="auto" /></Field></div>}
+                        <IconBtn danger disabled={b.columns.length <= 1} title="Spalte entfernen" onClick={() => removeTblCol(b.id, ci)}><Trash2 size={13} /></IconBtn>
+                      </div>
+                      {cl.kind === "button" && (
+                        <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+                          <div style={{ flex: 2 }}><Field label="BUTTON-TEXT"><TextInput value={cl.label || ""} onChange={(e) => patchTblCol(b.id, cl.id, { label: e.target.value })} /></Field></div>
+                          <div style={{ flex: 2 }}><Field label="LOC-KEY"><TextInput value={cl.loc || ""} onChange={(e) => patchTblCol(b.id, cl.id, { loc: e.target.value })} placeholder="L_…" /></Field></div>
+                          <div style={{ flex: 2 }}>
+                            <Field label="AKTION">
+                              <Select value={cl.writeMode || "setTrue"} onChange={(e) => patchTblCol(b.id, cl.id, { writeMode: e.target.value })} options={[{ value: "setTrue", label: "TRUE schreiben" }, { value: "setFalse", label: "FALSE schreiben" }, { value: "toggle", label: "Umschalten" }, { value: "pulse", label: "Puls (true→false)" }]} />
+                            </Field>
+                          </div>
+                          {cl.writeMode === "pulse" && <div style={{ flex: 1 }}><Field label="PULS (ms)"><TextInput value={cl.pulseMs} onChange={(e) => patchTblCol(b.id, cl.id, { pulseMs: e.target.value })} /></Field></div>}
+                        </div>
+                      )}
+                      {(cl.kind === "enum" || cl.kind === "icon") && (
+                        <div style={{ marginTop: 6 }}>
+                          <div style={{ fontSize: 11, color: T.muted, fontWeight: 600, marginBottom: 4 }}>WERT → {cl.kind === "icon" ? "SYMBOL → FARBE" : "TEXT → FARBE"}</div>
+                          {(cl.map || []).map((e) => (
+                            <div key={e.id} style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 4 }}>
+                              <div style={{ width: 70 }}><TextInput value={e.value} onChange={(ev) => patchTblMap(b.id, cl.id, e.id, { value: ev.target.value })} placeholder="Wert" /></div>
+                              {cl.kind === "icon" ? (
+                                <div style={{ width: 130 }}><Select value={e.icon || "info"} onChange={(ev) => patchTblMap(b.id, cl.id, e.id, { icon: ev.target.value })} options={Object.entries(ICONS).map(([k, v]) => ({ value: k, label: v.label }))} /></div>
+                              ) : (
+                                <div style={{ flex: 1 }}><TextInput value={e.label} onChange={(ev) => patchTblMap(b.id, cl.id, e.id, { label: ev.target.value })} placeholder="Text" /></div>
+                              )}
+                              <div style={{ flex: 1 }}><TextInput value={e.loc || ""} onChange={(ev) => patchTblMap(b.id, cl.id, e.id, { loc: ev.target.value })} placeholder="LOC-KEY" /></div>
+                              <ColorSwatches value={e.color} onChange={(cc) => patchTblMap(b.id, cl.id, e.id, { color: cc })} />
+                              <IconBtn danger title="Eintrag entfernen" onClick={() => removeTblMap(b.id, cl.id, e.id)}><Trash2 size={12} /></IconBtn>
+                            </div>
+                          ))}
+                          <IconBtn title="Eintrag hinzufügen" onClick={() => addTblMap(b.id, cl.id)}><Plus size={13} /></IconBtn>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  <div style={{ marginBottom: 10 }}><IconBtn title="Spalte hinzufügen" onClick={() => addTblCol(b.id)}><Plus size={14} /></IconBtn></div>
+
+                  {!isArr && (
+                    <>
+                      <div style={{ fontSize: 11, color: T.muted, fontWeight: 600, margin: "4px 0 6px" }}>ZEILEN (pro Spalte: Symbol bzw. Text)</div>
+                      {(b.rows || []).map((r, ri) => (
+                        <div key={r.id} style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 4 }}>
+                          <span style={{ fontSize: 11, color: T.muted, width: 20, textAlign: "right", flex: "0 0 auto" }}>{ri + 1}</span>
+                          {(b.columns || []).map((cl, ci) => {
+                            const cell = (r.cells || [])[ci] || {};
+                            if (cl.kind === "text") return (
+                              <div key={cl.id} style={{ flex: 1, display: "flex", gap: 4 }}>
+                                <TextInput value={cell.text || ""} onChange={(e) => patchTblCell(b.id, r.id, ci, { text: e.target.value })} placeholder="Text" />
+                                <TextInput value={cell.loc || ""} onChange={(e) => patchTblCell(b.id, r.id, ci, { loc: e.target.value })} placeholder="L_…" />
+                              </div>
+                            );
+                            if (boundKinds.includes(cl.kind)) return (
+                              <div key={cl.id} style={{ flex: 1 }}><TextInput value={cell.symbol || ""} onChange={(e) => patchTblCell(b.id, r.id, ci, { symbol: e.target.value })} placeholder={`Symbol (${cl.header || cl.kind})`} /></div>
+                            );
+                            return <div key={cl.id} style={{ flex: 1 }} />;
+                          })}
+                          <IconBtn danger title="Zeile entfernen" onClick={() => removeTblRow(b.id, r.id)}><Trash2 size={12} /></IconBtn>
+                        </div>
+                      ))}
+                      <div style={{ marginBottom: 10 }}><IconBtn title="Zeile hinzufügen" onClick={() => addTblRow(b.id)}><Plus size={14} /></IconBtn></div>
+                    </>
+                  )}
+
+                  <div style={{ fontSize: 11, color: T.muted, fontWeight: 600, margin: "4px 0 6px" }}>FÄRBE-REGELN (Wert einer Spalte → Zeile/Zelle einfärben)</div>
+                  {(b.rules || []).map((u) => (
+                    <div key={u.id} style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 4 }}>
+                      <div style={{ flex: 2 }}><Select value={u.colIndex} onChange={(e) => patchTblRule(b.id, u.id, { colIndex: parseInt(e.target.value) })} options={(b.columns || []).map((cl, ci) => ({ value: ci, label: `Spalte ${ci + 1}${cl.header ? " – " + cl.header : ""}` }))} /></div>
+                      <div style={{ width: 60 }}><Select value={u.op} onChange={(e) => patchTblRule(b.id, u.id, { op: e.target.value })} options={OPS.map((o) => ({ value: o, label: o }))} /></div>
+                      <div style={{ width: 90 }}><TextInput value={u.value} onChange={(e) => patchTblRule(b.id, u.id, { value: e.target.value })} placeholder="true / 5 / Text" /></div>
+                      <div style={{ width: 90 }}><Select value={u.target} onChange={(e) => patchTblRule(b.id, u.id, { target: e.target.value })} options={[{ value: "row", label: "Zeile" }, { value: "cell", label: "Zelle" }]} /></div>
+                      <ColorSwatches value={u.color} onChange={(cc) => patchTblRule(b.id, u.id, { color: cc })} />
+                      <IconBtn danger title="Regel entfernen" onClick={() => removeTblRule(b.id, u.id)}><Trash2 size={12} /></IconBtn>
+                    </div>
+                  ))}
+                  <div style={{ marginBottom: 10 }}><IconBtn title="Regel hinzufügen" onClick={() => addTblRule(b.id)}><Plus size={14} /></IconBtn></div>
+
+                  <div style={{ display: "flex", gap: 16, marginBottom: 8, flexWrap: "wrap" }}>
+                    <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: T.muted, cursor: "pointer" }}>
+                      <input type="checkbox" checked={b.search !== false} onChange={(e) => patch(b.id, { search: e.target.checked })} /> Suchfeld
+                    </label>
+                    <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: T.muted, cursor: "pointer" }}>
+                      <input type="checkbox" checked={b.striped !== false} onChange={(e) => patch(b.id, { striped: e.target.checked })} /> Zebra-Streifen
+                    </label>
+                    <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: T.muted, cursor: "pointer" }}>
+                      <input type="checkbox" checked={b.showHeader !== false} onChange={(e) => patch(b.id, { showHeader: e.target.checked })} /> Kopfzeile
+                    </label>
+                    <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: T.muted, cursor: "pointer" }}>
+                      <input type="checkbox" checked={!!b.showIndex} onChange={(e) => patch(b.id, { showIndex: e.target.checked })} /> Index-Spalte
+                    </label>
+                  </div>
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <div style={{ flex: 1 }}><Field label="SEITENGRÖSSE (0 = aus)"><TextInput value={b.pageSize} onChange={(e) => patch(b.id, { pageSize: e.target.value })} /></Field></div>
+                    <div style={{ flex: 1 }}><Field label="WATCH-LIMIT"><TextInput value={b.watchLimit} onChange={(e) => patch(b.id, { watchLimit: e.target.value })} /></Field></div>
+                    <div style={{ flex: 1 }}><Field label="SAMMEL-INTERVALL (ms)"><TextInput value={b.pollMs} onChange={(e) => patch(b.id, { pollMs: e.target.value })} /></Field></div>
+                    <div style={{ flex: 3 }} />
+                  </div>
+                  <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5, marginBottom: 8 }}>Bis WATCH-LIMIT gebundene Zellen: einzelne Symbol-Watches (bestätigte API). Darüber: EINE Server-Subscription mit allen Symbolen im Sammel-Intervall — Standard-Protokollweg, in diesem Projekt noch nicht per WS-Mitschnitt verifiziert. Suchfeld-Placeholder lokalisierbar über L_Tbl_Search.</div>
+                </>
+              );
+            })()}
 
             {(b.type === "enum" || b.type === "enumset") && (
               <>

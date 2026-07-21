@@ -29,6 +29,14 @@ const DEFAULT_TIME_BUTTONS = [
 ];
 const defaultTimeButtons = () => DEFAULT_TIME_BUTTONS.map((t) => mkTimeBtn(t.count, t.unit, t.label));
 
+
+// ── Tabellen-Factories ──
+const mkTableCol = (kind) => ({ id: eid("tc"), kind: kind || "read", header: "", headerLoc: "", member: "",
+  unit: "", decimals: "", label: "", loc: "", writeMode: "setTrue", pulseMs: 300, map: [] });
+const mkTableMapEntry = (value, label, color, icon) => ({ id: eid("tm"), value: value == null ? "" : value, label: label || "", loc: "", color: color || "grey", icon: icon || "info" });
+const mkTableRow = (nCols) => ({ id: eid("tr"), cells: Array.from({ length: Math.max(1, nCols || 1) }, () => ({ symbol: "", text: "", loc: "" })) });
+const mkTableRule = () => ({ id: eid("tu"), colIndex: 0, op: "==", value: "true", target: "row", color: "red" });
+
 const newBlock = (type) => {
   switch (type) {
     case "text":   return { id: nid(), type, col: 0, heading: "", headingLoc: "", text: "Hinweis…", loc: "", bgColor: "", icon: "", iconColor: "" };
@@ -39,6 +47,10 @@ const newBlock = (type) => {
     case "divider": return { id: nid(), type, col: 0, label: "", loc: "", inCol: false };
     case "progress": return { id: nid(), type, col: 0, label: "Ventilstellung", loc: "", symbol: "ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::rPosition", min: 0, max: 100, unit: "%", decimals: 0, showValue: true, color: "blue" };
     case "plot": { const ax = mkAxis(PLOT_COLORS[0].hex); return { id: nid(), type, col: 0, caption: "Verlauf", captionLoc: "", dataMode: "live", followSec: 300, historyLoadSec: 3600, maxPoints: 3600, plotHeight: 360, showRangeslider: true, showXAxis: true, showToolbar: true, zoomEnabled: true, nowLabel: "Jetzt", nowLoc: "", resetLabel: "Zurücksetzen", resetLoc: "", timeButtons: defaultTimeButtons(), axes: [ax], series: [mkSeries(ax.id, PLOT_COLORS[1].hex)], refLines: [], eventMarkers: [] }; }
+    case "table":  return { id: nid(), type, col: 0, caption: "", captionLoc: "",
+      dataSource: "static", arraySymbol: "", arrayCount: 10, countSymbol: "", startIndex: 0, showIndex: false,
+      columns: [mkTableCol("read")], rows: [mkTableRow(1)],
+      search: true, pageSize: 0, striped: true, showHeader: true, watchLimit: 30, pollMs: 1000, rules: [] };
     case "button": return { id: nid(), type, col: 0, buttons: [mkButton()] };
     case "row":    return { id: nid(), type, col: 0, items: [mkItem("read"), mkItem("input")] };
     case "enum":    return { id: nid(), type, col: 0, label: "Status", loc: "", symbol: "ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::eState", numeric: true, display: "text", map: [mkEnumEntry(0, "Aus", "grey"), mkEnumEntry(1, "Ein", "green")], fbLoc: "", fbText: "", fbColor: "grey" };
@@ -51,6 +63,7 @@ const newBlock = (type) => {
 };
 
 export {
+  mkTableCol, mkTableMapEntry, mkTableRow, mkTableRule,
   mkButton, mkItem, mkCond, mkEnumEntry, mkStatusEntry, newBlock,
   mkAxis, mkSeries, mkRef, mkMapping, mkMarker,
   mkTimeBtn, DEFAULT_TIME_BUTTONS, defaultTimeButtons,
