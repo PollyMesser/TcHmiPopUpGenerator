@@ -31,11 +31,20 @@ const defaultTimeButtons = () => DEFAULT_TIME_BUTTONS.map((t) => mkTimeBtn(t.cou
 
 
 // ── Tabellen-Factories ──
+// sortable: Spalte per Kopfklick sortierbar (Laufzeit).
+// action/fnName/paramSource/paramMember/paramCol: nur fuer kind==='button' relevant.
+//   action 'symbol' = bisheriges Schreib-Verhalten (Default, Golden-neutral);
+//   action 'fn'     = Aufruf TcHmi.Functions.AC_HMI[fnName](param).
+//   paramSource 'member' (Array) | 'col' (sichtbare Spalte) | 'index' (Zeilenindex) | 'none'.
 const mkTableCol = (kind) => ({ id: eid("tc"), kind: kind || "read", header: "", headerLoc: "", member: "",
-  unit: "", decimals: "", label: "", loc: "", writeMode: "setTrue", pulseMs: 300, map: [] });
+  unit: "", decimals: "", label: "", loc: "", writeMode: "setTrue", pulseMs: 300, map: [],
+  sortable: false,
+  action: "symbol", fnName: "", paramSource: "member", paramMember: "", paramCol: -1 });
 const mkTableMapEntry = (value, label, color, icon) => ({ id: eid("tm"), value: value == null ? "" : value, label: label || "", loc: "", color: color || "grey", icon: icon || "info" });
 const mkTableRow = (nCols) => ({ id: eid("tr"), cells: Array.from({ length: Math.max(1, nCols || 1) }, () => ({ symbol: "", text: "", loc: "" })) });
 const mkTableRule = () => ({ id: eid("tu"), colIndex: 0, op: "==", value: "true", target: "row", color: "red" });
+// Zeilenfilter: Zeile nur zeigen, wenn Bedingung erfuellt. op 'notEmpty'/'notZero' brauchen keinen Wert.
+const mkRowFilter = () => ({ id: eid("tf"), colIndex: 0, op: "notZero", value: "" });
 
 const newBlock = (type) => {
   switch (type) {
@@ -50,7 +59,8 @@ const newBlock = (type) => {
     case "table":  return { id: nid(), type, col: 0, caption: "", captionLoc: "",
       dataSource: "static", arraySymbol: "", arrayCount: 10, countSymbol: "", startIndex: 0, showIndex: false,
       columns: [mkTableCol("read")], rows: [mkTableRow(1)],
-      search: true, pageSize: 0, striped: true, showHeader: true, watchLimit: 30, pollMs: 1000, rules: [] };
+      search: true, pageSize: 0, striped: true, showHeader: true, watchLimit: 30, pollMs: 1000, rules: [], rowFilters: [],
+      defaultSortCol: -1, defaultSortDir: "asc" };
     case "button": return { id: nid(), type, col: 0, buttons: [mkButton()] };
     case "row":    return { id: nid(), type, col: 0, items: [mkItem("read"), mkItem("input")] };
     case "enum":    return { id: nid(), type, col: 0, label: "Status", loc: "", symbol: "ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::eState", numeric: true, display: "text", map: [mkEnumEntry(0, "Aus", "grey"), mkEnumEntry(1, "Ein", "green")], fbLoc: "", fbText: "", fbColor: "grey" };
@@ -63,7 +73,7 @@ const newBlock = (type) => {
 };
 
 export {
-  mkTableCol, mkTableMapEntry, mkTableRow, mkTableRule,
+  mkTableCol, mkTableMapEntry, mkTableRow, mkTableRule, mkRowFilter,
   mkButton, mkItem, mkCond, mkEnumEntry, mkStatusEntry, newBlock,
   mkAxis, mkSeries, mkRef, mkMapping, mkMarker,
   mkTimeBtn, DEFAULT_TIME_BUTTONS, defaultTimeButtons,

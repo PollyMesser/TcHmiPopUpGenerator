@@ -22,6 +22,16 @@ function tableBlockConfig(b) {
       color: (COLORS[e.color] || COLORS.grey).bg, text: (COLORS[e.color] || COLORS.grey).text,
       icon: ICONS[e.icon] ? e.icon : "info",
     })),
+    // sortable nur setzen, wenn aktiv -> Bestands-JSON bleibt byte-identisch
+    ...(c.sortable ? { sortable: true } : {}),
+    // Button-Funktionsaktion nur setzen, wenn action==='fn' -> Bestands-Buttons byte-identisch
+    ...((c.kind === "button" && c.action === "fn") ? {
+      action: "fn",
+      fnName: (c.fnName || "").trim(),
+      psrc: (c.paramSource === "col" || c.paramSource === "index" || c.paramSource === "none") ? c.paramSource : "member",
+      pmember: (c.paramMember || "").trim(),
+      pcol: (function () { var n = parseInt(c.paramCol); return (isNaN(n) || n < 0) ? -1 : n; })(),
+    } : {}),
   }));
   const rowsOut = (b.dataSource === "array") ? [] : (b.rows || []).map((r) =>
     (b.columns || []).map((c, ci) => {
@@ -43,9 +53,18 @@ function tableBlockConfig(b) {
     c: Math.max(0, parseInt(u.colIndex) || 0), op: u.op || "==", v: parseRuleVal(u.value),
     t: u.target === "cell" ? "cell" : "row", color: (COLORS[u.color] || COLORS.red).bg,
   }));
+  // Sichtbarkeitsregeln (Zeilenfilter): Zeile nur zeigen, wenn ALLE Regeln erfuellt sind.
+  // op 'notEmpty' = nicht leer/null/'' ; 'notZero' = nicht 0 und nicht leer ; sonst
+  // Standard-Operator gegen v. Nur setzen, wenn Regeln existieren (Golden-neutral).
+  const filtersOut = (b.rowFilters || []).map((u) => ({
+    c: Math.max(0, parseInt(u.colIndex) || 0),
+    op: (u.op === "notEmpty" || u.op === "notZero") ? u.op : (u.op || "!="),
+    v: parseRuleVal(u.value),
+  }));
   const J = (o) => JSON.stringify(o, null, 4);
   return {
     cols: J(colsOut), rows: J(rowsOut), rules: J(rulesOut), icons: J(usedIcons),
+    filters: J(filtersOut),
     dataSource: b.dataSource === "array" ? "array" : "static",
     arraySymbol: b.arraySymbol ? jsStr(wrapSym(b.arraySymbol)) : "''",
     countSymbol: b.countSymbol ? jsStr(wrapSym(b.countSymbol)) : "''",
@@ -59,6 +78,12 @@ function tableBlockConfig(b) {
     watchLimit: Math.max(0, parseInt(b.watchLimit) || 30),
     pollMs: Math.max(200, parseInt(b.pollMs) || 1000),
     captionExpr: locExpr(b.captionLoc, b.caption || ""),
+    defaultSortCol: (function () {
+      var n = parseInt(b.defaultSortCol);
+      if (isNaN(n) || n < 0 || n >= colsOut.length) return -1;
+      return n;
+    })(),
+    defaultSortDir: b.defaultSortDir === "desc" ? "desc" : "asc",
   };
 }
 
@@ -69,6 +94,7 @@ function emitTable(parent, b) {
     var TCOLS = ${c.cols};
     var TROWS = ${c.rows};
     var TRULES = ${c.rules};
+    var TFILTERS = ${c.filters};
     var ICON_SVGS = ${c.icons};
     var DATA_SOURCE = ${jsStr(c.dataSource)}; // 'static' | 'array'
     var ARRAY_SYMBOL = ${c.arraySymbol};
@@ -82,13 +108,18 @@ function emitTable(parent, b) {
     var SHOW_HEADER = ${c.showHeader};
     var WATCH_LIMIT = ${c.watchLimit};
     var POLL_MS = ${c.pollMs};
+    var DEFAULT_SORT_COL = ${c.defaultSortCol}; // -1 = keine Standardsortierung
+    var DEFAULT_SORT_DIR = ${jsStr(c.defaultSortDir)}; // 'asc' | 'desc'
 
     var watchers = [], symbols = [], batchSubId = null, renderQueued = false;
     var vals = [];        // vals[zeile][spalte] – Rohwerte
+    var paramVals = {};   // paramVals[member][zeile] – versteckte Button-Funktionsparameter (Array-Modus)
     var rowCount = DATA_SOURCE === 'static' ? TROWS.length : ARRAY_COUNT;
     var dynCount = -1;    // Wert aus COUNT_SYMBOL (-1 = unbenutzt)
     var page = 0, query = '';
+    var sortCol = DEFAULT_SORT_COL, sortDir = DEFAULT_SORT_DIR; // aktive Sortierung
     var tbody = null, pageInfo = null, prevBtn = null, nextBtn = null, wrap = null;
+    var sortThs = []; // { el: <span Pfeil>, col: <Spaltenindex> } je sortierbarer Kopfzelle
 
     function locT(key, fallback) {
         try { var f = TcHmi.Functions.getFunction('GetLocalizedText'); if (f) { var t = f(key); if (t !== null && t !== undefined && t !== '') return t; } } catch (e) {}
@@ -127,6 +158,41 @@ function emitTable(parent, b) {
         if (DATA_SOURCE === 'array') return dynSym(r, TCOLS[ci].member);
         var cell = (TROWS[r] || [])[ci];
         return cell && cell.s ? cell.s : '';
+    }
+    // Auto-Typisierung: numerisch, wenn der Rohwert eine endliche Zahl ist; sonst String.
+    // Bool bleibt Bool. undefined/null -> null (Funktion entscheidet selbst).
+    function autoType(v) {
+        if (v === undefined || v === null) return null;
+        if (typeof v === 'boolean') return v;
+        if (typeof v === 'number') return v;
+        var s = String(v).trim();
+        var n = Number(s);
+        if (s !== '' && !isNaN(n) && isFinite(n)) return n;
+        return v;
+    }
+    // Button-Funktionsparameter fuer Zeile r ermitteln (nur bei col.action==='fn').
+    //   psrc 'member' -> versteckter Array-Member aus paramVals (Array-Modus)
+    //   psrc 'col'    -> Wert einer sichtbaren Spalte (vals[r][pcol])
+    //   psrc 'index'  -> Zeilenindex START_INDEX + r
+    //   psrc 'none'   -> kein Parameter (undefined)
+    function resolveParam(r, col) {
+        if (col.psrc === 'index') return START_INDEX + r;
+        if (col.psrc === 'none') return undefined;
+        if (col.psrc === 'col') { var pc = col.pcol; return autoType((pc >= 0 && vals[r]) ? vals[r][pc] : undefined); }
+        // 'member' (Default): versteckter Kanal
+        var m = col.pmember;
+        var store = m ? paramVals[m] : null;
+        return autoType(store ? store[r] : undefined);
+    }
+    function callColFn(r, ci) {
+        var col = TCOLS[ci];
+        var name = col.fnName;
+        if (!name) return;
+        var fns = (typeof TcHmi !== 'undefined' && TcHmi.Functions && TcHmi.Functions.AC_HMI) ? TcHmi.Functions.AC_HMI : null;
+        var fn = fns ? fns[name] : null;
+        if (typeof fn !== 'function') return; // still fehlschlagen wie die Schreibpfade
+        var param = resolveParam(r, col);
+        try { if (col.psrc === 'none') fn(); else fn(param); } catch (e) {}
     }
     function setVal(r, ci, v) {
         if (!vals[r]) vals[r] = [];
@@ -183,6 +249,30 @@ function emitTable(parent, b) {
         var as = String(a === undefined || a === null ? '' : a);
         return op === '!=' ? as !== String(v) : as === String(v);
     }
+    // Zeilenfilter: Zeile ist nur sichtbar, wenn ALLE Filterregeln erfuellt sind.
+    // Werte werden zur Laufzeit geprueft (kein Cache) — billig gegenueber den
+    // Subscriptions und immer korrekt, auch wenn die PLC Zeilen spaeter fuellt.
+    function isEmptyVal(a) {
+        if (a === undefined || a === null) return true;
+        if (typeof a === 'string') return a.trim() === '';
+        return false;
+    }
+    function isZeroVal(a) {
+        if (isEmptyVal(a)) return true;
+        var n = Number(a);
+        return !isNaN(n) && isFinite(n) && n === 0;
+    }
+    function passesFilters(r) {
+        if (!TFILTERS.length) return true;
+        for (var i = 0; i < TFILTERS.length; i++) {
+            var f = TFILTERS[i];
+            var a = vals[r] ? vals[r][f.c] : undefined;
+            if (f.op === 'notEmpty') { if (isEmptyVal(a)) return false; }
+            else if (f.op === 'notZero') { if (isZeroVal(a)) return false; }
+            else { if (!cmpT(a, f.op, f.v)) return false; }
+        }
+        return true;
+    }
     function effectiveCount() {
         var n = rowCount;
         if (DATA_SOURCE === 'array') { if (dynCount >= 0 && dynCount < n) n = dynCount; if (n > ARRAY_COUNT) n = ARRAY_COUNT; }
@@ -236,6 +326,7 @@ function emitTable(parent, b) {
             btn.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
             btn.onclick = function (e) {
                 e.stopPropagation();
+                if (col.action === 'fn') { callColFn(r, ci); return; }
                 var s = symFor(r, ci); if (!s) return;
                 if (col.wmode === 'setFalse') writeT(s, false);
                 else if (col.wmode === 'toggle') { var cur = vals[r] ? vals[r][ci] : undefined; writeT(s, !(cur === true || cur === 1 || cur === '1' || cur === 'true')); }
@@ -264,13 +355,69 @@ function emitTable(parent, b) {
         }
         return td;
     }
+    // Sortierschluessel je Zeile fuer die aktive Spalte: text -> lokalisierter Text,
+    // sonst der Rohwert. Wird typrichtig verglichen (Zahl/Bool/String).
+    function sortValue(r, ci) {
+        var col = TCOLS[ci];
+        if (col.kind === 'text') return cellSearchText(r, ci);
+        return vals[r] ? vals[r][ci] : undefined;
+    }
+    // Boolartig, wenn die Spalte bool/check ist ODER (icon) nur true/false abbildet.
+    // Solche Werte kommen aus der PLC als true/false, 1/0 oder '1'/'0'/'true'/'false'.
+    function isBoolCol(ci) {
+        var k = TCOLS[ci].kind;
+        return k === 'bool' || k === 'check';
+    }
+    function toBool01(v) {
+        return (v === true || v === 1 || v === '1' || v === 'true') ? 1 : 0;
+    }
+    function cmpSort(a, b, ci) {
+        var ua = (a === undefined || a === null), ub = (b === undefined || b === null);
+        if (ua && ub) return 0;
+        if (ua) return 1;   // leere Werte immer ans Ende
+        if (ub) return -1;
+        // Boolartige Spalte: beide Werte einheitlich auf 0/1 normalisieren
+        if (isBoolCol(ci) || typeof a === 'boolean' || typeof b === 'boolean') {
+            return toBool01(a) - toBool01(b);
+        }
+        var na = Number(a), nb = Number(b);
+        var numA = (a !== '' && !isNaN(na) && isFinite(na));
+        var numB = (b !== '' && !isNaN(nb) && isFinite(nb));
+        if (numA && numB) return na - nb;
+        var sa = String(a), sb = String(b);
+        return sa < sb ? -1 : (sa > sb ? 1 : 0);
+    }
+    function sortVisible(list) {
+        var dir = sortDir === 'desc' ? -1 : 1;
+        list.sort(function (ra, rb) {
+            var d = cmpSort(sortValue(ra, sortCol), sortValue(rb, sortCol), sortCol);
+            if (d !== 0) return dir * d;
+            return ra - rb; // stabil: bei Gleichstand Zeilenreihenfolge behalten
+        });
+    }
+    function toggleSort(ci) {
+        if (sortCol === ci) { sortDir = (sortDir === 'asc') ? 'desc' : 'asc'; }
+        else { sortCol = ci; sortDir = 'asc'; }
+        page = 0;
+        updateSortIndicators();
+        renderBody();
+    }
+    var ARR_UP = String.fromCharCode(9650), ARR_DN = String.fromCharCode(9660), ARR_NEUTRAL = String.fromCharCode(9652);
+    function updateSortIndicators() {
+        for (var i = 0; i < sortThs.length; i++) {
+            var s = sortThs[i];
+            if (s.col === sortCol) { s.el.textContent = sortDir === 'desc' ? ARR_DN : ARR_UP; s.el.style.opacity = '.9'; }
+            else { s.el.textContent = ARR_NEUTRAL; s.el.style.opacity = '.3'; }
+        }
+    }
     function renderBody() {
         if (!tbody) return;
         var pp = palT();
         var n = effectiveCount();
         var q = query.toLowerCase();
         var visible = [];
-        for (var r = 0; r < n; r++) { if (rowMatches(r, q)) visible.push(r); }
+        for (var r = 0; r < n; r++) { if (passesFilters(r) && rowMatches(r, q)) visible.push(r); }
+        if (sortCol >= 0 && sortCol < TCOLS.length) sortVisible(visible);
         var pages = PAGE_SIZE > 0 ? Math.max(1, Math.ceil(visible.length / PAGE_SIZE)) : 1;
         if (page >= pages) page = pages - 1;
         if (page < 0) page = 0;
@@ -306,7 +453,7 @@ function emitTable(parent, b) {
     // ── DOM-Aufbau ──
     var pp0 = palT();
     wrap = document.createElement('div');
-    wrap.style.cssText = 'display:flex;flex-direction:column;min-width:0;margin-bottom:16px;';
+    wrap.style.cssText = 'display:flex;flex-direction:column;width:100%;min-width:0;margin-bottom:16px;';
     var capText = ${c.captionExpr};
     if (capText || SEARCH_ON) {
         var top = document.createElement('div');
@@ -318,7 +465,7 @@ function emitTable(parent, b) {
         if (SEARCH_ON) {
             var se = document.createElement('input');
             se.type = 'text';
-            se.placeholder = locT('L_Tbl_Search', 'Suchen…');
+            se.placeholder = locT('L_Search', 'Suchen…');
             se.style.cssText = 'flex:0 0 auto;width:160px;padding:4px 8px;border:1px solid ' + pp0.border + ';border-radius:6px;background:' + pp0.boxBg + ';color:' + pp0.bodyText + ';font-size:12px;';
             se.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
             se.addEventListener('input', function () { query = se.value || ''; page = 0; renderBody(); });
@@ -327,7 +474,8 @@ function emitTable(parent, b) {
         wrap.appendChild(top);
     }
     var scroller = document.createElement('div');
-    scroller.style.cssText = 'overflow:auto;max-height:60vh;border:1px solid ' + pp0.border + ';border-radius:8px;';
+    var scrollerMaxH = (typeof AC_EMBED !== 'undefined' && AC_EMBED) ? '' : 'max-height:60vh;';
+    scroller.style.cssText = 'overflow:auto;' + scrollerMaxH + 'border:1px solid ' + pp0.border + ';border-radius:8px;';
     var tbl = document.createElement('table');
     tbl.style.cssText = 'width:100%;border-collapse:collapse;';
     if (SHOW_HEADER) {
@@ -337,18 +485,34 @@ function emitTable(parent, b) {
         var heads = [];
         if (SHOW_INDEX) heads.push('#');
         TCOLS.forEach(function (col) { heads.push(locT(col.loc, col.header)); });
+        sortThs = [];
         heads.forEach(function (h, hi) {
             var th = document.createElement('th');
-            th.textContent = h;
             var isIdx = SHOW_INDEX && hi === 0;
-            var col0 = TCOLS[SHOW_INDEX ? hi - 1 : hi];
+            var colIdx = SHOW_INDEX ? hi - 1 : hi;
+            var col0 = TCOLS[colIdx];
             var right = !isIdx && col0 && (col0.kind === 'read' || col0.kind === 'input');
-            th.style.cssText = 'position:sticky;top:0;z-index:1;background:' + pp0.headerBg + ';padding:7px 10px;font-size:12px;font-weight:600;color:' + pp0.titleColor + ';text-align:' + (right || isIdx ? 'right' : 'left') + ';white-space:nowrap;';
+            var canSort = !isIdx && col0 && col0.sortable === true;
+            th.style.cssText = 'position:sticky;top:0;z-index:1;background:' + pp0.headerBg + ';padding:7px 10px;font-size:12px;font-weight:600;color:' + pp0.titleColor + ';text-align:' + (right || isIdx ? 'right' : 'left') + ';white-space:nowrap;' + (canSort ? 'cursor:pointer;user-select:none;' : '');
+            if (canSort) {
+                var lab = document.createElement('span');
+                lab.textContent = h;
+                var arr = document.createElement('span');
+                arr.style.cssText = 'display:inline-block;margin-left:5px;font-size:10px;opacity:.55;';
+                th.appendChild(lab);
+                th.appendChild(arr);
+                sortThs.push({ el: arr, col: colIdx });
+                th.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
+                (function (idx) { th.onclick = function (e) { e.stopPropagation(); toggleSort(idx); }; })(colIdx);
+            } else {
+                th.textContent = h;
+            }
             hr.appendChild(th);
         });
         thead.appendChild(hr);
         tbl.appendChild(thead);
     }
+    updateSortIndicators();
     tbody = document.createElement('tbody');
     tbl.appendChild(tbody);
     scroller.appendChild(tbl);
@@ -411,6 +575,27 @@ function emitTable(parent, b) {
                 queueRender();
             });
         } catch (e) {}
+    }
+
+    // ── Versteckter Parameter-Kanal ──
+    // Fuer Buttons mit action==='fn' und psrc==='member' (Array-Modus) wird der als
+    // Parameter dienende Struct-Member je Zeile separat gelesen, auch wenn er keine
+    // sichtbare Spalte hat. Element-Pfad wie bei sichtbaren Zellen (dynSym).
+    if (DATA_SOURCE === 'array') {
+        var pmembers = {}; // eindeutige Member sammeln
+        for (var pc0 = 0; pc0 < TCOLS.length; pc0++) {
+            var pcol = TCOLS[pc0];
+            if (pcol.kind === 'button' && pcol.action === 'fn' && pcol.psrc === 'member' && pcol.pmember) pmembers[pcol.pmember] = true;
+        }
+        Object.keys(pmembers).forEach(function (member) {
+            if (!paramVals[member]) paramVals[member] = [];
+            for (var pr = 0; pr < ARRAY_COUNT; pr++) {
+                (function (rr) {
+                    var ps = dynSym(rr, member);
+                    if (ps) subscribeT(ps, function (v) { paramVals[member][rr] = v; });
+                })(pr);
+            }
+        });
     }
     renderBody();
 

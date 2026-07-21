@@ -30,6 +30,8 @@ function reidBlocks(blocks) {
       nb.columns = (nb.columns || []).map((c) => ({ ...c, id: eid("tc"), map: (c.map || []).map((e) => ({ ...e, id: eid("tm") })) }));
       nb.rows = (nb.rows || []).map((r) => ({ ...r, id: eid("tr"), cells: (r.cells || []).map((cl) => ({ ...cl })) }));
       nb.rules = (nb.rules || []).map((u) => ({ ...u, id: eid("tu") }));
+      nb.rowFilters = (nb.rowFilters || []).map((f) => ({ ...f, id: eid("tf") }));
+
     }
     if (nb.type === "plot") {
       const axMap = {};

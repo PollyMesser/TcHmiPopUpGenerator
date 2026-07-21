@@ -12,7 +12,7 @@ import { ButtonItemFields, InputFields, ReadBoolFields, TriggerFields } from "..
 // ui: Ansichts-Zustand aus App(); actions: alle Block-Handler aus App().
 function BlockCard({ b, opts, ui, actions }) {
   const { openId, setOpenId, dragId, setDragId, grabbedId, setGrabbedId, dropTarget, setDropTarget, columns, mode, sm } = ui;
-  const { patch, remove, moveVertical, moveFlat, moveHorizontal, patchBtn, addBtn, removeBtn, addCond, removeCond, patchCond, patchItem, addItem, removeItem, setItemKind, addItemCond, removeItemCond, patchItemCond, patchEntry, addEnumEntry, addStatusEntry, removeEntry, addAxis, removeAxis, patchAxis, addSeries, removeSeries, patchSeries, addRef, removeRef, patchRef, addMarker, removeMarker, patchMarker, addMapping, removeMapping, patchMapping, addTimeBtn, removeTimeBtn, patchTimeBtn, handleDrop, patchTblCol, addTblCol, removeTblCol, addTblRow, removeTblRow, patchTblCell, addTblMap, removeTblMap, patchTblMap, addTblRule, removeTblRule, patchTblRule } = actions;
+  const { patch, remove, moveVertical, moveFlat, moveHorizontal, patchBtn, addBtn, removeBtn, addCond, removeCond, patchCond, patchItem, addItem, removeItem, setItemKind, addItemCond, removeItemCond, patchItemCond, patchEntry, addEnumEntry, addStatusEntry, removeEntry, addAxis, removeAxis, patchAxis, addSeries, removeSeries, patchSeries, addRef, removeRef, patchRef, addMarker, removeMarker, patchMarker, addMapping, removeMapping, patchMapping, addTimeBtn, removeTimeBtn, patchTimeBtn, handleDrop, patchTblCol, addTblCol, removeTblCol, addTblRow, removeTblRow, patchTblCell, addTblMap, removeTblMap, patchTblMap, addTblRule, removeTblRule, patchTblRule, addRowFilter, removeRowFilter, patchRowFilter } = actions;
     const { c, i, colLen, fullWidth } = opts;
     const meta = BLOCK_META[b.type]; const Icon = meta.icon; const open = openId === b.id;
     const isDropBefore = dropTarget && dropTarget.beforeId === b.id;
@@ -523,16 +523,67 @@ function BlockCard({ b, opts, ui, actions }) {
                         {cl.kind === "read" && <div style={{ flex: 1 }}><Field label="DEZIMALEN"><TextInput value={cl.decimals} onChange={(e) => patchTblCol(b.id, cl.id, { decimals: e.target.value })} placeholder="auto" /></Field></div>}
                         <IconBtn danger disabled={b.columns.length <= 1} title="Spalte entfernen" onClick={() => removeTblCol(b.id, ci)}><Trash2 size={13} /></IconBtn>
                       </div>
+                      <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: T.muted, cursor: "pointer", marginTop: 6 }}>
+                        <input type="checkbox" checked={!!cl.sortable} onChange={(e) => patchTblCol(b.id, cl.id, { sortable: e.target.checked })} /> Sortierbar (Klick auf Kopfzeile sortiert)
+                      </label>
                       {cl.kind === "button" && (
-                        <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
-                          <div style={{ flex: 2 }}><Field label="BUTTON-TEXT"><TextInput value={cl.label || ""} onChange={(e) => patchTblCol(b.id, cl.id, { label: e.target.value })} /></Field></div>
-                          <div style={{ flex: 2 }}><Field label="LOC-KEY"><TextInput value={cl.loc || ""} onChange={(e) => patchTblCol(b.id, cl.id, { loc: e.target.value })} placeholder="L_…" /></Field></div>
-                          <div style={{ flex: 2 }}>
-                            <Field label="AKTION">
-                              <Select value={cl.writeMode || "setTrue"} onChange={(e) => patchTblCol(b.id, cl.id, { writeMode: e.target.value })} options={[{ value: "setTrue", label: "TRUE schreiben" }, { value: "setFalse", label: "FALSE schreiben" }, { value: "toggle", label: "Umschalten" }, { value: "pulse", label: "Puls (true→false)" }]} />
-                            </Field>
+                        <div style={{ marginTop: 6 }}>
+                          <div style={{ display: "flex", gap: 8 }}>
+                            <div style={{ flex: 2 }}><Field label="BUTTON-TEXT"><TextInput value={cl.label || ""} onChange={(e) => patchTblCol(b.id, cl.id, { label: e.target.value })} /></Field></div>
+                            <div style={{ flex: 2 }}><Field label="LOC-KEY"><TextInput value={cl.loc || ""} onChange={(e) => patchTblCol(b.id, cl.id, { loc: e.target.value })} placeholder="L_…" /></Field></div>
+                            <div style={{ flex: 2 }}>
+                              <Field label="ART">
+                                <Select value={cl.action || "symbol"} onChange={(e) => patchTblCol(b.id, cl.id, { action: e.target.value })} options={[{ value: "symbol", label: "Symbol schreiben" }, { value: "fn", label: "Funktion aufrufen" }]} />
+                              </Field>
+                            </div>
                           </div>
-                          {cl.writeMode === "pulse" && <div style={{ flex: 1 }}><Field label="PULS (ms)"><TextInput value={cl.pulseMs} onChange={(e) => patchTblCol(b.id, cl.id, { pulseMs: e.target.value })} /></Field></div>}
+                          {(cl.action || "symbol") === "symbol" ? (
+                            <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+                              <div style={{ flex: 2 }}>
+                                <Field label="AKTION">
+                                  <Select value={cl.writeMode || "setTrue"} onChange={(e) => patchTblCol(b.id, cl.id, { writeMode: e.target.value })} options={[{ value: "setTrue", label: "TRUE schreiben" }, { value: "setFalse", label: "FALSE schreiben" }, { value: "toggle", label: "Umschalten" }, { value: "pulse", label: "Puls (true→false)" }]} />
+                                </Field>
+                              </div>
+                              {cl.writeMode === "pulse" && <div style={{ flex: 1 }}><Field label="PULS (ms)"><TextInput value={cl.pulseMs} onChange={(e) => patchTblCol(b.id, cl.id, { pulseMs: e.target.value })} /></Field></div>}
+                              <div style={{ flex: 3 }} />
+                            </div>
+                          ) : (
+                            <>
+                              <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+                                <div style={{ flex: 3 }}><Field label="FUNKTIONSNAME (TcHmi.Functions.AC_HMI.…)"><TextInput value={cl.fnName || ""} onChange={(e) => patchTblCol(b.id, cl.id, { fnName: e.target.value })} placeholder="skipReleasePopUp" /></Field></div>
+                                <div style={{ flex: 2 }}>
+                                  <Field label="PARAMETER AUS">
+                                    <Select value={cl.paramSource || "member"} onChange={(e) => patchTblCol(b.id, cl.id, { paramSource: e.target.value })}
+                                      options={
+                                        (isArr ? [{ value: "member", label: "PLC-Member (versteckt)" }] : []).concat([
+                                          { value: "col", label: "Spaltenwert" },
+                                          { value: "index", label: "Zeilenindex" },
+                                          { value: "none", label: "Kein Parameter" },
+                                        ])
+                                      } />
+                                  </Field>
+                                </div>
+                              </div>
+                              {(cl.paramSource || "member") === "member" && isArr && (
+                                <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+                                  <div style={{ flex: 1 }}><Field label="PARAMETER-MEMBER (z. B. nId — muss keine Spalte sein)"><TextInput value={cl.paramMember || ""} onChange={(e) => patchTblCol(b.id, cl.id, { paramMember: e.target.value })} placeholder="nId" /></Field></div>
+                                </div>
+                              )}
+                              {(cl.paramSource || "member") === "col" && (
+                                <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+                                  <div style={{ flex: 1 }}>
+                                    <Field label="PARAMETER-SPALTE">
+                                      <Select value={cl.paramCol == null ? -1 : cl.paramCol} onChange={(e) => patchTblCol(b.id, cl.id, { paramCol: parseInt(e.target.value) })}
+                                        options={[{ value: -1, label: "— wählen —" }].concat(
+                                          (b.columns || []).map((c2, ci2) => ({ value: ci2, label: `Spalte ${ci2 + 1}${c2.header ? " – " + c2.header : ""}` }))
+                                        )} />
+                                    </Field>
+                                  </div>
+                                </div>
+                              )}
+                              <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5, margin: "6px 0 0" }}>Ruft beim Klick <code style={{ color: T.text }}>TcHmi.Functions.AC_HMI.{cl.fnName || "…"}(Parameter)</code> auf. Der Parameter wird automatisch typisiert (Zahl wenn numerisch, sonst Text). „PLC-Member (versteckt)" liest den angegebenen Struct-Member je Zeile separat mit — auch ohne eigene Spalte. So bekommt z. B. die Zeile mit Fehler 101 den Aufruf mit Parameter 101.</div>
+                            </>
+                          )}
                         </div>
                       )}
                       {(cl.kind === "enum" || cl.kind === "icon") && (
@@ -596,6 +647,47 @@ function BlockCard({ b, opts, ui, actions }) {
                     </div>
                   ))}
                   <div style={{ marginBottom: 10 }}><IconBtn title="Regel hinzufügen" onClick={() => addTblRule(b.id)}><Plus size={14} /></IconBtn></div>
+
+                  <div style={{ fontSize: 11, color: T.muted, fontWeight: 600, margin: "4px 0 6px" }}>ZEILENFILTER (Zeile nur zeigen, wenn ALLE Bedingungen erfüllt)</div>
+                  {(b.rowFilters || []).map((f) => (
+                    <div key={f.id} style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 4 }}>
+                      <div style={{ flex: 2 }}><Select value={f.colIndex} onChange={(e) => patchRowFilter(b.id, f.id, { colIndex: parseInt(e.target.value) })} options={(b.columns || []).map((cl, ci) => ({ value: ci, label: `Spalte ${ci + 1}${cl.header ? " – " + cl.header : ""}` }))} /></div>
+                      <div style={{ width: 140 }}><Select value={f.op} onChange={(e) => patchRowFilter(b.id, f.id, { op: e.target.value })} options={[{ value: "notZero", label: "≠ 0 / nicht leer" }, { value: "notEmpty", label: "nicht leer" }, { value: "==", label: "=" }, { value: "!=", label: "≠" }, { value: ">", label: ">" }, { value: ">=", label: "≥" }, { value: "<", label: "<" }, { value: "<=", label: "≤" }]} /></div>
+                      {(f.op !== "notEmpty" && f.op !== "notZero") && <div style={{ width: 90 }}><TextInput value={f.value} onChange={(e) => patchRowFilter(b.id, f.id, { value: e.target.value })} placeholder="Wert" /></div>}
+                      <IconBtn danger title="Filter entfernen" onClick={() => removeRowFilter(b.id, f.id)}><Trash2 size={12} /></IconBtn>
+                    </div>
+                  ))}
+                  <div style={{ marginBottom: 6 }}><IconBtn title="Filter hinzufügen" onClick={() => addRowFilter(b.id)}><Plus size={14} /></IconBtn></div>
+                  <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5, marginBottom: 10 }}>Blendet Zeilen dauerhaft aus, deren Wert die Bedingung nicht erfüllt — z. B. „Spalte 1 ≠ 0 / nicht leer", um leere Struct-Einträge auszublenden. Die Prüfung läuft zur Laufzeit bei jedem Datenupdate (kein Cache, aber ressourcenschonend, da nur ein Vergleich pro Zeile).</div>
+
+                  <div style={{ fontSize: 11, color: T.muted, fontWeight: 600, margin: "4px 0 6px" }}>STANDARDSORTIERUNG (beim Öffnen)</div>
+                  <div style={{ display: "flex", gap: 10, marginBottom: 8 }}>
+                    <div style={{ flex: 2 }}>
+                      <Field label="SPALTE">
+                        <Select
+                          value={b.defaultSortCol == null ? -1 : b.defaultSortCol}
+                          onChange={(e) => patch(b.id, { defaultSortCol: parseInt(e.target.value) })}
+                          options={[{ value: -1, label: "— keine —" }].concat(
+                            (b.columns || [])
+                              .map((cl, ci) => ({ cl, ci }))
+                              .filter(({ cl }) => cl.sortable)
+                              .map(({ cl, ci }) => ({ value: ci, label: `Spalte ${ci + 1}${cl.header ? " – " + cl.header : ""}` }))
+                          )}
+                        />
+                      </Field>
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <Field label="RICHTUNG">
+                        <Select
+                          value={b.defaultSortDir || "asc"}
+                          onChange={(e) => patch(b.id, { defaultSortDir: e.target.value })}
+                          options={[{ value: "asc", label: "Aufsteigend" }, { value: "desc", label: "Absteigend" }]}
+                        />
+                      </Field>
+                    </div>
+                    <div style={{ flex: 3 }} />
+                  </div>
+                  <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5, marginBottom: 8 }}>Nur als „sortierbar" markierte Spalten erscheinen hier. Ohne Standardsortierung startet die Tabelle in Datenreihenfolge; Klick auf eine sortierbare Kopfzeile ändert Spalte/Richtung zur Laufzeit.</div>
 
                   <div style={{ display: "flex", gap: 16, marginBottom: 8, flexWrap: "wrap" }}>
                     <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: T.muted, cursor: "pointer" }}>

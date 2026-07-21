@@ -5,7 +5,7 @@ import { T, PAL } from "./constants/theme.js";
 import { PLOT_COLORS, MAX_AXES } from "./constants/palette.js";
 import { OUTPUT_MODES, BLOCK_META } from "./constants/options.js";
 import { nid } from "./model/ids.js";
-import { mkButton, mkItem, mkCond, mkEnumEntry, mkStatusEntry, newBlock, mkAxis, mkSeries, mkRef, mkMapping, mkMarker, mkTimeBtn, mkTableCol, mkTableMapEntry, mkTableRow, mkTableRule } from "./model/factories.js";
+import { mkButton, mkItem, mkCond, mkEnumEntry, mkStatusEntry, newBlock, mkAxis, mkSeries, mkRef, mkMapping, mkMarker, mkTimeBtn, mkTableCol, mkTableMapEntry, mkTableRow, mkTableRule, mkRowFilter } from "./model/factories.js";
 import { clampCol, groupByCol } from "./model/layout.js";
 
 import { generate } from "./codegen/index.js";
@@ -131,6 +131,9 @@ export default function App() {
   const patchTblRule = (id, ruleId, p) => setBlocks((bs) => bs.map((b) => b.id === id ? { ...b, rules: b.rules.map((u) => (u.id === ruleId ? { ...u, ...p } : u)) } : b));
   const addStatusEntry = (id) => setBlocks((bs) => bs.map((b) => b.id === id ? { ...b, map: [...b.map, mkStatusEntry("", "Status", "grey")] } : b));
   const removeEntry = (id, eid) => setBlocks((bs) => bs.map((b) => b.id === id ? { ...b, map: b.map.filter((e) => e.id !== eid) } : b));
+  const addRowFilter = (id) => setBlocks((bs) => bs.map((b) => b.id === id ? { ...b, rowFilters: [...(b.rowFilters || []), mkRowFilter()] } : b));
+  const removeRowFilter = (id, fId) => setBlocks((bs) => bs.map((b) => b.id === id ? { ...b, rowFilters: b.rowFilters.filter((f) => f.id !== fId) } : b));
+  const patchRowFilter = (id, fId, p) => setBlocks((bs) => bs.map((b) => b.id === id ? { ...b, rowFilters: b.rowFilters.map((f) => (f.id === fId ? { ...f, ...p } : f)) } : b));
 
   // ── Plot-Handler ──
   const addAxis = (id) => setBlocks((bs) => bs.map((b) => (b.id === id && (b.axes || []).length < MAX_AXES) ? { ...b, axes: [...b.axes, mkAxis(PLOT_COLORS[b.axes.length % PLOT_COLORS.length].hex)] } : b));
@@ -198,7 +201,7 @@ export default function App() {
 
   // ── Karte (Accordion + Griff-Drag): ausgelagert nach components/editor/BlockCard.jsx ──
   const ui = { openId, setOpenId, dragId, setDragId, grabbedId, setGrabbedId, dropTarget, setDropTarget, columns, mode, sm };
-  const actions = { patch, remove, moveVertical, moveFlat, moveHorizontal, patchBtn, addBtn, removeBtn, addCond, removeCond, patchCond, patchItem, addItem, removeItem, setItemKind, addItemCond, removeItemCond, patchItemCond, patchEntry, addEnumEntry, addStatusEntry, removeEntry, addAxis, removeAxis, patchAxis, addSeries, removeSeries, patchSeries, addRef, removeRef, patchRef, addMarker, removeMarker, patchMarker, addMapping, removeMapping, patchMapping, addTimeBtn, removeTimeBtn, patchTimeBtn, handleDrop, patchTblCol, addTblCol, removeTblCol, addTblRow, removeTblRow, patchTblCell, addTblMap, removeTblMap, patchTblMap, addTblRule, removeTblRule, patchTblRule };
+  const actions = { patch, remove, moveVertical, moveFlat, moveHorizontal, patchBtn, addBtn, removeBtn, addCond, removeCond, patchCond, patchItem, addItem, removeItem, setItemKind, addItemCond, removeItemCond, patchItemCond, patchEntry, addEnumEntry, addStatusEntry, removeEntry, addAxis, removeAxis, patchAxis, addSeries, removeSeries, patchSeries, addRef, removeRef, patchRef, addMarker, removeMarker, patchMarker, addMapping, removeMapping, patchMapping, addTimeBtn, removeTimeBtn, patchTimeBtn, handleDrop, patchTblCol, addTblCol, removeTblCol, addTblRow, removeTblRow, patchTblCell, addTblMap, removeTblMap, patchTblMap, addTblRule, addRowFilter, removeRowFilter, patchRowFilter, removeTblRule, patchTblRule };
   const renderCard = (b, opts) => <BlockCard key={b.id} b={b} opts={opts} ui={ui} actions={actions} />;
 
   const renderPreviewBody = () => segments.map((part, pi) => {
@@ -244,7 +247,7 @@ export default function App() {
               </div>
             </Field>
             <div style={{ fontSize: 11, color: T.muted, marginTop: -4, marginBottom: 12 }}>{OUTPUT_MODES[mode].hint}</div>
-            <Field label={mode === "registered" ? "FUNKTIONSNAME (registerFunctionEx)" : "NAME / UID"}>
+            <Field label={(mode === "registered" || mode === "embed") ? "FUNKTIONSNAME (registerFunctionEx)" : "NAME / UID"}>
               <TextInput value={fnName} onChange={(e) => setFnName(e.target.value)} placeholder="AC_PopUp" />
             </Field>
             {mode === "usercontrol" && (

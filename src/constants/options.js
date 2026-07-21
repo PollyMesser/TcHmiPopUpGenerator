@@ -8,6 +8,7 @@ const OUTPUT_MODES = {
   registered:  { label: "Registrierte Funktion", icon: Braces, hint: "registerFunctionEx, per Symbol (ADS)" },
   event:       { label: "Event-JavaScript",       icon: Zap,    hint: "Reiner JS-Block fürs Event, per Symbol (ADS)" },
   usercontrol: { label: "UserControl-JS",         icon: Box,    hint: "An Host-Control gebunden, per Attribut (getX/setX)" },
+  embed:       { label: "Eingebettet",            icon: Box,    hint: "In Zielcontainer statt Overlay; fn(target)+fnDestroy(target) an onAttached/onDetached" },
 };
 
 const BLOCK_META = {
