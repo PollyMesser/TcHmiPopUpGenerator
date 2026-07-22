@@ -1,8 +1,42 @@
-import { jsStr, wrapSym, locExpr, unitSuffix, attrName, I, cmpExpr, condOp, condVal } from "./helpers.js";
+import { jsStr, wrapSym, locExpr, unitSuffix, attrName, I, cmpExpr, condOp, condVal, durHelpers } from "./helpers.js";
 import { COLORS, TEXT_BG, ICONS } from "../constants/palette.js";
 import { emitPlot } from "./emitPlot.js";
 import { emitTable } from "./emitTable.js";
 import { emitDivider } from "./shared.js";
+
+// ─────────────────────────────────────────────────────────────
+//  Button-Beschriftung: Text, Icon oder Icon+Text.
+//  Ohne Icon exakt wie bisher (textContent) -> Bestands-Popups byte-identisch.
+//  Icon-Groesse = 1em (folgt automatisch der Button-Schriftgroesse, kein fixes px).
+//  SVG per innerHTML (jsStr = JSON.stringify -> die einfachen Anfuehrungszeichen
+//  in den SVGs werden NICHT escaped, Ausgabe bleibt backslash-frei).
+// ─────────────────────────────────────────────────────────────
+function btnLabelCode(elVar, locStr, item) {
+  const ic = item && item.icon && ICONS[item.icon];
+  if (!ic) return `${elVar}.textContent = ${locStr};`;
+  const P = `\n${I}    `;
+  const showLabel = item.showLabel !== false; // Default: mit Text
+  const iconRight = item.iconPos === "right";
+  const flex =
+    `${elVar}.style.display = 'inline-flex';` +
+    `${P}${elVar}.style.alignItems = 'center';` +
+    `${P}${elVar}.style.justifyContent = 'center';` +
+    (showLabel ? `${P}${elVar}.style.gap = '8px';` : "");
+  const ico =
+    `var _ico_${elVar} = document.createElement('span');` +
+    `${P}_ico_${elVar}.style.cssText = 'display:inline-flex;line-height:0;flex:0 0 auto;';` +
+    `${P}_ico_${elVar}.innerHTML = ${jsStr(ic.svg)};` +
+    `${P}var _sv_${elVar} = _ico_${elVar}.querySelector('svg'); if (_sv_${elVar}) { _sv_${elVar}.setAttribute('width', '1em'); _sv_${elVar}.setAttribute('height', '1em'); }`;
+  if (!showLabel) {
+    // Nur-Icon: Text als aria-label fuer Screenreader/Tooltip erhalten
+    return `${flex}${P}${ico}${P}${elVar}.setAttribute('aria-label', String(${locStr}));${P}${elVar}.appendChild(_ico_${elVar});`;
+  }
+  const txt = `var _tx_${elVar} = document.createElement('span'); _tx_${elVar}.textContent = ${locStr};`;
+  const appends = iconRight
+    ? `${elVar}.appendChild(_tx_${elVar});${P}${elVar}.appendChild(_ico_${elVar});`
+    : `${elVar}.appendChild(_ico_${elVar});${P}${elVar}.appendChild(_tx_${elVar});`;
+  return `${flex}${P}${ico}${P}${txt}${P}${appends}`;
+}
 
 // ─────────────────────────────────────────────────────────────
 //  EMIT: Symbol-Modus (registered + event) – subscribe/writeSymbol/…
@@ -61,7 +95,8 @@ function trigActionUC(b) {
 function emitInput(parent, b, mb) {
   const sym = jsStr(wrapSym(b.symbol));
   const trig = (b.trigSym || "").trim() ? trigActionSym(b) : "";
-  const isNum = b.dataType !== "text";
+  const isTime = b.dataType === "time";
+  const isNum = !isTime && b.dataType !== "text";
   const parse = isNum ? `var val = parseFloat(input.value); if (isNaN(val)) return;` : `var val = input.value;`;
   const inputType = isNum ? "number" : "text";
   const col = COLORS[b.sendColor] || COLORS.blue;
@@ -74,7 +109,13 @@ function emitInput(parent, b, mb) {
   const withBtn = b.sendButton !== false;
   const sendBlock = withBtn ? `\n${I}    var send = document.createElement('button');\n${I}    send.style.cssText = 'flex:0 0 auto;padding:0 16px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;background:${col.bg};color:${col.text};';\n${I}    send.textContent = ${sendText};\n${I}    send.addEventListener('pointerdown', function (e) { e.stopPropagation(); });\n${I}    send.style.transition = 'transform .08s ease, filter .08s ease';\n${I}    send.addEventListener('pointerdown', function () { send.style.transform = 'scale(0.96)'; send.style.filter = 'brightness(0.88)'; });\n${I}    var rel_send = function () { send.style.transform = ''; send.style.filter = ''; };\n${I}    send.addEventListener('pointerup', rel_send);\n${I}    send.addEventListener('pointerleave', rel_send);\n${I}    send.onclick = function (e) { e.stopPropagation(); commit()${trig}; };` : "";
   const sendAppend = withBtn ? `\n${I}    line.appendChild(send);` : "";
-  return `${I}// Eingabefeld + Senden: ${b.symbol}\n${I}(function () {\n${I}    var wrap = document.createElement('div');\n${I}    wrap.style.cssText = 'margin-bottom:${mb};';\n${I}    var lbl = document.createElement('div');\n${I}    lbl.style.cssText = 'font-size:13px;color:' + p.bodyText + ';margin-bottom:6px;';\n${I}    lbl.textContent = ${locExpr(b.loc, b.label)};\n${I}    var line = document.createElement('div');\n${I}    line.style.cssText = 'display:flex;gap:8px;align-items:stretch;';\n${I}    var input = document.createElement('input');\n${I}    input.type = '${inputType}';\n${I}    input.style.cssText = 'flex:1;min-width:0;box-sizing:border-box;padding:9px 10px;border-radius:8px;font-size:14px;outline:none;text-align:right;' +\n${I}        'border:1px solid ' + p.border + ';background:' + p.boxBg + ';color:' + p.bodyText + ';';\n${I}    input.addEventListener('pointerdown', function (e) { e.stopPropagation(); });\n${I}    subscribe(${sym}, function (v) { if (document.activeElement !== input) input.value = String(v); });\n${I}    function commit() { ${parse} writeSymbol(${sym}, val); }\n${I}    input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { commit(); } });${unitEl}${sendBlock}\n${I}    line.appendChild(input);${unitAppend}${sendAppend}\n${I}    wrap.appendChild(lbl); wrap.appendChild(line);\n${I}    ${parent}.appendChild(wrap);\n${I}})();`;
+  // TIME: SPS liefert ISO-8601-Dauer (z. B. PT3H5M20S). Anzeige/Eingabe als HH:MM:SS,
+  // beim Absenden zurueck nach PTxHxMxS. Backslash-frei (kein Regex-Escape, nur split/charAt).
+  const readAssign = isTime ? `input.value = durToHMS(v);` : `input.value = String(v);`;
+  const commitBody = isTime ? `var val = hmsToDur(input.value); writeSymbol(${sym}, val);` : `${parse} writeSymbol(${sym}, val);`;
+  const timeStyle = isTime ? `\n${I}    input.style.textAlign = 'center';\n${I}    input.placeholder = 'HH:MM:SS';` : "";
+  const timeHelpers = isTime ? durHelpers() : "";
+  return `${I}// Eingabefeld + Senden: ${b.symbol}\n${I}(function () {\n${I}    var wrap = document.createElement('div');\n${I}    wrap.style.cssText = 'margin-bottom:${mb};';\n${I}    var lbl = document.createElement('div');\n${I}    lbl.style.cssText = 'font-size:13px;color:' + p.bodyText + ';margin-bottom:6px;';\n${I}    lbl.textContent = ${locExpr(b.loc, b.label)};\n${I}    var line = document.createElement('div');\n${I}    line.style.cssText = 'display:flex;gap:8px;align-items:stretch;';\n${I}    var input = document.createElement('input');\n${I}    input.type = '${inputType}';\n${I}    input.style.cssText = 'flex:1;min-width:0;box-sizing:border-box;padding:9px 10px;border-radius:8px;font-size:14px;outline:none;text-align:right;' +\n${I}        'border:1px solid ' + p.border + ';background:' + p.boxBg + ';color:' + p.bodyText + ';';\n${I}    input.addEventListener('pointerdown', function (e) { e.stopPropagation(); });${timeStyle}\n${I}    subscribe(${sym}, function (v) { if (document.activeElement !== input) ${readAssign} });${timeHelpers}\n${I}    function commit() { ${commitBody} }\n${I}    input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { commit(); } });${unitEl}${sendBlock}\n${I}    line.appendChild(input);${unitAppend}${sendAppend}\n${I}    wrap.appendChild(lbl); wrap.appendChild(line);\n${I}    ${parent}.appendChild(wrap);\n${I}})();`;
 }
 function progressParams(b) {
   const col = COLORS[b.color] || COLORS.blue;
@@ -131,7 +172,7 @@ function emitButtons(parent, b, mb) {
     } else {
       clickHandler = `\n${I}    ${v}.onclick = function (e) { e.stopPropagation(); ${action};${close} };`;
     }
-    return `${I}    // ${btn.writeMode}: ${btn.symbol}\n${I}    var ${v} = document.createElement('button');\n${I}    ${v}.style.cssText = 'flex:1;padding:12px 0;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;background:${col.bg};color:${col.text};';\n${I}    ${v}.textContent = ${locExpr(btn.loc, btn.label)};\n${I}    ${v}.addEventListener('pointerdown', function (e) { e.stopPropagation(); });${clickHandler}${vis}${fb}${press}${enable}\n${I}    row.appendChild(${v});`;
+    return `${I}    // ${btn.writeMode}: ${btn.symbol}\n${I}    var ${v} = document.createElement('button');\n${I}    ${v}.style.cssText = 'flex:1;padding:12px 0;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;background:${col.bg};color:${col.text};';\n${I}    ${btnLabelCode(v, locExpr(btn.loc, btn.label), btn)}\n${I}    ${v}.addEventListener('pointerdown', function (e) { e.stopPropagation(); });${clickHandler}${vis}${fb}${press}${enable}\n${I}    row.appendChild(${v});`;
   }).join("\n");
   return `${I}// Buttons\n${I}(function () {\n${I}    var row = document.createElement('div');\n${I}    row.style.cssText = 'display:flex;gap:10px;margin-bottom:${mb};';\n${lines}\n${I}    ${parent}.appendChild(row);\n${I}})();`;
 }
@@ -171,7 +212,7 @@ function emitButtonItem(parent, it) {
   } else {
     clickHandler = `\n${I}    btn.onclick = function (e) { e.stopPropagation(); ${action};${close} };`;
   }
-  return `${I}// Button (Zeilen-Element): ${it.writeMode}: ${it.symbol}\n${I}(function () {\n${I}    var btn = document.createElement('button');\n${I}    btn.style.cssText = 'width:100%;padding:12px 0;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;background:${col.bg};color:${col.text};';\n${I}    btn.textContent = ${locExpr(it.loc, it.label)};\n${I}    btn.addEventListener('pointerdown', function (e) { e.stopPropagation(); });${clickHandler}${vis}${fb}${press}${enable}\n${I}    ${parent}.appendChild(btn);\n${I}})();`;
+  return `${I}// Button (Zeilen-Element): ${it.writeMode}: ${it.symbol}\n${I}(function () {\n${I}    var btn = document.createElement('button');\n${I}    btn.style.cssText = 'width:100%;padding:12px 0;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;background:${col.bg};color:${col.text};';\n${I}    ${btnLabelCode("btn", locExpr(it.loc, it.label), it)}\n${I}    btn.addEventListener('pointerdown', function (e) { e.stopPropagation(); });${clickHandler}${vis}${fb}${press}${enable}\n${I}    ${parent}.appendChild(btn);\n${I}})();`;
 }
 function emitButtonItemUC(parent, it) {
   const a = jsStr(attrName(it.symbol));
@@ -207,7 +248,7 @@ function emitButtonItemUC(parent, it) {
   } else {
     clickHandler = `\n${I}    btn.onclick = function (e) { e.stopPropagation(); ${action};${close} };`;
   }
-  return `${I}// Button (Zeilen-Element, Attribut): ${it.writeMode}: ${attrName(it.symbol)}\n${I}(function () {\n${I}    var btn = document.createElement('button');\n${I}    btn.style.cssText = 'width:100%;padding:12px 0;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;background:${col.bg};color:${col.text};';\n${I}    btn.textContent = ${locExpr(it.loc, it.label)};\n${I}    btn.addEventListener('pointerdown', function (e) { e.stopPropagation(); });${clickHandler}${vis}${fb}${press}${enable}\n${I}    ${parent}.appendChild(btn);\n${I}})();`;
+  return `${I}// Button (Zeilen-Element, Attribut): ${it.writeMode}: ${attrName(it.symbol)}\n${I}(function () {\n${I}    var btn = document.createElement('button');\n${I}    btn.style.cssText = 'width:100%;padding:12px 0;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;background:${col.bg};color:${col.text};';\n${I}    ${btnLabelCode("btn", locExpr(it.loc, it.label), it)}\n${I}    btn.addEventListener('pointerdown', function (e) { e.stopPropagation(); });${clickHandler}${vis}${fb}${press}${enable}\n${I}    ${parent}.appendChild(btn);\n${I}})();`;
 }
 function emitItem(parent, it, mb) {
   if (it.kind === "read") return emitRead(parent, it, mb);

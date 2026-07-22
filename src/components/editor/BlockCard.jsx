@@ -5,15 +5,16 @@ import { DASH_OPTS, ICONS, MAX_AXES, PLOT_COLORS, TEXT_BG } from "../../constant
 import { BLOCK_META, ITEM_KINDS, TIME_UNITS, WRITE_OPTS } from "../../constants/options.js";
 import { blockSummary, clampCol } from "../../model/layout.js";
 import { condOp, condVal } from "../../codegen/helpers.js";
-import { ColorSwatches, Field, HexSwatches, IconBtn, Select, TextArea, TextInput } from "../primitives.jsx";
+import { ColorSwatches, Field, HexSwatches, IconBtn, IconPicker, IconColorPicker, Select, TextArea, TextInput } from "../primitives.jsx";
 import { ButtonItemFields, InputFields, ReadBoolFields, TriggerFields } from "../fields.jsx";
 
 // ── Baustein-Karte des Editors (Accordion + Griff-Drag), auch für volle-Breite-Zeilen ──
 // ui: Ansichts-Zustand aus App(); actions: alle Block-Handler aus App().
 function BlockCard({ b, opts, ui, actions }) {
   const { openId, setOpenId, dragId, setDragId, grabbedId, setGrabbedId, dropTarget, setDropTarget, columns, mode, sm } = ui;
-  const { patch, remove, moveVertical, moveFlat, moveHorizontal, patchBtn, addBtn, removeBtn, addCond, removeCond, patchCond, patchItem, addItem, removeItem, setItemKind, addItemCond, removeItemCond, patchItemCond, patchEntry, addEnumEntry, addStatusEntry, removeEntry, addAxis, removeAxis, patchAxis, addSeries, removeSeries, patchSeries, addRef, removeRef, patchRef, addMarker, removeMarker, patchMarker, addMapping, removeMapping, patchMapping, addTimeBtn, removeTimeBtn, patchTimeBtn, handleDrop, patchTblCol, addTblCol, removeTblCol, addTblRow, removeTblRow, patchTblCell, addTblMap, removeTblMap, patchTblMap, addTblRule, removeTblRule, patchTblRule, addRowFilter, removeRowFilter, patchRowFilter } = actions;
+  const { patch, remove, moveVertical, moveFlat, moveHorizontal, patchBtn, addBtn, removeBtn, addCond, removeCond, patchCond, patchItem, addItem, removeItem, setItemKind, addItemCond, removeItemCond, patchItemCond, patchEntry, addEnumEntry, addStatusEntry, removeEntry, addAxis, removeAxis, patchAxis, addSeries, removeSeries, patchSeries, addRef, removeRef, patchRef, addMarker, removeMarker, patchMarker, addMapping, removeMapping, patchMapping, addTimeBtn, removeTimeBtn, patchTimeBtn, handleDrop, patchTblCol, addTblCol, removeTblCol, moveTblCol, addTblRow, removeTblRow, patchTblCell, addTblMap, removeTblMap, patchTblMap, addTblRule, removeTblRule, patchTblRule, addRowFilter, removeRowFilter, patchRowFilter } = actions;
     const { c, i, colLen, fullWidth } = opts;
+    const [tblColDrag, setTblColDrag] = React.useState(null); // Index der gerade gezogenen Tabellenspalte
     const meta = BLOCK_META[b.type]; const Icon = meta.icon; const open = openId === b.id;
     const isDropBefore = dropTarget && dropTarget.beforeId === b.id;
     const dropCol = fullWidth ? clampCol(b, columns) : c;
@@ -89,35 +90,13 @@ function BlockCard({ b, opts, ui, actions }) {
                 <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
                   <div style={{ flex: 2 }}>
                     <Field label="SYMBOL">
-                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                        <button type="button" onClick={() => patch(b.id, { icon: "" })}
-                          title="Kein Symbol"
-                          style={{ width: 26, height: 26, borderRadius: 6, cursor: "pointer", background: T.input, border: `2px solid ${!b.icon ? T.accent : T.border}`, display: "flex", alignItems: "center", justifyContent: "center", color: T.muted }}>
-                          {!b.icon ? <Check size={13} color={T.accent} /> : <Minus size={14} />}
-                        </button>
-                        {Object.entries(ICONS).map(([key, ic]) => (
-                          <button type="button" key={key} onClick={() => patch(b.id, { icon: key })}
-                            title={ic.label}
-                            style={{ width: 26, height: 26, borderRadius: 6, cursor: "pointer", background: T.input, border: `2px solid ${b.icon === key ? T.accent : T.border}`, display: "flex", alignItems: "center", justifyContent: "center", color: b.icon === key ? T.accent : T.muted }}>
-                            <span style={{ display: "inline-flex", lineHeight: 0 }} dangerouslySetInnerHTML={{ __html: ic.svg.replace("width='18' height='18'", "width='16' height='16'") }} />
-                          </button>
-                        ))}
-                      </div>
+                      <IconPicker value={b.icon || ""} onChange={(k) => patch(b.id, { icon: k })} />
                     </Field>
                   </div>
                   {b.icon ? (
                     <div style={{ flex: 2 }}>
                       <Field label="SYMBOLFARBE">
-                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                          <button type="button" onClick={() => patch(b.id, { iconColor: "" })}
-                            title="Wie Textfarbe"
-                            style={{ width: 22, height: 22, borderRadius: 6, cursor: "pointer", background: T.input, border: `2px solid ${!b.iconColor ? T.accent : T.border}`, color: T.muted, fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>A</button>
-                          {PLOT_COLORS.map((c) => (
-                            <button type="button" key={c.hex} onClick={() => patch(b.id, { iconColor: c.hex })}
-                              title={c.name}
-                              style={{ width: 22, height: 22, borderRadius: 6, cursor: "pointer", background: c.hex, border: `2px solid ${b.iconColor === c.hex ? T.text : "transparent"}`, boxShadow: b.iconColor === c.hex ? `0 0 0 1px ${T.border}` : "none" }} />
-                          ))}
-                        </div>
+                        <IconColorPicker value={b.iconColor || ""} onChange={(hex) => patch(b.id, { iconColor: hex })} />
                       </Field>
                     </div>
                   ) : null}
@@ -394,6 +373,17 @@ function BlockCard({ b, opts, ui, actions }) {
                       <div style={{ flex: 2 }}><Field label="BESCHRIFTUNG"><TextInput value={bt.label} onChange={(e) => patchBtn(b.id, bi, { label: e.target.value })} /></Field></div>
                       <div style={{ flex: 2 }}><Field label="LOC-KEY (optional)"><TextInput value={bt.loc} onChange={(e) => patchBtn(b.id, bi, { loc: e.target.value })} placeholder="L_…" /></Field></div>
                     </div>
+                    <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                      <div style={{ flex: 3 }}><Field label="SYMBOL (optional)"><IconPicker value={bt.icon || ""} onChange={(k) => patchBtn(b.id, bi, { icon: k })} /></Field></div>
+                      {bt.icon ? (
+                        <>
+                          <div style={{ width: 120 }}><Field label="POSITION"><Select value={bt.iconPos || "left"} onChange={(e) => patchBtn(b.id, bi, { iconPos: e.target.value })} options={[{ value: "left", label: "Links" }, { value: "right", label: "Rechts" }]} /></Field></div>
+                          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: T.muted, cursor: "pointer", paddingTop: 22 }}>
+                            <input type="checkbox" checked={bt.showLabel !== false} onChange={(e) => patchBtn(b.id, bi, { showLabel: e.target.checked })} /> mit Text
+                          </label>
+                        </>
+                      ) : null}
+                    </div>
                     <Field label={sm.label}><TextInput value={bt.symbol} onChange={(e) => patchBtn(b.id, bi, { symbol: e.target.value })} placeholder={sm.ph} /></Field>
                     <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
                       <div style={{ flex: 1 }}><Field label="AKTION"><Select value={bt.writeMode} onChange={(e) => patchBtn(b.id, bi, { writeMode: e.target.value })} options={WRITE_OPTS} /></Field></div>
@@ -513,19 +503,43 @@ function BlockCard({ b, opts, ui, actions }) {
 
                   <div style={{ fontSize: 11, color: T.muted, fontWeight: 600, margin: "4px 0 6px" }}>SPALTEN</div>
                   {(b.columns || []).map((cl, ci) => (
-                    <div key={cl.id} style={{ border: `1px solid ${T.border}`, borderRadius: 6, padding: 8, marginBottom: 6 }}>
+                    <div key={cl.id}
+                      onDragOver={(e) => { if (tblColDrag != null) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; } }}
+                      onDrop={(e) => {
+                        if (tblColDrag == null) return;
+                        e.preventDefault();
+                        const from = tblColDrag;
+                        setTblColDrag(null);
+                        if (from === ci) return;
+                        // moveTblCol tauscht nur Nachbarn -> schrittweise von from nach ci
+                        const dir = from < ci ? 1 : -1;
+                        for (let k = from; k !== ci; k += dir) moveTblCol(b.id, k, dir);
+                      }}
+                      style={{ border: `1px solid ${tblColDrag === ci ? T.accent : T.border}`, borderRadius: 6, padding: 8, marginBottom: 6, opacity: tblColDrag === ci ? 0.5 : 1 }}>
                       <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
+                        <span
+                          draggable
+                          onDragStart={(e) => { setTblColDrag(ci); e.dataTransfer.effectAllowed = "move"; }}
+                          onDragEnd={() => setTblColDrag(null)}
+                          title="Ziehen zum Umsortieren"
+                          style={{ flex: "0 0 auto", cursor: "grab", display: "flex", alignItems: "center", paddingBottom: 6 }}><GripVertical size={13} color={T.muted} /></span>
                         <div style={{ flex: 2 }}><Field label={`SPALTE ${ci + 1} – TYP`}><Select value={cl.kind} onChange={(e) => patchTblCol(b.id, cl.id, { kind: e.target.value })} options={KIND_OPTS.map(([v, l]) => ({ value: v, label: l }))} /></Field></div>
                         <div style={{ flex: 2 }}><Field label="ÜBERSCHRIFT"><TextInput value={cl.header || ""} onChange={(e) => patchTblCol(b.id, cl.id, { header: e.target.value })} /></Field></div>
                         <div style={{ flex: 2 }}><Field label="LOC-KEY"><TextInput value={cl.headerLoc || ""} onChange={(e) => patchTblCol(b.id, cl.id, { headerLoc: e.target.value })} placeholder="L_…" /></Field></div>
                         {isArr && cl.kind !== "text" && <div style={{ flex: 2 }}><Field label="MEMBER"><TextInput value={cl.member || ""} onChange={(e) => patchTblCol(b.id, cl.id, { member: e.target.value })} placeholder="bAck" /></Field></div>}
                         {(cl.kind === "read" || cl.kind === "input") && <div style={{ flex: 1 }}><Field label="EINHEIT"><TextInput value={cl.unit || ""} onChange={(e) => patchTblCol(b.id, cl.id, { unit: e.target.value })} /></Field></div>}
                         {cl.kind === "read" && <div style={{ flex: 1 }}><Field label="DEZIMALEN"><TextInput value={cl.decimals} onChange={(e) => patchTblCol(b.id, cl.id, { decimals: e.target.value })} placeholder="auto" /></Field></div>}
+                        <IconBtn disabled={ci === 0} title="Spalte nach links" onClick={() => moveTblCol(b.id, ci, -1)}><ChevronLeft size={13} /></IconBtn>
+                        <IconBtn disabled={ci === b.columns.length - 1} title="Spalte nach rechts" onClick={() => moveTblCol(b.id, ci, 1)}><ChevronRight size={13} /></IconBtn>
                         <IconBtn danger disabled={b.columns.length <= 1} title="Spalte entfernen" onClick={() => removeTblCol(b.id, ci)}><Trash2 size={13} /></IconBtn>
                       </div>
                       <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: T.muted, cursor: "pointer", marginTop: 6 }}>
                         <input type="checkbox" checked={!!cl.sortable} onChange={(e) => patchTblCol(b.id, cl.id, { sortable: e.target.checked })} /> Sortierbar (Klick auf Kopfzeile sortiert)
                       </label>
+                      <div style={{ display: "flex", gap: 10, marginTop: 6, alignItems: "flex-start" }}>
+                        <div style={{ flex: 3 }}><Field label="KOPF-SYMBOL (optional)"><IconPicker value={cl.headerIcon || ""} onChange={(k) => patchTblCol(b.id, cl.id, { headerIcon: k })} /></Field></div>
+                        {cl.headerIcon ? <div style={{ flex: 2 }}><Field label="SYMBOLFARBE"><IconColorPicker value={cl.headerIconColor || ""} onChange={(hex) => patchTblCol(b.id, cl.id, { headerIconColor: hex })} noneTitle="Wie Kopftext" /></Field></div> : null}
+                      </div>
                       {cl.kind === "button" && (
                         <div style={{ marginTop: 6 }}>
                           <div style={{ display: "flex", gap: 8 }}>

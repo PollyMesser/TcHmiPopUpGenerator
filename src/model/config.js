@@ -6,6 +6,7 @@ function buildConfigComment(cfg) {
   const c = {
     v: 1, mode: cfg.mode, fnName: cfg.fnName, title: cfg.title, titleLoc: cfg.titleLoc,
     titleSource: cfg.titleSource, titleField: cfg.titleField, titleFallback: cfg.titleFallback,
+    titleIcon: cfg.titleIcon, titleIconColor: cfg.titleIconColor,
     maxWidth: cfg.maxWidth, columns: cfg.columns, hostSuffix: cfg.hostSuffix, blocks: cfg.blocks,
   };
   return `\n// ── AC_PopUp Generator: Konfiguration für Re-Import (diese Zeilen nicht entfernen) ──\n// AC_POPUP_CONFIG_V1: ${JSON.stringify(c)}\n`;

@@ -1,5 +1,6 @@
 import { jsStr, wrapSym, locExpr, attrName, I } from "./helpers.js";
 import { groupByCol } from "../model/layout.js";
+import { ICONS } from "../constants/palette.js";
 
 // ── Trennlinie: horizontale Linie, optional mittig beschriftet (volle Breite) ──
 function emitDivider(parent, b) {
@@ -55,11 +56,31 @@ function buildBodyContent(blocks, cols, emit) {
 }
 
 // ── Titel-Statement (statisch, oder dynamisch aus Attribut/Symbol) ──
-function buildTitleStmt(mode, source, field, fallback, titleExpr) {
+// Erzeugt jetzt SELBST die Titel-Elemente (vormals eine feste Zeile in Templates.js).
+// Ohne Symbol: 'title' == 'titleText' (die Textspanne selbst) -> unveraendertes Verhalten.
+// Mit Symbol: 'title' ist ein Flex-Wrapper [Symbol][titleText]; der Text-Span 'titleText'
+// bleibt die einzige Stelle, die textContent gesetzt bekommt (auch im subscribe-Callback) -
+// so bricht ein spaeteres Reassignment von 'title' den dynamischen Titel nicht.
+function buildTitleStmt(mode, source, field, fallback, titleExpr, icon, iconColor) {
   const pad = "                    "; // 20 Leerzeichen
-  if (source !== "dynamic") return `${pad}title.textContent = ${titleExpr};`;
-  if (mode === "usercontrol") return `${pad}title.textContent = gv(${jsStr(attrName(field))}, ${jsStr(fallback || "")});`;
-  return `${pad}title.textContent = ${jsStr(fallback || "")};\n${pad}subscribe(${jsStr(wrapSym(field))}, function (v) { title.textContent = String(v); });`;
+  const textStmt = source !== "dynamic"
+    ? `${pad}titleText.textContent = ${titleExpr};`
+    : mode === "usercontrol"
+      ? `${pad}titleText.textContent = gv(${jsStr(attrName(field))}, ${jsStr(fallback || "")});`
+      : `${pad}titleText.textContent = ${jsStr(fallback || "")};\n${pad}subscribe(${jsStr(wrapSym(field))}, function (v) { titleText.textContent = String(v); });`;
+  const base = `${pad}var titleText = document.createElement('span');\n${textStmt}`;
+  const ic = icon && ICONS[icon];
+  if (!ic) return `${base}\n${pad}var title = titleText;`;
+  const iconColorExpr = iconColor ? jsStr(iconColor) : `p.titleColor`;
+  return `${base}\n` +
+    `${pad}var titleIco = document.createElement('span');\n` +
+    `${pad}titleIco.style.cssText = 'display:inline-flex;line-height:0;flex:0 0 auto;color:' + ${iconColorExpr} + ';';\n` +
+    `${pad}titleIco.innerHTML = ${jsStr(ic.svg)};\n` +
+    `${pad}var titleSvg = titleIco.querySelector('svg'); if (titleSvg) { titleSvg.setAttribute('width', '1em'); titleSvg.setAttribute('height', '1em'); }\n` +
+    `${pad}var title = document.createElement('span');\n` +
+    `${pad}title.style.cssText = 'display:inline-flex;align-items:center;gap:8px;min-width:0;';\n` +
+    `${pad}title.appendChild(titleIco);\n` +
+    `${pad}title.appendChild(titleText);`;
 }
 
 export { emitDivider, gridSegment, buildBodyContent, buildTitleStmt };

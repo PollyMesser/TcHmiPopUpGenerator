@@ -3,7 +3,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { T } from "../constants/theme.js";
 import { WRITE_OPTS } from "../constants/options.js";
 import { condOp, condVal } from "../codegen/helpers.js";
-import { Field, TextInput, Select, ColorSwatches, IconBtn } from "./primitives.jsx";
+import { Field, TextInput, Select, ColorSwatches, IconBtn, IconPicker } from "./primitives.jsx";
 
 // ── Feld-Editoren für Bausteine/Zeilenelemente ──
 function symMeta(mode) {
@@ -58,9 +58,21 @@ function ButtonItemFields({ it, onPatch, mode, onAddCond, onRemoveCond, onPatchC
         </>
       )}
       <Field label="FARBE"><ColorSwatches value={it.color} onChange={(cc) => onPatch({ color: cc })} /></Field>
+      <div style={{ display: "flex", gap: 10, alignItems: "flex-start", marginTop: 4 }}>
+        <div style={{ flex: 3 }}><Field label="SYMBOL (optional)"><IconPicker value={it.icon || ""} onChange={(k) => onPatch({ icon: k })} /></Field></div>
+        {it.icon ? (
+          <>
+            <div style={{ width: 120 }}><Field label="POSITION"><Select value={it.iconPos || "left"} onChange={(e) => onPatch({ iconPos: e.target.value })} options={[{ value: "left", label: "Links" }, { value: "right", label: "Rechts" }]} /></Field></div>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: T.muted, cursor: "pointer", paddingTop: 22 }}>
+              <input type="checkbox" checked={it.showLabel !== false} onChange={(e) => onPatch({ showLabel: e.target.checked })} /> mit Text
+            </label>
+          </>
+        ) : null}
+      </div>
       <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: T.muted, cursor: "pointer", marginTop: 2, marginBottom: 8 }}>
         <input type="checkbox" checked={!!it.closeAfter} onChange={(e) => onPatch({ closeAfter: e.target.checked })} /> Popup nach Klick schließen
       </label>
+
       <Field label={`NUR SICHTBAR WENN ${mode === "usercontrol" ? "(Attribut-Bool)" : "(Symbol-Bool)"} – optional`}>
         <TextInput value={it.visSym || ""} onChange={(e) => onPatch({ visSym: e.target.value })} placeholder={mode === "usercontrol" ? "z.B. Fault (leer = immer sichtbar)" : "ADS.…::xFault (leer = immer sichtbar)"} />
       </Field>
@@ -111,7 +123,7 @@ function InputFields({ cfg, onPatch, mode }) {
       </div>
       <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
         <div style={{ flex: 1 }}><Field label={sm.label}><TextInput value={cfg.symbol} onChange={(e) => onPatch({ symbol: e.target.value })} placeholder={sm.ph} /></Field></div>
-        <div style={{ width: 96 }}><Field label="DATENTYP"><Select value={cfg.dataType} onChange={(e) => onPatch({ dataType: e.target.value })} options={[{ value: "number", label: "Zahl" }, { value: "text", label: "Text" }]} /></Field></div>
+        <div style={{ width: 96 }}><Field label="DATENTYP"><Select value={cfg.dataType} onChange={(e) => onPatch({ dataType: e.target.value })} options={[{ value: "number", label: "Zahl" }, { value: "text", label: "Text" }, { value: "time", label: "Zeit (HH:MM:SS)" }]} /></Field></div>
         <div style={{ width: 92 }}><Field label="EINHEIT (optional)"><TextInput value={cfg.unit || ""} onChange={(e) => onPatch({ unit: e.target.value })} placeholder="z.B. bar" /></Field></div>
       </div>
       <div style={{ borderTop: `1px solid ${T.border}`, margin: "2px 0 8px" }} />

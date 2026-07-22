@@ -1,12 +1,12 @@
 import { nid, eid, pid } from "./ids.js";
 import { PLOT_COLORS } from "../constants/palette.js";
 
-const mkButton = () => ({ label: "OK", loc: "", symbol: "ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::xConfirm", writeMode: "pulse", pulseMs: 500, closeAfter: true, color: "blue", visSym: "", enableIf: [], fbSym: "", confirmMs: 3000, confirmAction: "pulse" });
+const mkButton = () => ({ label: "OK", loc: "", icon: "", iconPos: "left", showLabel: true, symbol: "ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::xConfirm", writeMode: "pulse", pulseMs: 500, closeAfter: true, color: "blue", visSym: "", enableIf: [], fbSym: "", confirmMs: 3000, confirmAction: "pulse" });
 const mkItem = (kind) => {
   const base = { id: nid(), kind };
   if (kind === "input") return { ...base, label: "Sollwert", loc: "", symbol: "ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::nSetpoint", dataType: "number", sendLabel: "Setzen", sendLoc: "", sendColor: "blue", trigSym: "", trigMode: "pulse", trigMs: 500 };
   if (kind === "check") return { ...base, label: "Freigabe", loc: "", symbol: "ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::xEnable" };
-  if (kind === "button") return { ...base, label: "OK", loc: "", symbol: "ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::xConfirm", writeMode: "pulse", pulseMs: 500, closeAfter: true, color: "blue", visSym: "", enableIf: [], fbSym: "", confirmMs: 3000, confirmAction: "pulse" };
+  if (kind === "button") return { ...base, label: "OK", loc: "", icon: "", iconPos: "left", showLabel: true, symbol: "ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::xConfirm", writeMode: "pulse", pulseMs: 500, closeAfter: true, color: "blue", visSym: "", enableIf: [], fbSym: "", confirmMs: 3000, confirmAction: "pulse" };
   return { ...base, label: kind === "bool" ? "Status" : "Wert", loc: "", symbol: "ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::" + (kind === "bool" ? "xStatus" : "xValue") };
 };
 
@@ -36,7 +36,7 @@ const defaultTimeButtons = () => DEFAULT_TIME_BUTTONS.map((t) => mkTimeBtn(t.cou
 //   action 'symbol' = bisheriges Schreib-Verhalten (Default, Golden-neutral);
 //   action 'fn'     = Aufruf TcHmi.Functions.AC_HMI[fnName](param).
 //   paramSource 'member' (Array) | 'col' (sichtbare Spalte) | 'index' (Zeilenindex) | 'none'.
-const mkTableCol = (kind) => ({ id: eid("tc"), kind: kind || "read", header: "", headerLoc: "", member: "",
+const mkTableCol = (kind) => ({ id: eid("tc"), kind: kind || "read", header: "", headerLoc: "", headerIcon: "", headerIconColor: "", member: "",
   unit: "", decimals: "", label: "", loc: "", writeMode: "setTrue", pulseMs: 300, map: [],
   sortable: false,
   action: "symbol", fnName: "", paramSource: "member", paramMember: "", paramCol: -1 });

@@ -142,7 +142,6 @@ function innerSymbol(uidStr, titleStmt, mw, bodyContent) {
                         'padding:14px 20px;background:' + p.headerBg + ';border-radius:12px 12px 0 0;' +
                         'flex:0 0 auto;font-size:15px;font-weight:600;color:' + p.titleColor + ';';
 
-                    var title = document.createElement('span');
 ${titleStmt}
 
                     var closeBtn = document.createElement('button');
@@ -300,7 +299,6 @@ function innerUC(baseName, titleStmt, mw, bodyContent) {
                         'padding:14px 20px;background:' + p.headerBg + ';border-radius:12px 12px 0 0;' +
                         'flex:0 0 auto;font-size:15px;font-weight:600;color:' + p.titleColor + ';';
 
-                    var title = document.createElement('span');
 ${titleStmt}
 
                     var closeBtn = document.createElement('button');

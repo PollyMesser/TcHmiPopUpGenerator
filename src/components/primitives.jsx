@@ -1,7 +1,7 @@
 import React from "react";
+import { Check, Minus } from "lucide-react";
 import { T } from "../constants/theme.js";
-import { COLORS, PLOT_COLORS } from "../constants/palette.js";
-
+import { COLORS, ICONS, PLOT_COLORS } from "../constants/palette.js";
 // ── kleine UI-Bausteine des Generators ──
 function Field({ label, children }) {
   return (
@@ -59,6 +59,40 @@ function Tab({ active, onClick, children }) {
     </button>
   );
 }
+// Symbol-Auswahl: identisches Verhalten/Styling wie der bisherige Inline-Picker im Text-Block.
+// value = Icon-Key ("" = keins). onChange(key) liefert den neuen Key ("" bei "kein Symbol").
+function IconPicker({ value, onChange, allowNone = true, noneTitle = "Kein Symbol" }) {
+  return (
+    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+      {allowNone && (
+        <button type="button" onClick={() => onChange("")} title={noneTitle}
+          style={{ width: 26, height: 26, borderRadius: 6, cursor: "pointer", background: T.input, border: `2px solid ${!value ? T.accent : T.border}`, display: "flex", alignItems: "center", justifyContent: "center", color: T.muted }}>
+          {!value ? <Check size={13} color={T.accent} /> : <Minus size={14} />}
+        </button>
+      )}
+      {Object.entries(ICONS).map(([key, ic]) => (
+        <button type="button" key={key} onClick={() => onChange(key)} title={ic.label}
+          style={{ width: 26, height: 26, borderRadius: 6, cursor: "pointer", background: T.input, border: `2px solid ${value === key ? T.accent : T.border}`, display: "flex", alignItems: "center", justifyContent: "center", color: value === key ? T.accent : T.muted }}>
+          <span style={{ display: "inline-flex", lineHeight: 0 }} dangerouslySetInnerHTML={{ __html: ic.svg.replace("width='18' height='18'", "width='16' height='16'") }} />
+        </button>
+      ))}
+    </div>
+  );
+}
+ 
+// Symbolfarbe: "A" = uebernehmen (leerer Wert), sonst eine Palette-Hexfarbe.
+// value = Hex ("" = uebernehmen). onChange(hex) liefert Hex ("" bei "A").
+function IconColorPicker({ value, onChange, noneTitle = "Wie Textfarbe" }) {
+  return (
+    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+      <button type="button" onClick={() => onChange("")} title={noneTitle}
+        style={{ width: 22, height: 22, borderRadius: 6, cursor: "pointer", background: T.input, border: `2px solid ${!value ? T.accent : T.border}`, color: T.muted, fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>A</button>
+      {PLOT_COLORS.map((c) => (
+        <button type="button" key={c.hex} onClick={() => onChange(c.hex)} title={c.name}
+          style={{ width: 22, height: 22, borderRadius: 6, cursor: "pointer", background: c.hex, border: `2px solid ${value === c.hex ? T.text : "transparent"}`, boxShadow: value === c.hex ? `0 0 0 1px ${T.border}` : "none" }} />
+      ))}
+    </div>
+  );
+}
 
-
-export { Field, inputStyle, TextInput, TextArea, Select, ColorSwatches, HexSwatches, IconBtn, Tab };
+export { Field, inputStyle, TextInput, TextArea, Select, ColorSwatches, HexSwatches, IconBtn, Tab, IconPicker, IconColorPicker };

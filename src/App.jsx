@@ -2,7 +2,7 @@ import React, { useState, useRef, useMemo } from "react";
 import { Plus, Copy, Check, Code2, Monitor, Sun, Moon, Braces } from "lucide-react";
 
 import { T, PAL } from "./constants/theme.js";
-import { PLOT_COLORS, MAX_AXES } from "./constants/palette.js";
+import { PLOT_COLORS, MAX_AXES, ICONS } from "./constants/palette.js";
 import { OUTPUT_MODES, BLOCK_META } from "./constants/options.js";
 import { nid } from "./model/ids.js";
 import { mkButton, mkItem, mkCond, mkEnumEntry, mkStatusEntry, newBlock, mkAxis, mkSeries, mkRef, mkMapping, mkMarker, mkTimeBtn, mkTableCol, mkTableMapEntry, mkTableRow, mkTableRule, mkRowFilter } from "./model/factories.js";
@@ -10,7 +10,7 @@ import { clampCol, groupByCol } from "./model/layout.js";
 
 import { generate } from "./codegen/index.js";
 import { parseConfigComment, reidBlocks } from "./model/config.js";
-import { Field, TextInput, Tab } from "./components/primitives.jsx";
+import { Field, TextInput, Tab, IconPicker, IconColorPicker } from "./components/primitives.jsx";
 import { symMeta } from "./components/fields.jsx";
 import { BlockPreview } from "./components/preview.jsx";
 import { BlockCard } from "./components/editor/BlockCard.jsx";
@@ -23,6 +23,8 @@ export default function App() {
   const [titleSource, setTitleSource] = useState("static");
   const [titleField, setTitleField] = useState("TagName");
   const [titleFallback, setTitleFallback] = useState("Titel");
+  const [titleIcon, setTitleIcon] = useState("");
+  const [titleIconColor, setTitleIconColor] = useState("");
   const [maxWidth, setMaxWidth] = useState(400);
   const [columns, setColumns] = useState(1);
   const [hostSuffix, setHostSuffix] = useState(".btn_PopUp");
@@ -45,8 +47,8 @@ export default function App() {
   const [dropTarget, setDropTarget] = useState(null);
   const codeRef = useRef(null);
 
-  const cfg = { mode, fnName, title, titleLoc, titleSource, titleField, titleFallback, maxWidth, columns, hostSuffix, blocks };
-  const code = useMemo(() => generate(cfg), [mode, fnName, title, titleLoc, titleSource, titleField, titleFallback, maxWidth, columns, hostSuffix, blocks]);
+  const cfg = { mode, fnName, title, titleLoc, titleSource, titleField, titleFallback, titleIcon, titleIconColor, maxWidth, columns, hostSuffix, blocks };
+  const code = useMemo(() => generate(cfg), [mode, fnName, title, titleLoc, titleSource, titleField, titleFallback, titleIcon, titleIconColor, maxWidth, columns, hostSuffix, blocks]);
   const pal = previewDark ? PAL.dark : PAL.light;
   const boxW = Math.max(320, parseInt(maxWidth) || 400);
   const sm = symMeta(mode);
@@ -114,10 +116,51 @@ export default function App() {
   const addTblCol = (id) => setBlocks((bs) => bs.map((b) => b.id === id ? { ...b, columns: [...b.columns, mkTableCol("read")], rows: (b.rows || []).map((r) => ({ ...r, cells: [...r.cells, { symbol: "", text: "", loc: "" }] })) } : b));
   const removeTblCol = (id, colIdx) => setBlocks((bs) => bs.map((b) => {
     if (b.id !== id || b.columns.length <= 1) return b;
+    // Index-Remap nach dem Loeschen von colIdx:
+    //   == colIdx  -> null (Referenz ungueltig, muss entfernt/neutralisiert werden)
+    //   >  colIdx  -> n-1
+    //   sonst      -> unveraendert
+    const shiftIdx = (n) => (n === colIdx ? null : (n > colIdx ? n - 1 : n));
     return { ...b,
-      columns: b.columns.filter((_, i) => i !== colIdx),
+      columns: b.columns.filter((_, i) => i !== colIdx).map((c) => {
+        if (c.action === "fn" && c.paramSource === "col" && typeof c.paramCol === "number" && c.paramCol >= 0) {
+          const np = shiftIdx(c.paramCol);
+          return { ...c, paramCol: np == null ? -1 : np }; // geloeschte Parameter-Spalte -> -1 (neu waehlen)
+        }
+        return c;
+      }),
       rows: (b.rows || []).map((r) => ({ ...r, cells: r.cells.filter((_, i) => i !== colIdx) })),
       rules: (b.rules || []).filter((u) => u.colIndex !== colIdx).map((u) => (u.colIndex > colIdx ? { ...u, colIndex: u.colIndex - 1 } : u)),
+      rowFilters: (b.rowFilters || []).filter((f) => f.colIndex !== colIdx).map((f) => (f.colIndex > colIdx ? { ...f, colIndex: f.colIndex - 1 } : f)),
+      defaultSortCol: (function () {
+        const n = b.defaultSortCol;
+        if (n == null || n < 0) return n;      // keine Standardsortierung -> unveraendert
+        const ns = shiftIdx(n);
+        return ns == null ? -1 : ns;           // sortierte Spalte geloescht -> keine Sortierung
+      })(),
+    };
+  }));
+  // Spalte verschieben (dir -1 = nach links, +1 = nach rechts). Zieht ALLE
+  // Index-Referenzen mit: statische Zell-Reihenfolge, rules.colIndex,
+  // rowFilters.colIndex, defaultSortCol, und paramCol von fn-Buttons.
+  const moveTblCol = (id, colIdx, dir) => setBlocks((bs) => bs.map((b) => {
+    if (b.id !== id) return b;
+    const j = colIdx + dir;
+    if (j < 0 || j >= b.columns.length) return b;
+    // i<->j vertauschen; remap bildet jeden alten Index auf den neuen ab
+    const remap = (n) => (n === colIdx ? j : (n === j ? colIdx : n));
+    const swap = (arr) => { const a = arr.slice(); const t = a[colIdx]; a[colIdx] = a[j]; a[j] = t; return a; };
+    // paramCol von fn-Buttons zeigt auf eine Spalte -> nach dem Swap remappen
+    const cols = swap(b.columns).map((c) => (
+      (c.action === "fn" && c.paramSource === "col" && typeof c.paramCol === "number" && c.paramCol >= 0)
+        ? { ...c, paramCol: remap(c.paramCol) } : c
+    ));
+    return { ...b,
+      columns: cols,
+      rows: (b.rows || []).map((r) => ({ ...r, cells: swap(r.cells) })),
+      rules: (b.rules || []).map((u) => ({ ...u, colIndex: remap(u.colIndex) })),
+      rowFilters: (b.rowFilters || []).map((f) => ({ ...f, colIndex: remap(f.colIndex) })),
+      defaultSortCol: (b.defaultSortCol == null || b.defaultSortCol < 0) ? b.defaultSortCol : remap(b.defaultSortCol),
     };
   }));
   const addTblRow = (id) => setBlocks((bs) => bs.map((b) => b.id === id ? { ...b, rows: [...(b.rows || []), mkTableRow(b.columns.length)] } : b));
@@ -189,6 +232,8 @@ export default function App() {
     setTitleSource(c.titleSource || "static");
     setTitleField(c.titleField || "TagName");
     setTitleFallback(c.titleFallback || "");
+    setTitleIcon(c.titleIcon || "");
+    setTitleIconColor(c.titleIconColor || "");
     setMaxWidth(c.maxWidth || 400);
     setColumns(Math.min(Math.max(parseInt(c.columns) || 1, 1), 3));
     setHostSuffix(c.hostSuffix || ".btn_PopUp");
@@ -201,7 +246,7 @@ export default function App() {
 
   // ── Karte (Accordion + Griff-Drag): ausgelagert nach components/editor/BlockCard.jsx ──
   const ui = { openId, setOpenId, dragId, setDragId, grabbedId, setGrabbedId, dropTarget, setDropTarget, columns, mode, sm };
-  const actions = { patch, remove, moveVertical, moveFlat, moveHorizontal, patchBtn, addBtn, removeBtn, addCond, removeCond, patchCond, patchItem, addItem, removeItem, setItemKind, addItemCond, removeItemCond, patchItemCond, patchEntry, addEnumEntry, addStatusEntry, removeEntry, addAxis, removeAxis, patchAxis, addSeries, removeSeries, patchSeries, addRef, removeRef, patchRef, addMarker, removeMarker, patchMarker, addMapping, removeMapping, patchMapping, addTimeBtn, removeTimeBtn, patchTimeBtn, handleDrop, patchTblCol, addTblCol, removeTblCol, addTblRow, removeTblRow, patchTblCell, addTblMap, removeTblMap, patchTblMap, addTblRule, addRowFilter, removeRowFilter, patchRowFilter, removeTblRule, patchTblRule };
+  const actions = { patch, remove, moveVertical, moveFlat, moveHorizontal, patchBtn, addBtn, removeBtn, addCond, removeCond, patchCond, patchItem, addItem, removeItem, setItemKind, addItemCond, removeItemCond, patchItemCond, patchEntry, addEnumEntry, addStatusEntry, removeEntry, addAxis, removeAxis, patchAxis, addSeries, removeSeries, patchSeries, addRef, removeRef, patchRef, addMarker, removeMarker, patchMarker, addMapping, removeMapping, patchMapping, addTimeBtn, removeTimeBtn, patchTimeBtn, handleDrop, patchTblCol, addTblCol, removeTblCol, moveTblCol, addTblRow, removeTblRow, patchTblCell, addTblMap, removeTblMap, patchTblMap, addTblRule, addRowFilter, removeRowFilter, patchRowFilter, removeTblRule, patchTblRule };
   const renderCard = (b, opts) => <BlockCard key={b.id} b={b} opts={opts} ui={ui} actions={actions} />;
 
   const renderPreviewBody = () => segments.map((part, pi) => {
@@ -247,7 +292,7 @@ export default function App() {
               </div>
             </Field>
             <div style={{ fontSize: 11, color: T.muted, marginTop: -4, marginBottom: 12 }}>{OUTPUT_MODES[mode].hint}</div>
-            <Field label={(mode === "registered" || mode === "embed") ? "FUNKTIONSNAME (registerFunctionEx)" : "NAME / UID"}>
+            <Field label={mode === "registered" ? "FUNKTIONSNAME (registerFunctionEx)" : "NAME / UID"}>
               <TextInput value={fnName} onChange={(e) => setFnName(e.target.value)} placeholder="AC_PopUp" />
             </Field>
             {mode === "usercontrol" && (
@@ -269,6 +314,10 @@ export default function App() {
                 })}
               </div>
             </Field>
+            <div style={{ display: "flex", gap: 10, alignItems: "flex-start", marginBottom: 8 }}>
+              <div style={{ flex: 3 }}><Field label="TITEL-SYMBOL (optional)"><IconPicker value={titleIcon} onChange={setTitleIcon} /></Field></div>
+              {titleIcon ? <div style={{ flex: 2 }}><Field label="SYMBOLFARBE"><IconColorPicker value={titleIconColor} onChange={setTitleIconColor} noneTitle="Wie Titelfarbe" /></Field></div> : null}
+            </div>
             {titleSource === "static" ? (
               <div style={{ display: "flex", gap: 10 }}>
                 <div style={{ flex: 2 }}><Field label="TITEL"><TextInput value={title} onChange={(e) => setTitle(e.target.value)} /></Field></div>
@@ -382,7 +431,10 @@ export default function App() {
             <div style={{ background: previewDark ? "#0f1117" : "#dfe3e8", border: `1px solid ${T.border}`, borderRadius: 10, padding: 32, display: "flex", justifyContent: "center", minHeight: 300, overflow: "auto" }}>
               <div style={{ background: pal.boxBg, border: `1px solid ${pal.border}`, borderRadius: 12, width: boxW, boxShadow: pal.shadow, overflow: "hidden", alignSelf: "flex-start" }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 20px", background: pal.headerBg, fontSize: 15, fontWeight: 600, color: pal.titleColor }}>
-                  <span>{previewTitle}</span>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                    {titleIcon ? <span style={{ display: "inline-flex", lineHeight: 0, flex: "0 0 auto", color: titleIconColor || pal.titleColor }} dangerouslySetInnerHTML={{ __html: ICONS[titleIcon].svg.replace("width='18' height='18'", "width='15' height='15'") }} /> : null}
+                    <span>{previewTitle}</span>
+                  </span>
                   <span style={{ color: pal.closeColor, fontSize: 20, lineHeight: 1 }}>×</span>
                 </div>
                 <div style={{ padding: 20 }}>
@@ -428,6 +480,3 @@ export default function App() {
     </div>
   );
 }
-
-
-

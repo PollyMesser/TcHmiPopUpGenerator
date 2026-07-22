@@ -1,4 +1,4 @@
-import { jsStr, locExpr, unitSuffix, attrName, I, cmpExpr, condOp, condVal } from "./helpers.js";
+import { jsStr, locExpr, unitSuffix, attrName, I, cmpExpr, condOp, condVal, durHelpers } from "./helpers.js";
 import { COLORS } from "../constants/palette.js";
 import { emitText, emitButtonItemUC, progressParams, trigActionUC } from "./emitSymbol.js";
 import { emitPlot } from "./emitPlot.js";
@@ -24,7 +24,8 @@ function emitCheckUC(parent, b, mb) {
 function emitInputUC(parent, b, mb) {
   const a = jsStr(attrName(b.symbol));
   const trig = (b.trigSym || "").trim() ? trigActionUC(b) : "";
-  const isNum = b.dataType !== "text";
+  const isTime = b.dataType === "time";
+  const isNum = !isTime && b.dataType !== "text";
   const parse = isNum ? `var val = parseFloat(input.value); if (isNaN(val)) return;` : `var val = input.value;`;
   const inputType = isNum ? "number" : "text";
   const col = COLORS[b.sendColor] || COLORS.blue;
@@ -37,7 +38,12 @@ function emitInputUC(parent, b, mb) {
   const withBtn = b.sendButton !== false;
   const sendBlock = withBtn ? `\n${I}    var send = document.createElement('button');\n${I}    send.style.cssText = 'flex:0 0 auto;padding:0 16px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;background:${col.bg};color:${col.text};';\n${I}    send.textContent = ${sendText};\n${I}    send.addEventListener('pointerdown', function (e) { e.stopPropagation(); });\n${I}    send.style.transition = 'transform .08s ease, filter .08s ease';\n${I}    send.addEventListener('pointerdown', function () { send.style.transform = 'scale(0.96)'; send.style.filter = 'brightness(0.88)'; });\n${I}    var rel_send = function () { send.style.transform = ''; send.style.filter = ''; };\n${I}    send.addEventListener('pointerup', rel_send);\n${I}    send.addEventListener('pointerleave', rel_send);\n${I}    send.onclick = function (e) { e.stopPropagation(); commit()${trig}; };` : "";
   const sendAppend = withBtn ? `\n${I}    line.appendChild(send);` : "";
-  return `${I}// Eingabefeld + Senden (Attribut): ${attrName(b.symbol)}\n${I}(function () {\n${I}    var wrap = document.createElement('div');\n${I}    wrap.style.cssText = 'margin-bottom:${mb};';\n${I}    var lbl = document.createElement('div');\n${I}    lbl.style.cssText = 'font-size:13px;color:' + p.bodyText + ';margin-bottom:6px;';\n${I}    lbl.textContent = ${locExpr(b.loc, b.label)};\n${I}    var line = document.createElement('div');\n${I}    line.style.cssText = 'display:flex;gap:8px;align-items:stretch;';\n${I}    var input = document.createElement('input');\n${I}    input.type = '${inputType}';\n${I}    input.style.cssText = 'flex:1;min-width:0;box-sizing:border-box;padding:9px 10px;border-radius:8px;font-size:14px;outline:none;text-align:right;' +\n${I}        'border:1px solid ' + p.border + ';background:' + p.boxBg + ';color:' + p.bodyText + ';';\n${I}    input.addEventListener('pointerdown', function (e) { e.stopPropagation(); });\n${I}    function commit() { ${parse} sv(${a}, val); }\n${I}    input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { commit(); } });${unitEl}${sendBlock}\n${I}    line.appendChild(input);${unitAppend}${sendAppend}\n${I}    wrap.appendChild(lbl); wrap.appendChild(line);\n${I}    ${parent}.appendChild(wrap);\n${I}    updaters.push(function () { if (input.value === '' && document.activeElement !== input) input.value = String(gv(${a}, '')); });\n${I}})();`;
+  // TIME: SPS-Attribut liefert ISO-8601-Dauer (PT..S). Anzeige/Eingabe HH:MM:SS.
+  const readAssign = isTime ? `durToHMS(gv(${a}, ''))` : `String(gv(${a}, ''))`;
+  const commitBody = isTime ? `var val = hmsToDur(input.value); sv(${a}, val);` : `${parse} sv(${a}, val);`;
+  const timeStyle = isTime ? `\n${I}    input.style.textAlign = 'center';\n${I}    input.placeholder = 'HH:MM:SS';` : "";
+  const timeHelpers = isTime ? durHelpers() : "";
+  return `${I}// Eingabefeld + Senden (Attribut): ${attrName(b.symbol)}\n${I}(function () {\n${I}    var wrap = document.createElement('div');\n${I}    wrap.style.cssText = 'margin-bottom:${mb};';\n${I}    var lbl = document.createElement('div');\n${I}    lbl.style.cssText = 'font-size:13px;color:' + p.bodyText + ';margin-bottom:6px;';\n${I}    lbl.textContent = ${locExpr(b.loc, b.label)};\n${I}    var line = document.createElement('div');\n${I}    line.style.cssText = 'display:flex;gap:8px;align-items:stretch;';\n${I}    var input = document.createElement('input');\n${I}    input.type = '${inputType}';\n${I}    input.style.cssText = 'flex:1;min-width:0;box-sizing:border-box;padding:9px 10px;border-radius:8px;font-size:14px;outline:none;text-align:right;' +\n${I}        'border:1px solid ' + p.border + ';background:' + p.boxBg + ';color:' + p.bodyText + ';';\n${I}    input.addEventListener('pointerdown', function (e) { e.stopPropagation(); });${timeStyle}${timeHelpers}\n${I}    function commit() { ${commitBody} }\n${I}    input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { commit(); } });${unitEl}${sendBlock}\n${I}    line.appendChild(input);${unitAppend}${sendAppend}\n${I}    wrap.appendChild(lbl); wrap.appendChild(line);\n${I}    ${parent}.appendChild(wrap);\n${I}    updaters.push(function () { if (input.value === '' && document.activeElement !== input) input.value = ${readAssign}; });\n${I}})();`;
 }
 function emitProgressUC(parent, b, mb) {
   const a = jsStr(attrName(b.symbol));

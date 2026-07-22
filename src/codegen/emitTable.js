@@ -24,6 +24,8 @@ function tableBlockConfig(b) {
     })),
     // sortable nur setzen, wenn aktiv -> Bestands-JSON bleibt byte-identisch
     ...(c.sortable ? { sortable: true } : {}),
+    // Kopf-Icon nur setzen, wenn gewaehlt -> Bestands-JSON bleibt byte-identisch
+    ...(ICONS[c.headerIcon] ? { hicon: c.headerIcon, ...((c.headerIconColor || "").trim() ? { hicolor: c.headerIconColor } : {}) } : {}),
     // Button-Funktionsaktion nur setzen, wenn action==='fn' -> Bestands-Buttons byte-identisch
     ...((c.kind === "button" && c.action === "fn") ? {
       action: "fn",
@@ -40,7 +42,7 @@ function tableBlockConfig(b) {
     }));
   // Nur tatsächlich genutzte Icon-SVGs einbetten
   const usedIcons = {};
-  colsOut.forEach((c) => { if (c.kind === "icon") c.map.forEach((e) => { usedIcons[e.icon] = ICONS[e.icon].svg; }); });
+  colsOut.forEach((c) => { if (c.kind === "icon") c.map.forEach((e) => { usedIcons[e.icon] = ICONS[e.icon].svg; }); if (c.hicon && ICONS[c.hicon]) usedIcons[c.hicon] = ICONS[c.hicon].svg; });
   // Regel-Wert bei der Generierung typisieren (true/false/Zahl/String)
   const parseRuleVal = (raw) => {
     const t = String(raw == null ? "" : raw).trim();
@@ -281,7 +283,7 @@ function emitTable(parent, b) {
     function buildCellEl(r, ci, pp) {
         var col = TCOLS[ci];
         var td = document.createElement('td');
-        td.style.cssText = 'padding:6px 10px;border-top:1px solid ' + pp.border + ';font-size:13px;color:' + pp.bodyText + ';white-space:nowrap;'
+        td.style.cssText = 'padding:6px 10px;border-top:1px solid ' + pp.border + ';font-size:18px;color:' + pp.bodyText + ';white-space:nowrap;'
             + ((col.kind === 'read' || col.kind === 'input') ? 'text-align:right;font-variant-numeric:tabular-nums;' : '');
         var v = vals[r] ? vals[r][ci] : undefined;
         if (col.kind === 'text') {
@@ -308,7 +310,7 @@ function emitTable(parent, b) {
             var inp = document.createElement('input');
             inp.type = 'text';
             inp.value = (v === undefined || v === null) ? '' : String(v);
-            inp.style.cssText = 'width:80px;padding:3px 6px;border:1px solid ' + pp.border + ';border-radius:5px;background:' + pp.boxBg + ';color:' + pp.bodyText + ';font-size:13px;text-align:right;';
+            inp.style.cssText = 'width:80px;padding:3px 6px;border:1px solid ' + pp.border + ';border-radius:5px;background:' + pp.boxBg + ';color:' + pp.bodyText + ';font-size:18px;text-align:right;';
             inp.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
             var send = function () {
                 var s = symFor(r, ci); if (!s) return;
@@ -322,7 +324,7 @@ function emitTable(parent, b) {
         } else if (col.kind === 'button') {
             var btn = document.createElement('button');
             btn.textContent = locT(col.lloc, col.label || 'OK');
-            btn.style.cssText = 'padding:4px 12px;border:1px solid ' + pp.border + ';border-radius:6px;background:transparent;color:' + pp.bodyText + ';font-size:12px;font-weight:600;cursor:pointer;';
+            btn.style.cssText = 'padding:4px 12px;border:1px solid ' + pp.border + ';border-radius:6px;background:transparent;color:' + pp.bodyText + ';font-size:16px;font-weight:600;cursor:pointer;';
             btn.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
             btn.onclick = function (e) {
                 e.stopPropagation();
@@ -338,7 +340,7 @@ function emitTable(parent, b) {
         } else if (col.kind === 'enum') {
             var e2 = mapEntry(ci, v);
             var badge = document.createElement('span');
-            badge.style.cssText = 'display:inline-block;padding:2px 10px;border-radius:10px;font-size:12px;font-weight:600;background:' + (e2 ? e2.color : pp.inactive) + ';color:' + (e2 ? e2.text : '#ffffff') + ';';
+            badge.style.cssText = 'display:inline-block;padding:2px 10px;border-radius:10px;font-size:16px;font-weight:600;background:' + (e2 ? e2.color : pp.inactive) + ';color:' + (e2 ? e2.text : '#ffffff') + ';';
             badge.textContent = e2 ? locT(e2.loc, e2.label) : (v === undefined || v === null ? '–' : String(v));
             td.style.textAlign = 'center';
             td.appendChild(badge);
@@ -429,7 +431,7 @@ function emitTable(parent, b) {
             if (SHOW_INDEX) {
                 var tdIdx = document.createElement('td');
                 tdIdx.textContent = String(START_INDEX + r);
-                tdIdx.style.cssText = 'padding:6px 10px;border-top:1px solid ' + pp.border + ';font-size:12px;color:' + pp.bodyText + ';opacity:.6;text-align:right;font-variant-numeric:tabular-nums;';
+                tdIdx.style.cssText = 'padding:6px 10px;border-top:1px solid ' + pp.border + ';font-size:16px;color:' + pp.bodyText + ';opacity:.6;text-align:right;font-variant-numeric:tabular-nums;';
                 tr.appendChild(tdIdx);
             }
             var cellEls = [];
@@ -459,14 +461,14 @@ function emitTable(parent, b) {
         var top = document.createElement('div');
         top.style.cssText = 'display:flex;align-items:center;gap:10px;margin-bottom:8px;';
         var cap = document.createElement('span');
-        cap.style.cssText = 'flex:1 1 auto;font-size:13px;font-weight:600;color:' + pp0.titleColor + ';';
+        cap.style.cssText = 'flex:1 1 auto;font-size:18px;font-weight:600;color:' + pp0.titleColor + ';';
         cap.textContent = capText;
         top.appendChild(cap);
         if (SEARCH_ON) {
             var se = document.createElement('input');
             se.type = 'text';
-            se.placeholder = locT('L_Search', 'Suchen…');
-            se.style.cssText = 'flex:0 0 auto;width:160px;padding:4px 8px;border:1px solid ' + pp0.border + ';border-radius:6px;background:' + pp0.boxBg + ';color:' + pp0.bodyText + ';font-size:12px;';
+            se.placeholder = locT('L_Tbl_Search', 'Suchen…');
+            se.style.cssText = 'flex:0 0 auto;width:160px;padding:4px 8px;border:1px solid ' + pp0.border + ';border-radius:6px;background:' + pp0.boxBg + ';color:' + pp0.bodyText + ';font-size:16px;';
             se.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
             se.addEventListener('input', function () { query = se.value || ''; page = 0; renderBody(); });
             top.appendChild(se);
@@ -493,8 +495,29 @@ function emitTable(parent, b) {
             var col0 = TCOLS[colIdx];
             var right = !isIdx && col0 && (col0.kind === 'read' || col0.kind === 'input');
             var canSort = !isIdx && col0 && col0.sortable === true;
-            th.style.cssText = 'position:sticky;top:0;z-index:1;background:' + pp0.headerBg + ';padding:7px 10px;font-size:12px;font-weight:600;color:' + pp0.titleColor + ';text-align:' + (right || isIdx ? 'right' : 'left') + ';white-space:nowrap;' + (canSort ? 'cursor:pointer;user-select:none;' : '');
-            if (canSort) {
+            var hIcon = !isIdx && col0 && col0.hicon && ICON_SVGS[col0.hicon];
+            th.style.cssText = 'position:sticky;top:0;z-index:1;background:' + pp0.headerBg + ';padding:7px 10px;font-size:16px;font-weight:600;color:' + pp0.titleColor + ';text-align:' + (right || isIdx ? 'right' : 'left') + ';white-space:nowrap;' + (canSort ? 'cursor:pointer;user-select:none;' : '');
+            if (hIcon) {
+                var inner = document.createElement('span');
+                inner.style.cssText = 'display:inline-flex;align-items:center;gap:6px;vertical-align:middle;justify-content:' + (right || isIdx ? 'flex-end' : 'flex-start') + ';';
+                var hico = document.createElement('span');
+                hico.style.cssText = 'display:inline-flex;line-height:0;flex:0 0 auto;color:' + (col0.hicolor || pp0.titleColor) + ';';
+                hico.innerHTML = ICON_SVGS[col0.hicon];
+                var _hsv = hico.querySelector('svg'); if (_hsv) { _hsv.setAttribute('width', '1em'); _hsv.setAttribute('height', '1em'); }
+                inner.appendChild(hico);
+                var labh = document.createElement('span');
+                labh.textContent = h;
+                inner.appendChild(labh);
+                th.appendChild(inner);
+                if (canSort) {
+                    var arrh = document.createElement('span');
+                    arrh.style.cssText = 'display:inline-block;margin-left:5px;font-size:10px;opacity:.55;';
+                    inner.appendChild(arrh);
+                    sortThs.push({ el: arrh, col: colIdx });
+                    th.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
+                    (function (idx) { th.onclick = function (e) { e.stopPropagation(); toggleSort(idx); }; })(colIdx);
+                }
+            } else if (canSort) {
                 var lab = document.createElement('span');
                 lab.textContent = h;
                 var arr = document.createElement('span');
@@ -520,10 +543,10 @@ function emitTable(parent, b) {
     if (PAGE_SIZE > 0) {
         var pager = document.createElement('div');
         pager.style.cssText = 'display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:6px;';
-        var pbStyle = 'padding:2px 10px;border:1px solid ' + pp0.border + ';border-radius:6px;background:transparent;color:' + pp0.bodyText + ';font-size:12px;cursor:pointer;';
+        var pbStyle = 'padding:2px 10px;border:1px solid ' + pp0.border + ';border-radius:6px;background:transparent;color:' + pp0.bodyText + ';font-size:16px;cursor:pointer;';
         prevBtn = document.createElement('button'); prevBtn.textContent = '‹'; prevBtn.style.cssText = pbStyle;
         nextBtn = document.createElement('button'); nextBtn.textContent = '›'; nextBtn.style.cssText = pbStyle;
-        pageInfo = document.createElement('span'); pageInfo.style.cssText = 'font-size:12px;color:' + pp0.bodyText + ';opacity:.75;font-variant-numeric:tabular-nums;';
+        pageInfo = document.createElement('span'); pageInfo.style.cssText = 'font-size:16px;color:' + pp0.bodyText + ';opacity:.75;font-variant-numeric:tabular-nums;';
         prevBtn.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
         nextBtn.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
         prevBtn.onclick = function (e) { e.stopPropagation(); page -= 1; renderBody(); };

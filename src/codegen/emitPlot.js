@@ -92,7 +92,7 @@ function emitPlot(parent, b) {
     statsWrap = document.createElement('div');
     statsWrap.style.cssText = 'margin-top:8px;border:1px solid ' + pp.border + ';border-radius:8px;overflow:hidden;';
     var stHead = document.createElement('div');
-    stHead.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 10px;cursor:pointer;font-size:12px;font-weight:600;color:' + pp.bodyText + ';';
+    stHead.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 10px;cursor:pointer;font-size:16px;font-weight:600;color:' + pp.bodyText + ';';
     var stArrow = document.createElement('span'); stArrow.textContent = '▾'; stArrow.style.cssText = 'flex:0 0 auto;transition:transform .15s;';
     var stTitle = document.createElement('span'); stTitle.textContent = locP('L_Stat_Title', 'Statistik'); stTitle.style.cssText = 'flex:1 1 auto;';
     var stRangeLbl = document.createElement('span'); stRangeLbl.style.cssText = 'flex:0 0 auto;font-weight:400;opacity:.75;'; stRangeLbl.textContent = locP('L_Stat_Range', 'Zeitraum') + ':';
@@ -102,7 +102,7 @@ function emitPlot(parent, b) {
     var stTblWrap = document.createElement('div');
     stTblWrap.style.cssText = 'overflow-x:auto;';
     var stTbl = document.createElement('table');
-    stTbl.style.cssText = 'width:100%;border-collapse:collapse;font-size:12px;color:' + pp.bodyText + ';';
+    stTbl.style.cssText = 'width:100%;border-collapse:collapse;font-size:16px;color:' + pp.bodyText + ';';
     var stThead = document.createElement('tr');
     ['', locP('L_Stat_Min', 'Min'), locP('L_Stat_Max', 'Max'), locP('L_Stat_Mean', 'Mittel'), locP('L_Stat_Median', 'Median'), locP('L_Stat_Now', 'Aktuell')].forEach(function (h, hi) {
         var th = document.createElement('th');
@@ -231,7 +231,7 @@ function emitPlot(parent, b) {
         if (existing) { existing.addEventListener('load', cb); return; }
         var s = document.createElement('script'); s.id = 'ac-plotly-loader'; s.src = PLOTLY_SRC;
         s.onload = function () { cb(); };
-        s.onerror = function () { if (plotDiv) { plotDiv.textContent = locP('L_PlotLoadError', 'Plotly konnte nicht geladen werden: ' + PLOTLY_SRC); plotDiv.style.color = pal().bodyText; plotDiv.style.fontSize = '13px'; } };
+        s.onerror = function () { if (plotDiv) { plotDiv.textContent = locP('L_PlotLoadError', 'Plotly konnte nicht geladen werden: ' + PLOTLY_SRC); plotDiv.style.color = pal().bodyText; plotDiv.style.fontSize = '20px'; } };
         document.head.appendChild(s);
     }
     function axisRef(idx) { return idx === 0 ? 'y' : ('y' + (idx + 1)); }
@@ -370,10 +370,10 @@ ${statsFns}    function isDisplayed() { return !!plotDiv && plotDiv.offsetParent
     wrapper.style.cssText = 'display:flex;flex-direction:column;min-width:0;margin-bottom:16px;';
     if (SHOW_TOOLBAR || ZOOM_ENABLED) {
         var bar = document.createElement('div');
-        bar.style.cssText = 'display:flex;align-items:center;gap:10px;margin-bottom:6px;font-size:13px;font-weight:600;color:' + pp.titleColor + ';';
+        bar.style.cssText = 'display:flex;align-items:center;gap:10px;margin-bottom:6px;font-size:20px;font-weight:600;color:' + pp.titleColor + ';';
         var cap = document.createElement('span'); cap.style.cssText = 'flex:1 1 auto;'; if (SHOW_TOOLBAR) cap.textContent = ${c.captionExpr};
         bar.appendChild(cap);
-        var btnStyle = 'flex:0 0 auto;border:1px solid ' + pp.border + ';background:transparent;color:' + pp.bodyText + ';font-size:12px;font-weight:600;cursor:pointer;padding:4px 10px;border-radius:6px;';
+        var btnStyle = 'flex:0 0 auto;border:1px solid ' + pp.border + ';background:transparent;color:' + pp.bodyText + ';font-size:16px;font-weight:600;cursor:pointer;padding:4px 10px;border-radius:6px;';
         if (ZOOM_ENABLED) {
             var resetBtn = document.createElement('button');
             resetBtn.style.cssText = btnStyle;
@@ -396,7 +396,7 @@ ${statsFns}    function isDisplayed() { return !!plotDiv && plotDiv.offsetParent
         var legend = document.createElement('div');
         legend.style.cssText = 'display:flex;flex-wrap:wrap;gap:16px;margin-bottom:10px;';
         series.forEach(function (s, i) {
-            var lab = document.createElement('label'); lab.style.cssText = 'display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:' + pp.bodyText + ';';
+            var lab = document.createElement('label'); lab.style.cssText = 'display:flex;align-items:center;gap:6px;cursor:pointer;font-size:16px;color:' + pp.bodyText + ';';
             var cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = true; cb.style.cssText = 'width:14px;height:14px;flex:0 0 auto;cursor:pointer;accent-color:' + s.color + ';';
             cb.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
             cb.addEventListener('change', function () { if (!plotDiv || !window.Plotly) return; window.Plotly.restyle(plotDiv, { visible: cb.checked ? true : 'legendonly' }, [i]); });

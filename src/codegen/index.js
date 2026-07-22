@@ -2,7 +2,7 @@ import { jsStr, locExpr, sanitizeFn, dedent, REF } from "./helpers.js";
 import { blockCodeSym } from "./emitSymbol.js";
 import { blockCodeUC } from "./emitUserControl.js";
 import { buildBodyContent, buildTitleStmt } from "./shared.js";
-import { innerSymbol, innerUC, innerEmbed } from "./templates.js";
+import { innerSymbol, innerUC } from "./templates.js";
 import { buildConfigComment } from "../model/config.js";
 
 // ── Haupt-Generator ──
@@ -12,67 +12,7 @@ function generateCode(cfg) {
   const titleExpr = locExpr(cfg.titleLoc, cfg.title);
   const mw = Math.max(320, parseInt(cfg.maxWidth) || 400);
   const cols = Math.min(Math.max(parseInt(cfg.columns) || 1, 1), 3);
-  const titleStmt = buildTitleStmt(cfg.mode, cfg.titleSource, cfg.titleField, cfg.titleFallback, titleExpr);
-
-  if (cfg.mode === "embed") {
-    const bodyContentEmbed = buildBodyContent(cfg.blocks, cols, blockCodeSym);
-    const inner = dedent(innerEmbed(bodyContentEmbed), 12);
-    return `// Auto-generiert vom AC_PopUp Generator – eingebettet (in Zielcontainer, kein Overlay)
-${REF}
-
-/*
- * Aufruf am View-Event onAttached:   TcHmi.Functions.AC_HMI.${fn}('MeinContainer');
- * Abbau am View-Event onDetached:    TcHmi.Functions.AC_HMI.${fn}Destroy('MeinContainer');
- * 'MeinContainer' = Name eines Container-Controls (empfohlen) oder id eines rohen divs
- * mit echter Größe in der View.
- */
-(function (/** @type {globalThis.TcHmi} */ TcHmi) {
-    var Functions;
-    (function (/** @type {globalThis.TcHmi.Functions} */ Functions) {
-        var AC_HMI;
-        (function (AC_HMI) {
-
-            function resolveTarget(t) {
-                if (!t) return null;
-                if (typeof t === 'object') {
-                    if (t.nodeType === 1) return t;                    // DOM-Element
-                    if (typeof t.getElement === 'function') {          // TcHMI-Control-Objekt
-                        try { var e = t.getElement(); if (e && e[0]) return e[0]; } catch (err) {}
-                    }
-                    return null;
-                }
-                if (typeof t === 'string') {
-                    var byId = document.getElementById(t);             // rohes div per id
-                    if (byId) return byId;
-                    try {                                              // TcHMI-Control per Name
-                        var ctrl = TcHmi.Controls.get(t);
-                        if (ctrl && typeof ctrl.getElement === 'function') {
-                            var el = ctrl.getElement();
-                            if (el && el[0]) return el[0];
-                        }
-                    } catch (err) {}
-                    try { return document.querySelector(t); } catch (err) { return null; } // CSS-Selektor
-                }
-                return null;
-            }
-
-            function ${fn}Destroy(target) {
-                var container = resolveTarget(target);
-                if (container && container.__acEmbedDestroy) { try { container.__acEmbedDestroy(); } catch (e) {} }
-            }
-            AC_HMI.${fn}Destroy = ${fn}Destroy;
-
-            function ${fn}(target) {
-${inner}
-            }
-            AC_HMI.${fn} = ${fn};
-        })(AC_HMI = Functions.AC_HMI || (Functions.AC_HMI = {}));
-    })(Functions = TcHmi.Functions || (TcHmi.Functions = {}));
-})(TcHmi);
-TcHmi.Functions.registerFunctionEx(${jsStr(fn)}, 'TcHmi.Functions.AC_HMI', TcHmi.Functions.AC_HMI.${fn});
-TcHmi.Functions.registerFunctionEx(${jsStr(fn + "Destroy")}, 'TcHmi.Functions.AC_HMI', TcHmi.Functions.AC_HMI.${fn}Destroy);
-`;
-  }
+  const titleStmt = buildTitleStmt(cfg.mode, cfg.titleSource, cfg.titleField, cfg.titleFallback, titleExpr, cfg.titleIcon, cfg.titleIconColor);
 
   if (cfg.mode === "usercontrol") {
     const suffix = (cfg.hostSuffix || ".btn_PopUp").trim() || ".btn_PopUp";
