@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "node test/run.mjs && node test/smoke-render.mjs && node test/smoke-blockcard.mjs && node test/sort-logic.mjs && node test/fn-logic.mjs && node test/bool-filter-logic.mjs && node test/embed-test.mjs && node test/access-logic.mjs",
+    "test:record": "node test/run.mjs --record"
   },
   "dependencies": {
     "lucide-react": "^1.23.0",

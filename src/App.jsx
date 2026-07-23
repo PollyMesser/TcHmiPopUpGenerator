@@ -11,6 +11,7 @@ import { clampCol, groupByCol } from "./model/layout.js";
 import { generate } from "./codegen/index.js";
 import { parseConfigComment, reidBlocks } from "./model/config.js";
 import { Field, TextInput, Tab, IconPicker, IconColorPicker } from "./components/primitives.jsx";
+import { AccessFields } from "./components/access.jsx";
 import { symMeta } from "./components/fields.jsx";
 import { BlockPreview } from "./components/preview.jsx";
 import { BlockCard } from "./components/editor/BlockCard.jsx";
@@ -28,6 +29,7 @@ export default function App() {
   const [maxWidth, setMaxWidth] = useState(400);
   const [columns, setColumns] = useState(1);
   const [hostSuffix, setHostSuffix] = useState(".btn_PopUp");
+  const [access, setAccess] = useState(undefined); // popup-weite Gruppen-Berechtigung (undefined = keine)
   const [addTargetCol, setAddTargetCol] = useState(0);
   const [blocks, setBlocks] = useState([
     { id: nid(), type: "bool", col: 0, label: "Freigabe angeboten", loc: "L_SkipReleaseOffered", symbol: "ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::xSkipReleaseOffered" },
@@ -47,8 +49,8 @@ export default function App() {
   const [dropTarget, setDropTarget] = useState(null);
   const codeRef = useRef(null);
 
-  const cfg = { mode, fnName, title, titleLoc, titleSource, titleField, titleFallback, titleIcon, titleIconColor, maxWidth, columns, hostSuffix, blocks };
-  const code = useMemo(() => generate(cfg), [mode, fnName, title, titleLoc, titleSource, titleField, titleFallback, titleIcon, titleIconColor, maxWidth, columns, hostSuffix, blocks]);
+  const cfg = { mode, fnName, title, titleLoc, titleSource, titleField, titleFallback, titleIcon, titleIconColor, maxWidth, columns, hostSuffix, blocks, ...(access ? { access } : {}) };
+  const code = useMemo(() => generate(cfg), [mode, fnName, title, titleLoc, titleSource, titleField, titleFallback, titleIcon, titleIconColor, maxWidth, columns, hostSuffix, blocks, access]);
   const pal = previewDark ? PAL.dark : PAL.light;
   const boxW = Math.max(320, parseInt(maxWidth) || 400);
   const sm = symMeta(mode);
@@ -237,6 +239,7 @@ export default function App() {
     setMaxWidth(c.maxWidth || 400);
     setColumns(Math.min(Math.max(parseInt(c.columns) || 1, 1), 3));
     setHostSuffix(c.hostSuffix || ".btn_PopUp");
+    setAccess(c.access || undefined);
     const nb = reidBlocks(c.blocks || []);
     setBlocks(nb);
     setOpenId(nb[0] ? nb[0].id : null);
@@ -346,6 +349,12 @@ export default function App() {
             </Field>
             {columns > 1 && parseInt(maxWidth) < 560 && (
               <div style={{ fontSize: 11, color: T.muted }}>Tipp: Bei {columns} Spalten wirkt eine größere Breite (z.B. 700–900 px) meist besser. „Zeile“-Bausteine sind immer volle Breite.</div>
+            )}
+            <AccessFields access={access} onChange={setAccess} title="GRUPPEN-BERECHTIGUNG (ganzes Popup)" />
+            {access && (
+              <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5, marginTop: 6 }}>
+                „Sehen" entscheidet, ob das Popup überhaupt öffnet; „Bedienen" sperrt alle Bedienelemente. Einzelne Bausteine können das feiner überschreiben.
+              </div>
             )}
           </div>
 

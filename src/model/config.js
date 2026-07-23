@@ -8,6 +8,9 @@ function buildConfigComment(cfg) {
     titleSource: cfg.titleSource, titleField: cfg.titleField, titleFallback: cfg.titleFallback,
     titleIcon: cfg.titleIcon, titleIconColor: cfg.titleIconColor,
     maxWidth: cfg.maxWidth, columns: cfg.columns, hostSuffix: cfg.hostSuffix, blocks: cfg.blocks,
+    // Popup-weite Gruppen-Berechtigungen NUR aufnehmen, wenn gesetzt – sonst
+    // bliebe der Re-Import-Kommentar bestehender Popups nicht byte-identisch.
+    ...(cfg.access ? { access: cfg.access } : {}),
   };
   return `\n// ── AC_PopUp Generator: Konfiguration für Re-Import (diese Zeilen nicht entfernen) ──\n// AC_POPUP_CONFIG_V1: ${JSON.stringify(c)}\n`;
 }

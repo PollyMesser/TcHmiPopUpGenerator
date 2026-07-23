@@ -52,4 +52,15 @@ const TIME_UNITS = [
   { value: "all", label: "Alle (gesamt)" },
 ];
 
-export { OUTPUT_MODES, BLOCK_META, WRITE_OPTS, ITEM_KINDS, TIME_UNITS };
+// ── Gruppen-Berechtigungen (TcHMI-UserManagement) ──
+// Feste Gruppenliste (deckt den aktuellen Anlagenfall ab). Die Auflösung zur
+// Laufzeit nutzt TcHmi.Server.getCurrentUserConfig().userIsInGroups.
+// Semantik pro Recht: Whitelist / "Allow gewinnt" – nur Gruppen mit "Allow"
+// sehen (observe) bzw. bedienen (operate) das Element; alle anderen nicht.
+const ACCESS_GROUPS = ["Admin", "Service", "Process_Engineer", "Operator"];
+const ACCESS_RIGHTS = [
+  { key: "observe", label: "Sehen (observe)", hint: "Deny → Element wird ausgeblendet" },
+  { key: "operate", label: "Bedienen (operate)", hint: "Deny → Element sichtbar, aber deaktiviert" },
+];
+
+export { OUTPUT_MODES, BLOCK_META, WRITE_OPTS, ITEM_KINDS, TIME_UNITS, ACCESS_GROUPS, ACCESS_RIGHTS };

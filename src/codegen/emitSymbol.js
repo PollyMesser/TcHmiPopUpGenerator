@@ -3,6 +3,7 @@ import { COLORS, TEXT_BG, ICONS } from "../constants/palette.js";
 import { emitPlot } from "./emitPlot.js";
 import { emitTable } from "./emitTable.js";
 import { emitDivider } from "./shared.js";
+import { gateBlock, gateButton } from "./access.js";
 
 // ─────────────────────────────────────────────────────────────
 //  Button-Beschriftung: Text, Icon oder Icon+Text.
@@ -172,7 +173,8 @@ function emitButtons(parent, b, mb) {
     } else {
       clickHandler = `\n${I}    ${v}.onclick = function (e) { e.stopPropagation(); ${action};${close} };`;
     }
-    return `${I}    // ${btn.writeMode}: ${btn.symbol}\n${I}    var ${v} = document.createElement('button');\n${I}    ${v}.style.cssText = 'flex:1;padding:12px 0;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;background:${col.bg};color:${col.text};';\n${I}    ${btnLabelCode(v, locExpr(btn.loc, btn.label), btn)}\n${I}    ${v}.addEventListener('pointerdown', function (e) { e.stopPropagation(); });${clickHandler}${vis}${fb}${press}${enable}\n${I}    row.appendChild(${v});`;
+    const head = `${I}    // ${btn.writeMode}: ${btn.symbol}\n${I}    var ${v} = document.createElement('button');\n${I}    ${v}.style.cssText = 'flex:1;padding:12px 0;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;background:${col.bg};color:${col.text};';\n${I}    ${btnLabelCode(v, locExpr(btn.loc, btn.label), btn)}\n${I}    ${v}.addEventListener('pointerdown', function (e) { e.stopPropagation(); });${clickHandler}${vis}${fb}${press}${enable}`;
+    return gateButton(head, `${I}    row.appendChild(${v});`, btn.access, v);
   }).join("\n");
   return `${I}// Buttons\n${I}(function () {\n${I}    var row = document.createElement('div');\n${I}    row.style.cssText = 'display:flex;gap:10px;margin-bottom:${mb};';\n${lines}\n${I}    ${parent}.appendChild(row);\n${I}})();`;
 }
@@ -318,6 +320,9 @@ function emitStatus(parent, b, mb) {
   return `${I}// Statusanzeige (${isBadge ? "Badge" : "Text"}) aus ${entries.length} Bools\n${I}(function () {\n${I}    var row = document.createElement('div');\n${I}    row.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:${mb};';\n${labelCode}${I}    var badge = document.createElement('span');\n${I}    row.appendChild(badge);\n${I}    ${parent}.appendChild(row);\n${I}    function paint(text, bg, fg) {\n${I}        badge.textContent = text;\n${paintBody}\n${I}    }\n${I}    var states = [${stateInit}];\n${I}    function apply() {\n${chain}\n${I}        paint(${locExpr(b.fbLoc, b.fbText)}, ${jsStr(fbCol.bg)}, ${jsStr(fbCol.text)});\n${I}    }\n${subs}\n${I}    apply();\n${I}})();`;
 }
 function blockCodeSym(b, parent) {
+  return gateBlock(b, parent, (p) => emitBlockSym(b, p));
+}
+function emitBlockSym(b, parent) {
   if (b.type === "text") return emitText(parent, b, "16px");
   if (b.type === "read") return emitRead(parent, b, "16px");
   if (b.type === "bool") return emitBool(parent, b, "16px");

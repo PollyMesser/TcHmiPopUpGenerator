@@ -469,6 +469,7 @@ function emitTable(parent, b) {
             se.type = 'text';
             se.placeholder = locT('L_Tbl_Search', 'Suchen…');
             se.style.cssText = 'flex:0 0 auto;width:160px;padding:4px 8px;border:1px solid ' + pp0.border + ';border-radius:6px;background:' + pp0.boxBg + ';color:' + pp0.bodyText + ';font-size:16px;';
+            se.setAttribute('data-ac-view', '1'); // Ansichtssteuerung: bleibt bei operate-Deny nutzbar
             se.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
             se.addEventListener('input', function () { query = se.value || ''; page = 0; renderBody(); });
             top.appendChild(se);
@@ -544,8 +545,8 @@ function emitTable(parent, b) {
         var pager = document.createElement('div');
         pager.style.cssText = 'display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:6px;';
         var pbStyle = 'padding:2px 10px;border:1px solid ' + pp0.border + ';border-radius:6px;background:transparent;color:' + pp0.bodyText + ';font-size:16px;cursor:pointer;';
-        prevBtn = document.createElement('button'); prevBtn.textContent = '‹'; prevBtn.style.cssText = pbStyle;
-        nextBtn = document.createElement('button'); nextBtn.textContent = '›'; nextBtn.style.cssText = pbStyle;
+        prevBtn = document.createElement('button'); prevBtn.textContent = '‹'; prevBtn.style.cssText = pbStyle; prevBtn.setAttribute('data-ac-view', '1');
+        nextBtn = document.createElement('button'); nextBtn.textContent = '›'; nextBtn.style.cssText = pbStyle; nextBtn.setAttribute('data-ac-view', '1');
         pageInfo = document.createElement('span'); pageInfo.style.cssText = 'font-size:16px;color:' + pp0.bodyText + ';opacity:.75;font-variant-numeric:tabular-nums;';
         prevBtn.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
         nextBtn.addEventListener('pointerdown', function (e) { e.stopPropagation(); });

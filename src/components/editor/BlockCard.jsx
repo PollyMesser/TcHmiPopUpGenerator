@@ -7,6 +7,7 @@ import { blockSummary, clampCol } from "../../model/layout.js";
 import { condOp, condVal } from "../../codegen/helpers.js";
 import { ColorSwatches, Field, HexSwatches, IconBtn, IconPicker, IconColorPicker, Select, TextArea, TextInput } from "../primitives.jsx";
 import { ButtonItemFields, InputFields, ReadBoolFields, TriggerFields } from "../fields.jsx";
+import { AccessFields } from "../access.jsx";
 
 // ── Baustein-Karte des Editors (Accordion + Griff-Drag), auch für volle-Breite-Zeilen ──
 // ui: Ansichts-Zustand aus App(); actions: alle Block-Handler aus App().
@@ -426,6 +427,7 @@ function BlockCard({ b, opts, ui, actions }) {
                       <Plus size={12} color={T.accent} /> Bedingung {(bt.enableIf || []).length ? "(UND)" : ""}
                     </button>
                     <div style={{ fontSize: 11, color: T.muted, marginTop: 4 }}>Keine Bedingung = immer aktiv. Wert kann bool (true/false), Zahl oder Enum sein – z.B. Mode ≠ 1.</div>
+                    <AccessFields access={bt.access} onChange={(a) => patchBtn(b.id, bi, { access: a })} title="GRUPPEN-BERECHTIGUNG (dieser Button)" />
                   </div>
                 ))}
                 {b.buttons.length < 2 && (
@@ -841,6 +843,8 @@ function BlockCard({ b, opts, ui, actions }) {
                 <Field label="FARBE"><ColorSwatches value={b.fbColor} onChange={(cc) => patch(b.id, { fbColor: cc })} /></Field>
               </>
             )}
+
+            <AccessFields access={b.access} onChange={(a) => patch(b.id, { access: a })} title="GRUPPEN-BERECHTIGUNG (dieser Baustein)" />
           </div>
         )}
       </div>
