@@ -107,6 +107,9 @@ function makeSandbox() {
     TcHmi,
     console,
     setTimeout, clearTimeout,
+    // UC-/Embed-Polling nutzt setInterval; im Test nur als No-op-Stub (der
+    // initiale refresh() laeuft ohnehin synchron vor dem Intervall).
+    setInterval: () => 0, clearInterval: () => {},
   };
   return { sandbox, registerCalls, controlsRegistry, documentStub };
 }

@@ -3,13 +3,43 @@ import {
   Braces, Zap, Box, List, ChevronsUpDown, Tag, Gauge, LineChart, Minus, Table,
 } from "lucide-react";
 
-// ── Ausgabemodi ──
+// ── Ausgabemodi (Alt-Struktur, weiter für Rückwärtskompatibilität referenziert) ──
 const OUTPUT_MODES = {
   registered:  { label: "Registrierte Funktion", icon: Braces, hint: "registerFunctionEx, per Symbol (ADS)" },
   event:       { label: "Event-JavaScript",       icon: Zap,    hint: "Reiner JS-Block fürs Event, per Symbol (ADS)" },
   usercontrol: { label: "UserControl-JS",         icon: Box,    hint: "An Host-Control gebunden, per Attribut (getX/setX)" },
   embed:       { label: "Eingebettet",            icon: Box,    hint: "In Zielcontainer statt Overlay; fn(target)+fnDestroy(target) an onAttached/onDetached" },
 };
+
+// ── Zwei getrennte Achsen: Funktionsart × Darstellung ──
+// Der gespeicherte `mode` bleibt EIN String (byte-schonend, keine neuen Config-
+// Felder für Bestands-Popups). Die Oberfläche splittet ihn in zwei Auswahlen.
+const FUNCTION_TYPES = {
+  registered:  { label: "Registrierte Funktion", icon: Braces, hint: "registerFunctionEx, aufrufbar per CallFunction – per Symbol (ADS)" },
+  event:       { label: "Event-JavaScript",       icon: Zap,    hint: "Reiner JS-Block direkt im Control-Event – per Symbol (ADS)" },
+  usercontrol: { label: "UserControl-JS",         icon: Box,    hint: "An ein UserControl gebunden – per Attribut (getX/setX)" },
+};
+const RENDER_MODES = {
+  popup: { label: "Popup (Overlay)", hint: "Verschiebbares Overlay-Fenster mit Kopfzeile" },
+  embed: { label: "Eingebettet",     hint: "Direkt in einen Zielcontainer, kein Overlay; Größe orientiert sich am Elternelement" },
+};
+// mode <-> (functionType, render)
+const MODE_MATRIX = {
+  registered:  { fn: "registered",  render: "popup" },
+  event:       { fn: "event",       render: "popup" },
+  usercontrol: { fn: "usercontrol", render: "popup" },
+  embed:       { fn: "registered",  render: "embed" },
+  embedEvent:  { fn: "event",       render: "embed" },
+  embedUc:     { fn: "usercontrol", render: "embed" },
+};
+const functionTypeOf = (mode) => (MODE_MATRIX[mode] || MODE_MATRIX.registered).fn;
+const renderOf = (mode) => (MODE_MATRIX[mode] || MODE_MATRIX.registered).render;
+const modeOf = (fn, render) => (render === "embed"
+  ? (fn === "event" ? "embedEvent" : fn === "usercontrol" ? "embedUc" : "embed")
+  : (fn === "event" ? "event" : fn === "usercontrol" ? "usercontrol" : "registered"));
+// UC-Datenzugriff (getX/setX + Polling) gilt für UC-Popup UND UC-Embed.
+const isUC = (mode) => mode === "usercontrol" || mode === "embedUc";
+const isEmbed = (mode) => renderOf(mode) === "embed";
 
 const BLOCK_META = {
   text:   { label: "Text",            icon: Type,              hint: "Statischer Text" },
@@ -63,4 +93,8 @@ const ACCESS_RIGHTS = [
   { key: "operate", label: "Bedienen (operate)", hint: "Deny → Element sichtbar, aber deaktiviert" },
 ];
 
-export { OUTPUT_MODES, BLOCK_META, WRITE_OPTS, ITEM_KINDS, TIME_UNITS, ACCESS_GROUPS, ACCESS_RIGHTS };
+export {
+  OUTPUT_MODES, FUNCTION_TYPES, RENDER_MODES, MODE_MATRIX,
+  functionTypeOf, renderOf, modeOf, isUC, isEmbed,
+  BLOCK_META, WRITE_OPTS, ITEM_KINDS, TIME_UNITS, ACCESS_GROUPS, ACCESS_RIGHTS,
+};

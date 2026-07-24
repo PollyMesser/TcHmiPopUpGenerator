@@ -1,0 +1,4 @@
+# Golden-Master-Dateien werden byte-genau mit der LF-Codegen-Ausgabe verglichen.
+# Ohne diese Regel wandelt git bei core.autocrlf=true die Dateien beim Checkout
+# in CRLF um -> der LF-erzeugende Codegen kann nie matchen (Tests brechen).
+test/goldens/*.js text eol=lf

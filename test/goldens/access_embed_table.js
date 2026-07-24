@@ -137,11 +137,13 @@
     if (csEmbed.position === 'static') container.style.position = 'relative';
     if (csEmbed.overflow === 'visible' || csEmbed.overflowY === 'visible') container.style.overflowY = 'auto';
 
-    // body oben-links verankern: fliessender Einschub wuerde im absolut
-    // positionierten TcHmiContainer nach unten rutschen. Kein bottom/height
-    // -> waechst mit dem Inhalt; der Container scrollt bei vielen Zeilen.
+    // body fuellt das Elternelement (inset:0): bei einem Container mit
+    // definierter Groesse (TcHmiContainer hat i.d.R. feste Geometrie)
+    // orientiert sich Breite UND Hoehe am Parent, viel Inhalt scrollt im
+    // body selbst. Absolut positioniert (nicht fliessend), damit es im
+    // absolut aufgebauten TcHmiContainer nicht nach unten rutscht.
     var body = document.createElement('div');
-    body.style.cssText = 'position:absolute;top:0;left:0;right:0;box-sizing:border-box;padding:12px;color:' + p.bodyText + ';';
+    body.style.cssText = 'position:absolute;top:0;left:0;right:0;bottom:0;box-sizing:border-box;overflow:auto;padding:12px;color:' + p.bodyText + ';';
 
         // ── Gruppen-Berechtigungen (TcHmi.Server.getCurrentUserConfig().userIsInGroups) ──
         function acCurrentGroups() {

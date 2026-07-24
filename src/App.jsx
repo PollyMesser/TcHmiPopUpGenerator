@@ -3,7 +3,7 @@ import { Plus, Copy, Check, Code2, Monitor, Sun, Moon, Braces } from "lucide-rea
 
 import { T, PAL } from "./constants/theme.js";
 import { PLOT_COLORS, MAX_AXES, ICONS } from "./constants/palette.js";
-import { OUTPUT_MODES, BLOCK_META } from "./constants/options.js";
+import { FUNCTION_TYPES, RENDER_MODES, functionTypeOf, renderOf, modeOf, isUC, BLOCK_META } from "./constants/options.js";
 import { nid } from "./model/ids.js";
 import { mkButton, mkItem, mkCond, mkEnumEntry, mkStatusEntry, newBlock, mkAxis, mkSeries, mkRef, mkMapping, mkMarker, mkTimeBtn, mkTableCol, mkTableMapEntry, mkTableRow, mkTableRule, mkRowFilter } from "./model/factories.js";
 import { clampCol, groupByCol } from "./model/layout.js";
@@ -29,6 +29,7 @@ export default function App() {
   const [maxWidth, setMaxWidth] = useState(400);
   const [columns, setColumns] = useState(1);
   const [hostSuffix, setHostSuffix] = useState(".btn_PopUp");
+  const [embedTarget, setEmbedTarget] = useState("MeinContainer");
   const [access, setAccess] = useState(undefined); // popup-weite Gruppen-Berechtigung (undefined = keine)
   const [addTargetCol, setAddTargetCol] = useState(0);
   const [blocks, setBlocks] = useState([
@@ -49,12 +50,18 @@ export default function App() {
   const [dropTarget, setDropTarget] = useState(null);
   const codeRef = useRef(null);
 
-  const cfg = { mode, fnName, title, titleLoc, titleSource, titleField, titleFallback, titleIcon, titleIconColor, maxWidth, columns, hostSuffix, blocks, ...(access ? { access } : {}) };
-  const code = useMemo(() => generate(cfg), [mode, fnName, title, titleLoc, titleSource, titleField, titleFallback, titleIcon, titleIconColor, maxWidth, columns, hostSuffix, blocks, access]);
+  const cfg = { mode, fnName, title, titleLoc, titleSource, titleField, titleFallback, titleIcon, titleIconColor, maxWidth, columns, hostSuffix, blocks, ...(access ? { access } : {}), ...(embedTarget ? { embedTarget } : {}) };
+  const code = useMemo(() => generate(cfg), [mode, fnName, title, titleLoc, titleSource, titleField, titleFallback, titleIcon, titleIconColor, maxWidth, columns, hostSuffix, blocks, access, embedTarget]);
   const pal = previewDark ? PAL.dark : PAL.light;
   const boxW = Math.max(320, parseInt(maxWidth) || 400);
-  const sm = symMeta(mode);
-  const dynLabel = mode === "usercontrol" ? "Aus Attribut" : "Aus Symbol";
+  // Funktionsart × Darstellung aus dem gespeicherten `mode` ableiten.
+  const functionType = functionTypeOf(mode);
+  const render = renderOf(mode);
+  // Kind-Komponenten (Editor-Felder) unterscheiden nur UC vs. Symbol -> abgeleiteten
+  // Modus reichen, damit embedUc wie usercontrol und die übrigen wie Symbol wirken.
+  const childMode = isUC(mode) ? "usercontrol" : "registered";
+  const sm = symMeta(childMode);
+  const dynLabel = isUC(mode) ? "Aus Attribut" : "Aus Symbol";
   const previewTitle = titleSource === "dynamic" ? (titleFallback || "(dynamisch)") : (title || "Titel");
   const toggleBool = (id) => setPreviewBools((s) => ({ ...s, [id]: !s[id] }));
 
@@ -239,6 +246,7 @@ export default function App() {
     setMaxWidth(c.maxWidth || 400);
     setColumns(Math.min(Math.max(parseInt(c.columns) || 1, 1), 3));
     setHostSuffix(c.hostSuffix || ".btn_PopUp");
+    setEmbedTarget(c.embedTarget != null ? c.embedTarget : "MeinContainer");
     setAccess(c.access || undefined);
     const nb = reidBlocks(c.blocks || []);
     setBlocks(nb);
@@ -248,7 +256,7 @@ export default function App() {
   };
 
   // ── Karte (Accordion + Griff-Drag): ausgelagert nach components/editor/BlockCard.jsx ──
-  const ui = { openId, setOpenId, dragId, setDragId, grabbedId, setGrabbedId, dropTarget, setDropTarget, columns, mode, sm };
+  const ui = { openId, setOpenId, dragId, setDragId, grabbedId, setGrabbedId, dropTarget, setDropTarget, columns, mode: childMode, sm };
   const actions = { patch, remove, moveVertical, moveFlat, moveHorizontal, patchBtn, addBtn, removeBtn, addCond, removeCond, patchCond, patchItem, addItem, removeItem, setItemKind, addItemCond, removeItemCond, patchItemCond, patchEntry, addEnumEntry, addStatusEntry, removeEntry, addAxis, removeAxis, patchAxis, addSeries, removeSeries, patchSeries, addRef, removeRef, patchRef, addMarker, removeMarker, patchMarker, addMapping, removeMapping, patchMapping, addTimeBtn, removeTimeBtn, patchTimeBtn, handleDrop, patchTblCol, addTblCol, removeTblCol, moveTblCol, addTblRow, removeTblRow, patchTblCell, addTblMap, removeTblMap, patchTblMap, addTblRule, addRowFilter, removeRowFilter, patchRowFilter, removeTblRule, patchTblRule };
   const renderCard = (b, opts) => <BlockCard key={b.id} b={b} opts={opts} ui={ui} actions={actions} />;
 
@@ -281,12 +289,12 @@ export default function App() {
         <div style={{ flex: "1 1 460px", minWidth: 340 }}>
           <div style={{ background: T.panel, border: `1px solid ${T.border}`, borderRadius: 10, padding: 16, marginBottom: 14 }}>
             <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Allgemein</div>
-            <Field label="AUSGABE-MODUS">
+            <Field label="FUNKTIONSART">
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                {Object.keys(OUTPUT_MODES).map((k) => {
-                  const M = OUTPUT_MODES[k]; const Icon = M.icon; const sel = mode === k;
+                {Object.keys(FUNCTION_TYPES).map((k) => {
+                  const M = FUNCTION_TYPES[k]; const Icon = M.icon; const sel = functionType === k;
                   return (
-                    <button key={k} onClick={() => setMode(k)} title={M.hint}
+                    <button key={k} onClick={() => setMode(modeOf(k, render))} title={M.hint}
                       style={{ display: "flex", alignItems: "center", gap: 6, background: sel ? T.panel2 : "transparent", color: sel ? T.text : T.muted, border: `1px solid ${sel ? T.accentDim : T.border}`, borderRadius: 6, padding: "7px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
                       <Icon size={14} color={sel ? T.accent : T.muted} /> {M.label}
                     </button>
@@ -294,8 +302,22 @@ export default function App() {
                 })}
               </div>
             </Field>
-            <div style={{ fontSize: 11, color: T.muted, marginTop: -4, marginBottom: 12 }}>{OUTPUT_MODES[mode].hint}</div>
-            <Field label={mode === "registered" ? "FUNKTIONSNAME (registerFunctionEx)" : "NAME / UID"}>
+            <div style={{ fontSize: 11, color: T.muted, marginTop: -4, marginBottom: 12 }}>{FUNCTION_TYPES[functionType].hint}</div>
+            <Field label="DARSTELLUNG">
+              <div style={{ display: "flex", gap: 8 }}>
+                {Object.keys(RENDER_MODES).map((k) => {
+                  const M = RENDER_MODES[k]; const sel = render === k;
+                  return (
+                    <button key={k} onClick={() => setMode(modeOf(functionType, k))} title={M.hint}
+                      style={{ flex: 1, background: sel ? T.panel2 : "transparent", color: sel ? T.text : T.muted, border: `1px solid ${sel ? T.accentDim : T.border}`, borderRadius: 6, padding: "7px 0", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                      {M.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </Field>
+            <div style={{ fontSize: 11, color: T.muted, marginTop: -4, marginBottom: 12 }}>{RENDER_MODES[render].hint}</div>
+            <Field label={functionType === "registered" ? "FUNKTIONSNAME (registerFunctionEx)" : "NAME / UID"}>
               <TextInput value={fnName} onChange={(e) => setFnName(e.target.value)} placeholder="AC_PopUp" />
             </Field>
             {mode === "usercontrol" && (
@@ -305,6 +327,23 @@ export default function App() {
                 </Field>
                 <div style={{ fontSize: 11, color: T.muted, marginTop: -4, marginBottom: 12, lineHeight: 1.5 }}>
                   Host über <code style={{ color: T.text }}>event.target.closest('[id$="{hostSuffix || ".btn_PopUp"}"]')</code>. Bausteine lesen/schreiben per <code style={{ color: T.text }}>get…/set…</code>-Attribut.
+                </div>
+              </>
+            )}
+            {render === "embed" && functionType === "registered" && (
+              <div style={{ fontSize: 11, color: T.muted, marginTop: -4, marginBottom: 12, lineHeight: 1.5 }}>
+                Aufruf an <code style={{ color: T.text }}>onAttached</code>: <code style={{ color: T.text }}>TcHmi.Functions.AC_HMI.{fnName || "AC_PopUp"}('MeinContainer')</code>, Abbau an <code style={{ color: T.text }}>onDetached</code>: <code style={{ color: T.text }}>…{fnName || "AC_PopUp"}Destroy('MeinContainer')</code>.
+              </div>
+            )}
+            {(mode === "embedEvent" || mode === "embedUc") && (
+              <>
+                <Field label={mode === "embedUc" ? "CONTAINER-ID (Name des UserControls)" : "CONTAINER-ID (Container-Control oder div-id)"}>
+                  <TextInput value={embedTarget} onChange={(e) => setEmbedTarget(e.target.value)} placeholder="MeinContainer" />
+                </Field>
+                <div style={{ fontSize: 11, color: T.muted, marginTop: -4, marginBottom: 12, lineHeight: 1.5 }}>
+                  {mode === "embedUc"
+                    ? <>Als JavaScript-Action im <code style={{ color: T.text }}>onAttached</code> des UserControls. Host wird über <code style={{ color: T.text }}>TcHmi.Controls.get(ID)</code> ermittelt; gelesen/geschrieben per <code style={{ color: T.text }}>get…/set…</code>.</>
+                    : <>Als JavaScript-Action ins Event. Die Funktion wird direkt mit dieser Container-ID aufgerufen; gerendert wird per Symbol (ADS) in den Container.</>}
                 </div>
               </>
             )}

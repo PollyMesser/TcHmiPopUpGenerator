@@ -11,6 +11,9 @@ function buildConfigComment(cfg) {
     // Popup-weite Gruppen-Berechtigungen NUR aufnehmen, wenn gesetzt – sonst
     // bliebe der Re-Import-Kommentar bestehender Popups nicht byte-identisch.
     ...(cfg.access ? { access: cfg.access } : {}),
+    // Embed-Container-ID (event+embed / usercontrol+embed) nur aufnehmen, wenn
+    // gesetzt – Bestands-Popups bleiben byte-identisch.
+    ...(cfg.embedTarget ? { embedTarget: cfg.embedTarget } : {}),
   };
   return `\n// ── AC_PopUp Generator: Konfiguration für Re-Import (diese Zeilen nicht entfernen) ──\n// AC_POPUP_CONFIG_V1: ${JSON.stringify(c)}\n`;
 }

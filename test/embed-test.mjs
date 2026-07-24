@@ -85,4 +85,66 @@ try { AC_HMI.AC_EmbedTest("NichtVorhanden"); } catch (e) { threw = true; }
 assert(!threw, "Ungültiges Ziel wirft keine Exception");
 assert(warned, "Ungültiges Ziel loggt eine Warnung (console.warn)");
 
+// ── 3) event + embed (mode:'embedEvent'): bare IIFE, mit Container-ID aufgerufen ──
+{
+  const cfgE = {
+    mode: "embedEvent", fnName: "AC_EmbEvt", embedTarget: "EvtBox",
+    title: "", titleLoc: "", titleSource: "static", titleField: "", titleFallback: "", titleIcon: "", titleIconColor: "",
+    maxWidth: 400, columns: 1, hostSuffix: "",
+    blocks: [{ ...newBlock("bool"), label: "Aktiv", symbol: "ADS.…::xActive" }],
+  };
+  const codeE = generate(cfgE);
+  assert(codeE.includes("function resolveTarget("), "embedEvent: resolveTarget vorhanden");
+  assertEqual((codeE.match(/registerFunctionEx/g) || []).length, 0, "embedEvent: KEINE Registrierung (reine IIFE)");
+  assert(/\}\)\("EvtBox"\);/.test(codeE), "embedEvent: IIFE wird mit der Container-ID aufgerufen");
+  assert(!codeE.includes("function buildDialog"), "embedEvent: kein Overlay-Dialog");
+  assertEqual((codeE.match(/\\/g) || []).length, 0, "embedEvent: backslash-frei");
+
+  const { sandbox: sbE } = makeSandbox();
+  const boxE = makeElement("div"); boxE.nodeType = 1;
+  sbE.document.getElementById = (id) => (id === "EvtBox" ? boxE : null);
+  let threwE = false;
+  try { vm.runInContext(codeE, vm.createContext(sbE), { filename: "embedEvent.js" }); } catch (e) { threwE = true; }
+  assert(!threwE, "embedEvent: läuft ohne Exception");
+  assertEqual(boxE.children.length, 1, "embedEvent: rendert genau ein body-div in den Container (per id)");
+}
+
+// ── 4) usercontrol + embed (mode:'embedUc'): Host aus Container-ID, getX/setX + Polling ──
+{
+  const cfgU = {
+    mode: "embedUc", fnName: "AC_EmbUc", embedTarget: "UcBox",
+    title: "", titleLoc: "", titleSource: "static", titleField: "", titleFallback: "", titleIcon: "", titleIconColor: "",
+    maxWidth: 400, columns: 1, hostSuffix: "",
+    blocks: [{ ...newBlock("check"), label: "Frei", symbol: "Enable", writeSym: "CmdEnable" }],
+  };
+  const codeU = generate(cfgU);
+  assert(codeU.includes("TcHmi.Controls.get(target)"), "embedUc: Host wird per Controls.get(target) aufgelöst");
+  assert(codeU.includes("setInterval"), "embedUc: Polling-Intervall vorhanden");
+  assert(/\}\)\("UcBox"\);/.test(codeU), "embedUc: IIFE wird mit der Container-ID aufgerufen");
+  assertEqual((codeU.match(/registerFunctionEx/g) || []).length, 0, "embedUc: KEINE Registrierung (reine IIFE)");
+  assert(!codeU.includes("makeDraggable"), "embedUc: kein Drag/Overlay");
+  assertEqual((codeU.match(/\\/g) || []).length, 0, "embedUc: backslash-frei");
+
+  const { sandbox: sbU, controlsRegistry: regU } = makeSandbox();
+  const ucEl = makeElement("div"); ucEl.nodeType = 1;
+  let written = null; const enableVal = true;
+  regU.UcBox = { getElement: () => [ucEl], getEnable: () => enableVal, setCmdEnable: (v) => { written = v; } };
+  let threwU = false;
+  try { vm.runInContext(codeU, vm.createContext(sbU), { filename: "embedUc.js" }); } catch (e) { threwU = true; }
+  assert(!threwU, "embedUc: läuft ohne Exception");
+  assertEqual(ucEl.children.length, 1, "embedUc: rendert body in das Host-Element (getElement)");
+
+  const findCb = (el) => {
+    if (el.tagName === "input" && el.type === "checkbox") return el;
+    for (const c of (el.children || [])) { const f = findCb(c); if (f) return f; }
+    return null;
+  };
+  const cb = findCb(ucEl);
+  assert(!!cb, "embedUc: Zell-/Checkbox gerendert");
+  assertEqual(cb.checked, true, "embedUc: Checkbox zeigt Ist-Wert aus getEnable (initialer refresh/Polling)");
+  cb.checked = false;
+  (cb._listeners.change || []).forEach((fn) => fn());
+  assertEqual(written, false, "embedUc: Änderung schreibt nach CmdEnable (getX != setX, getrenntes Schreib-Attribut)");
+}
+
 report("embed-test");

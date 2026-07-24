@@ -637,4 +637,27 @@ add("access_table_columns", {
   ],
 });
 
+// ── event + embed: IIFE mit konfigurierter Container-ID, Symbol-Datenzugriff ──
+add("embed_event", {
+  mode: "embedEvent",
+  fnName: "AC_EmbedEvent",
+  embedTarget: "MeinContainer",
+  blocks: [
+    { ...newBlock("read"), label: "Druck", loc: "L_P", symbol: "ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::rPressure", unit: "bar" },
+    { ...newBlock("check"), label: "Freigabe", loc: "L_Enable", symbol: "ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::xEnable" },
+  ],
+});
+
+// ── usercontrol + embed: Host/Container aus Container-ID, UC-Datenzugriff + Polling ──
+add("embed_uc", {
+  mode: "embedUc",
+  fnName: "AC_EmbedUc",
+  embedTarget: "MyUserControl",
+  blocks: [
+    { ...newBlock("read"), label: "Ist-Modus", loc: "L_Mode", symbol: "Mode" },
+    { ...newBlock("enumset"), label: "Modus", loc: "L_ModeSet", symbol: "Mode", numeric: true, writeSym: "CmdMode",
+      map: [mkEnumEntry(0, "Hand"), mkEnumEntry(1, "Automatik")], sendButton: true, sendLabel: "Übernehmen", trigSym: "CmdSetMode", trigMode: "pulse", trigMs: 300 },
+  ],
+});
+
 export { CONFIGS };
