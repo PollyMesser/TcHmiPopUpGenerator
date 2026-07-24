@@ -215,7 +215,7 @@
                         wrap.style.cssText = 'display:flex;align-items:center;gap:10px;margin-bottom:16px;cursor:pointer;';
                         var cb = document.createElement('input');
                         cb.type = 'checkbox';
-                        cb.style.cssText = 'width:16px;height:16px;flex:0 0 auto;cursor:pointer;accent-color:' + p.active + ';';
+                        cb.style.cssText = 'width:20px;height:20px;flex:0 0 auto;cursor:pointer;accent-color:' + p.active + ';';
                         var lbl = document.createElement('span');
                         lbl.style.cssText = 'font-size:14px;color:' + p.bodyText + ';';
                         lbl.textContent = "Nur Bedienen";

@@ -188,4 +188,31 @@ const controls = (root) => walk(root).filter((el) => ["button", "input", "select
   assertEqual(adminCb.disabled, false, "operate erlaubt: Admin kann die Zell-Checkbox bedienen");
 }
 
+// ── 8) Per-SPALTE: observe-Deny blendet die Spalte (Kopf + Zellen) aus, ──
+//     operate-Deny deaktiviert nur die Bedienzellen DIESER Spalte, andere bleiben.
+{
+  const cName = { ...mkTableCol("read"), header: "Name" };
+  const cAck = { ...mkTableCol("check"), header: "Ack" };                              // ohne Rechte
+  const cLock = { ...mkTableCol("check"), header: "Lock", access: acc({ operate: { Admin: "Allow", Service: "Allow", Process_Engineer: "Deny", Operator: "Deny" } }) };
+  const cSecret = { ...mkTableCol("read"), header: "Geheim", access: acc({ observe: { Admin: "Allow", Service: "Allow", Process_Engineer: "Deny", Operator: "Deny" } }) };
+  const columns = [cName, cAck, cLock, cSecret];
+  const cfg = baseCfg([
+    { ...newBlock("table"), dataSource: "static", columns, rows: [mkTableRow(columns.length)], search: false },
+  ]);
+  const ths = (root) => walk(root).filter((el) => el.tagName === "th").map((el) => el.textContent);
+  const cbsOf = (root) => walk(root).filter((el) => el.tagName === "input" && el.type === "checkbox");
+
+  const asOperator = run(cfg, ["Operator"]);
+  assertEqual(ths(asOperator).includes("Geheim"), false, "Spalten-observe: 'Geheim'-Kopf für Operator ausgeblendet");
+  assert(ths(asOperator).includes("Name") && ths(asOperator).includes("Ack") && ths(asOperator).includes("Lock"), "Spalten: sichtbare Köpfe (Name/Ack/Lock) vorhanden");
+  const cbsOp = cbsOf(asOperator);
+  assertEqual(cbsOp.length, 2, "Spalten: 2 Checkbox-Spalten gerendert (Geheim ist read + ausgeblendet)");
+  assertEqual(cbsOp.filter((el) => el.disabled).length, 1, "Spalten-operate: genau eine Checkbox (Lock) ist für Operator deaktiviert");
+  assertEqual(cbsOp.filter((el) => !el.disabled).length, 1, "Spalten-operate: die ungeschützte Checkbox (Ack) bleibt für Operator bedienbar");
+
+  const asAdmin = run(cfg, ["Admin"]);
+  assertEqual(ths(asAdmin).includes("Geheim"), true, "Spalten-observe: Admin sieht 'Geheim'");
+  assert(cbsOf(asAdmin).length === 2 && cbsOf(asAdmin).every((el) => !el.disabled), "Spalten-operate: für Admin sind beide Checkboxen bedienbar");
+}
+
 report("access-logic");

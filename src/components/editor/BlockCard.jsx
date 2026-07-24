@@ -6,7 +6,7 @@ import { BLOCK_META, ITEM_KINDS, TIME_UNITS, WRITE_OPTS } from "../../constants/
 import { blockSummary, clampCol } from "../../model/layout.js";
 import { condOp, condVal } from "../../codegen/helpers.js";
 import { ColorSwatches, Field, HexSwatches, IconBtn, IconPicker, IconColorPicker, Select, TextArea, TextInput } from "../primitives.jsx";
-import { ButtonItemFields, InputFields, ReadBoolFields, TriggerFields } from "../fields.jsx";
+import { ButtonItemFields, InputFields, ReadBoolFields, TriggerFields, WriteSymField } from "../fields.jsx";
 import { AccessFields } from "../access.jsx";
 
 // ── Baustein-Karte des Editors (Accordion + Griff-Drag), auch für volle-Breite-Zeilen ──
@@ -531,6 +531,7 @@ function BlockCard({ b, opts, ui, actions }) {
                         {isArr && cl.kind !== "text" && <div style={{ flex: 2 }}><Field label="MEMBER"><TextInput value={cl.member || ""} onChange={(e) => patchTblCol(b.id, cl.id, { member: e.target.value })} placeholder="bAck" /></Field></div>}
                         {(cl.kind === "read" || cl.kind === "input") && <div style={{ flex: 1 }}><Field label="EINHEIT"><TextInput value={cl.unit || ""} onChange={(e) => patchTblCol(b.id, cl.id, { unit: e.target.value })} /></Field></div>}
                         {cl.kind === "read" && <div style={{ flex: 1 }}><Field label="DEZIMALEN"><TextInput value={cl.decimals} onChange={(e) => patchTblCol(b.id, cl.id, { decimals: e.target.value })} placeholder="auto" /></Field></div>}
+                        {cl.kind === "input" && <div style={{ flex: 2 }}><Field label="EINGABE-TYP"><Select value={cl.inputType || "auto"} onChange={(e) => patchTblCol(b.id, cl.id, { inputType: e.target.value })} options={[{ value: "auto", label: "Auto (Zahl/Text)" }, { value: "number", label: "Zahl" }, { value: "text", label: "Text" }, { value: "time", label: "Zeit (HH:MM:SS)" }]} /></Field></div>}
                         <IconBtn disabled={ci === 0} title="Spalte nach links" onClick={() => moveTblCol(b.id, ci, -1)}><ChevronLeft size={13} /></IconBtn>
                         <IconBtn disabled={ci === b.columns.length - 1} title="Spalte nach rechts" onClick={() => moveTblCol(b.id, ci, 1)}><ChevronRight size={13} /></IconBtn>
                         <IconBtn danger disabled={b.columns.length <= 1} title="Spalte entfernen" onClick={() => removeTblCol(b.id, ci)}><Trash2 size={13} /></IconBtn>
@@ -621,6 +622,7 @@ function BlockCard({ b, opts, ui, actions }) {
                           <IconBtn title="Eintrag hinzufügen" onClick={() => addTblMap(b.id, cl.id)}><Plus size={13} /></IconBtn>
                         </div>
                       )}
+                      <AccessFields access={cl.access} onChange={(a) => patchTblCol(b.id, cl.id, { access: a })} title="GRUPPEN-BERECHTIGUNG (diese Spalte)" />
                     </div>
                   ))}
                   <div style={{ marginBottom: 10 }}><IconBtn title="Spalte hinzufügen" onClick={() => addTblCol(b.id)}><Plus size={14} /></IconBtn></div>
@@ -740,6 +742,7 @@ function BlockCard({ b, opts, ui, actions }) {
                 <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: T.muted, cursor: "pointer", marginBottom: 8 }}>
                   <input type="checkbox" checked={!!b.numeric} onChange={(e) => patch(b.id, { numeric: e.target.checked })} /> Wert ist numerisch (parseInt beim Schreiben)
                 </label>
+                {b.type === "enumset" && <WriteSymField cfg={b} mode={mode} onPatch={(o) => patch(b.id, o)} />}
                 {b.type === "enumset" && (
                   <>
                     <div style={{ borderTop: `1px solid ${T.border}`, margin: "2px 0 8px" }} />

@@ -549,4 +549,92 @@ add("access_per_button_uc", {
   ],
 });
 
+// ── Getrenntes Schreib-Ziel (writeSym): Lesen != Schreiben, Symbol-Modus ──
+add("writeattr_symbol", {
+  mode: "registered",
+  fnName: "AC_WriteAttrSym",
+  blocks: [
+    { ...newBlock("check"), label: "Freigabe", loc: "L_Enable",
+      symbol: "ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::xEnable",
+      writeSym: "ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::xCmdEnable" },
+    { ...newBlock("input"), label: "Sollwert", loc: "L_Setpoint",
+      symbol: "ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::rSetpoint", dataType: "number", unit: "bar",
+      writeSym: "ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::rCmdSetpoint",
+      trigSym: "ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::xCmdSetSetpoint", trigMode: "pulse", trigMs: 300 },
+    { ...newBlock("enumset"), label: "Modus", loc: "L_Mode",
+      symbol: "ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::eMode", numeric: true,
+      writeSym: "ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::eCmdMode",
+      map: [mkEnumEntry(0, "Hand"), mkEnumEntry(1, "Automatik")],
+      sendButton: true, sendLabel: "Übernehmen", sendColor: "green",
+      trigSym: "ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::xCmdSetMode", trigMode: "pulse", trigMs: 300 },
+  ],
+});
+
+// ── Getrenntes Schreib-Ziel (writeSym): Lesen != Schreiben, UserControl-Modus ──
+add("writeattr_uc", {
+  mode: "usercontrol",
+  fnName: "AC_WriteAttrUc",
+  hostSuffix: ".btn_Cmd",
+  blocks: [
+    { ...newBlock("check"), label: "Freigabe", loc: "L_Enable",
+      symbol: "Enable", writeSym: "CmdEnable" },
+    { ...newBlock("input"), label: "Sollwert", loc: "L_Setpoint",
+      symbol: "Setpoint", dataType: "number", unit: "bar",
+      writeSym: "CmdSetpoint", trigSym: "CmdSetSetpoint", trigMode: "pulse", trigMs: 300 },
+    { ...newBlock("enumset"), label: "Modus", loc: "L_Mode",
+      symbol: "Mode", numeric: true, writeSym: "CmdMode",
+      map: [mkEnumEntry(0, "Hand"), mkEnumEntry(1, "Automatik")],
+      sendButton: true, sendLabel: "Übernehmen", sendColor: "green",
+      trigSym: "CmdSetMode", trigMode: "pulse", trigMs: 300 },
+  ],
+});
+
+// ── Tabellen mit Eingabe-Typ pro Spalte (time/number/text) ──
+add("table_time_input", {
+  mode: "registered",
+  fnName: "AC_TableTime",
+  blocks: [
+    {
+      ...newBlock("table"), caption: "Zeiten", dataSource: "static",
+      columns: [
+        { ...mkTableCol("read"), header: "Name" },
+        { ...mkTableCol("input"), header: "Dauer", inputType: "time" },
+        { ...mkTableCol("input"), header: "Menge", inputType: "number", unit: "l" },
+        { ...mkTableCol("input"), header: "Notiz", inputType: "text" },
+      ],
+      rows: [
+        { ...mkTableRow(4), cells: [
+          { symbol: "ADS.AF_PLC.MAIN::sName0", text: "", loc: "" },
+          { symbol: "ADS.AF_PLC.MAIN::tDur0", text: "", loc: "" },
+          { symbol: "ADS.AF_PLC.MAIN::nQty0", text: "", loc: "" },
+          { symbol: "ADS.AF_PLC.MAIN::sNote0", text: "", loc: "" },
+        ] },
+      ],
+    },
+  ],
+});
+
+// ── Tabelle mit Spalten-Berechtigungen (observe-Deny + operate-Deny) ──
+add("access_table_columns", {
+  mode: "registered",
+  fnName: "AC_TableColAcc",
+  blocks: [
+    {
+      ...newBlock("table"), caption: "Rechte", dataSource: "static",
+      columns: [
+        { ...mkTableCol("read"), header: "Name" },
+        { ...mkTableCol("check"), header: "Freigabe", access: mkAcc({ operate: { Operator: "Deny" } }) },
+        { ...mkTableCol("read"), header: "Geheim", access: mkAcc({ observe: { Operator: "Deny", Process_Engineer: "Deny" } }) },
+      ],
+      rows: [
+        { ...mkTableRow(3), cells: [
+          { symbol: "ADS.AF_PLC.MAIN::sName0", text: "", loc: "" },
+          { symbol: "ADS.AF_PLC.MAIN::xEnable0", text: "", loc: "" },
+          { symbol: "ADS.AF_PLC.MAIN::rSecret0", text: "", loc: "" },
+        ] },
+      ],
+    },
+  ],
+});
+
 export { CONFIGS };

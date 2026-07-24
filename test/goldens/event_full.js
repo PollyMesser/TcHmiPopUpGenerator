@@ -364,7 +364,7 @@
         // Zeile (nebeneinander)
         (function () {
             var rrow = document.createElement('div');
-            rrow.style.cssText = 'display:flex;gap:16px;margin-bottom:16px;align-items:flex-start;';
+            rrow.style.cssText = 'display:flex;gap:16px;margin-bottom:16px;align-items:center;';
             var rc0 = document.createElement('div');
             rc0.style.cssText = 'flex:1;min-width:0;';
             rrow.appendChild(rc0);
@@ -373,7 +373,7 @@
             var row = document.createElement('div');
             row.style.cssText = 'display:flex;align-items:center;gap:10px;margin-bottom:0px;';
             var dot = document.createElement('span');
-            dot.style.cssText = 'width:14px;height:14px;border-radius:50%;flex:0 0 auto;background:' + p.inactive + ';transition:background .15s;';
+            dot.style.cssText = 'width:18px;height:18px;border-radius:50%;flex:0 0 auto;background:' + p.inactive + ';transition:background .15s;';
             var lbl = document.createElement('span');
             lbl.style.cssText = 'font-size:14px;color:' + p.bodyText + ';';
             lbl.textContent = "Aktiv";
@@ -390,7 +390,7 @@
             wrap.style.cssText = 'display:flex;align-items:center;gap:10px;margin-bottom:0px;cursor:pointer;';
             var cb = document.createElement('input');
             cb.type = 'checkbox';
-            cb.style.cssText = 'width:16px;height:16px;flex:0 0 auto;cursor:pointer;accent-color:' + p.active + ';';
+            cb.style.cssText = 'width:20px;height:20px;flex:0 0 auto;cursor:pointer;accent-color:' + p.active + ';';
             var lbl = document.createElement('span');
             lbl.style.cssText = 'font-size:14px;color:' + p.bodyText + ';';
             lbl.textContent = "Quittieren";

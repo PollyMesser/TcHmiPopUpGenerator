@@ -6,8 +6,8 @@
     (function (/** @type {globalThis.TcHmi.Functions} */ Functions) {
         var AC_HMI;
         (function (AC_HMI) {
-            function AC_TableStatic(par1) {
-                var uid = "AC_TableStatic";
+            function AC_TableTime(par1) {
+                var uid = "AC_TableTime";
                 var watchers = [];   // watch-Abmelder
                 var symbols = [];    // Symbole zum Freigeben
                 var teardowns = [];  // Aufräum-Callbacks (z.B. Plot-Module)
@@ -139,7 +139,7 @@
                     var box = document.createElement('div');
                     box.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);' +
                         'background:' + p.boxBg + ';border:1px solid ' + p.border + ';border-radius:12px;' +
-                        'min-width:320px;width:620px;max-width:calc(100vw - 32px);max-height:calc(100vh - 48px);' +
+                        'min-width:320px;width:400px;max-width:calc(100vw - 32px);max-height:calc(100vh - 48px);' +
                         'display:flex;flex-direction:column;overflow:hidden;box-shadow:' + p.shadow + ';pointer-events:auto;';
 
                     var header = document.createElement('div');
@@ -170,23 +170,7 @@
                         var TCOLS = [
                         {
                             "kind": "read",
-                            "header": "Wert",
-                            "loc": "L_ColWert",
-                            "member": "",
-                            "unit": "bar",
-                            "dec": 1,
-                            "label": "",
-                            "lloc": "",
-                            "wmode": "setTrue",
-                            "pms": 300,
-                            "map": [],
-                            "sortable": true,
-                            "hicon": "info",
-                            "hicolor": "#3b82f6"
-                        },
-                        {
-                            "kind": "text",
-                            "header": "Bezeichnung",
+                            "header": "Name",
                             "loc": "",
                             "member": "",
                             "unit": "",
@@ -194,39 +178,12 @@
                             "label": "",
                             "lloc": "",
                             "wmode": "setTrue",
-                            "pms": 300,
-                            "map": []
-                        },
-                        {
-                            "kind": "bool",
-                            "header": "Aktiv",
-                            "loc": "",
-                            "member": "",
-                            "unit": "",
-                            "dec": -1,
-                            "label": "",
-                            "lloc": "",
-                            "wmode": "setTrue",
-                            "pms": 300,
-                            "map": [],
-                            "sortable": true
-                        },
-                        {
-                            "kind": "check",
-                            "header": "Quittiert",
-                            "loc": "",
-                            "member": "",
-                            "unit": "",
-                            "dec": -1,
-                            "label": "",
-                            "lloc": "",
-                            "wmode": "toggle",
                             "pms": 300,
                             "map": []
                         },
                         {
                             "kind": "input",
-                            "header": "Soll",
+                            "header": "Dauer",
                             "loc": "",
                             "member": "",
                             "unit": "",
@@ -235,24 +192,26 @@
                             "lloc": "",
                             "wmode": "setTrue",
                             "pms": 300,
-                            "map": []
+                            "map": [],
+                            "itype": "time"
                         },
                         {
-                            "kind": "button",
-                            "header": "Aktion",
+                            "kind": "input",
+                            "header": "Menge",
                             "loc": "",
                             "member": "",
-                            "unit": "",
+                            "unit": "l",
                             "dec": -1,
-                            "label": "Reset",
+                            "label": "",
                             "lloc": "",
-                            "wmode": "pulse",
-                            "pms": 200,
-                            "map": []
+                            "wmode": "setTrue",
+                            "pms": 300,
+                            "map": [],
+                            "itype": "number"
                         },
                         {
-                            "kind": "enum",
-                            "header": "Status",
+                            "kind": "input",
+                            "header": "Notiz",
                             "loc": "",
                             "member": "",
                             "unit": "",
@@ -261,213 +220,50 @@
                             "lloc": "",
                             "wmode": "setTrue",
                             "pms": 300,
-                            "map": [
-                                {
-                                    "v": "0",
-                                    "label": "Aus",
-                                    "loc": "",
-                                    "color": "#6b7280",
-                                    "text": "#ffffff",
-                                    "icon": "info"
-                                },
-                                {
-                                    "v": "1",
-                                    "label": "Ein",
-                                    "loc": "",
-                                    "color": "#22c55e",
-                                    "text": "#06240f",
-                                    "icon": "info"
-                                }
-                            ],
-                            "sortable": true
-                        },
-                        {
-                            "kind": "icon",
-                            "header": "Warnung",
-                            "loc": "",
-                            "member": "",
-                            "unit": "",
-                            "dec": -1,
-                            "label": "",
-                            "lloc": "",
-                            "wmode": "setTrue",
-                            "pms": 300,
-                            "map": [
-                                {
-                                    "v": "1",
-                                    "label": "Warnung",
-                                    "loc": "",
-                                    "color": "#f59e0b",
-                                    "text": "#1a1a1a",
-                                    "icon": "warning"
-                                },
-                                {
-                                    "v": "2",
-                                    "label": "Alarm",
-                                    "loc": "",
-                                    "color": "#ef4444",
-                                    "text": "#ffffff",
-                                    "icon": "alert"
-                                }
-                            ]
+                            "map": [],
+                            "itype": "text"
                         }
                     ];
                         var TROWS = [
                         [
                             {
-                                "s": "%s%ADS.…::aRow0_c0%/s%",
+                                "s": "%s%ADS.AF_PLC.MAIN::sName0%/s%",
                                 "t": "",
                                 "loc": ""
                             },
                             {
-                                "s": "",
-                                "t": "Zeile 1",
-                                "loc": ""
-                            },
-                            {
-                                "s": "%s%ADS.…::aRow0_c2%/s%",
+                                "s": "%s%ADS.AF_PLC.MAIN::tDur0%/s%",
                                 "t": "",
                                 "loc": ""
                             },
                             {
-                                "s": "%s%ADS.…::aRow0_c3%/s%",
+                                "s": "%s%ADS.AF_PLC.MAIN::nQty0%/s%",
                                 "t": "",
                                 "loc": ""
                             },
                             {
-                                "s": "%s%ADS.…::aRow0_c4%/s%",
-                                "t": "",
-                                "loc": ""
-                            },
-                            {
-                                "s": "%s%ADS.…::aRow0_c5%/s%",
-                                "t": "",
-                                "loc": ""
-                            },
-                            {
-                                "s": "%s%ADS.…::aRow0_c6%/s%",
-                                "t": "",
-                                "loc": ""
-                            },
-                            {
-                                "s": "%s%ADS.…::aRow0_c7%/s%",
-                                "t": "",
-                                "loc": ""
-                            }
-                        ],
-                        [
-                            {
-                                "s": "%s%ADS.…::aRow1_c0%/s%",
-                                "t": "",
-                                "loc": ""
-                            },
-                            {
-                                "s": "",
-                                "t": "Zeile 2",
-                                "loc": ""
-                            },
-                            {
-                                "s": "%s%ADS.…::aRow1_c2%/s%",
-                                "t": "",
-                                "loc": ""
-                            },
-                            {
-                                "s": "%s%ADS.…::aRow1_c3%/s%",
-                                "t": "",
-                                "loc": ""
-                            },
-                            {
-                                "s": "%s%ADS.…::aRow1_c4%/s%",
-                                "t": "",
-                                "loc": ""
-                            },
-                            {
-                                "s": "%s%ADS.…::aRow1_c5%/s%",
-                                "t": "",
-                                "loc": ""
-                            },
-                            {
-                                "s": "%s%ADS.…::aRow1_c6%/s%",
-                                "t": "",
-                                "loc": ""
-                            },
-                            {
-                                "s": "%s%ADS.…::aRow1_c7%/s%",
-                                "t": "",
-                                "loc": ""
-                            }
-                        ],
-                        [
-                            {
-                                "s": "%s%ADS.…::aRow2_c0%/s%",
-                                "t": "",
-                                "loc": ""
-                            },
-                            {
-                                "s": "",
-                                "t": "Zeile 3",
-                                "loc": ""
-                            },
-                            {
-                                "s": "%s%ADS.…::aRow2_c2%/s%",
-                                "t": "",
-                                "loc": ""
-                            },
-                            {
-                                "s": "%s%ADS.…::aRow2_c3%/s%",
-                                "t": "",
-                                "loc": ""
-                            },
-                            {
-                                "s": "%s%ADS.…::aRow2_c4%/s%",
-                                "t": "",
-                                "loc": ""
-                            },
-                            {
-                                "s": "%s%ADS.…::aRow2_c5%/s%",
-                                "t": "",
-                                "loc": ""
-                            },
-                            {
-                                "s": "%s%ADS.…::aRow2_c6%/s%",
-                                "t": "",
-                                "loc": ""
-                            },
-                            {
-                                "s": "%s%ADS.…::aRow2_c7%/s%",
+                                "s": "%s%ADS.AF_PLC.MAIN::sNote0%/s%",
                                 "t": "",
                                 "loc": ""
                             }
                         ]
                     ];
-                        var TRULES = [
-                        {
-                            "c": 0,
-                            "op": ">",
-                            "v": 80,
-                            "t": "row",
-                            "color": "#ef4444"
-                        }
-                    ];
+                        var TRULES = [];
                         var TFILTERS = [];
-                        var ICON_SVGS = {
-                        "info": "<svg viewBox='0 0 24 24' width='18' height='18' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><line x1='12' y1='16' x2='12' y2='12'/><line x1='12' y1='8' x2='12.01' y2='8'/></svg>",
-                        "warning": "<svg viewBox='0 0 24 24' width='18' height='18' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z'/><line x1='12' y1='9' x2='12' y2='13'/><line x1='12' y1='17' x2='12.01' y2='17'/></svg>",
-                        "alert": "<svg viewBox='0 0 24 24' width='18' height='18' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><line x1='12' y1='8' x2='12' y2='12'/><line x1='12' y1='16' x2='12.01' y2='16'/></svg>"
-                    };
+                        var ICON_SVGS = {};
                         var DATA_SOURCE = "static"; // 'static' | 'array'
                         var ARRAY_SYMBOL = '';
                         var COUNT_SYMBOL = '';
                         var ARRAY_COUNT = 10;
                         var START_INDEX = 0;
-                        var SHOW_INDEX = true;
+                        var SHOW_INDEX = false;
                         var SEARCH_ON = true;
-                        var PAGE_SIZE = 2; // 0 = keine Pagination
+                        var PAGE_SIZE = 0; // 0 = keine Pagination
                         var STRIPED = true;
                         var SHOW_HEADER = true;
                         var WATCH_LIMIT = 30;
                         var POLL_MS = 1000;
-                        var DEFAULT_SORT_COL = 0; // -1 = keine Standardsortierung
+                        var DEFAULT_SORT_COL = -1; // -1 = keine Standardsortierung
                         var DEFAULT_SORT_DIR = "asc"; // 'asc' | 'desc'
 
                         var watchers = [], symbols = [], batchSubId = null, renderQueued = false;
@@ -637,6 +433,43 @@
                             if (DATA_SOURCE === 'array') { if (dynCount >= 0 && dynCount < n) n = dynCount; if (n > ARRAY_COUNT) n = ARRAY_COUNT; }
                             return n;
                         }
+
+                        function durToHMS(iso) {
+                            iso = String(iso == null ? '' : iso).trim().toUpperCase();
+                            if (iso.charAt(0) !== 'P') return iso;
+                            var days = 0, hh = 0, mm = 0, ss = 0, ms = 0, num = '', inTime = false;
+                            for (var k = 1; k < iso.length; k++) {
+                                var ch = iso.charAt(k);
+                                if (ch === 'T') { inTime = true; num = ''; continue; }
+                                if (ch === '.' || ch === ',') { num += '.'; continue; }
+                                if (ch >= '0' && ch <= '9') { num += ch; continue; }
+                                var val = parseFloat(num || '0'); num = '';
+                                if (ch === 'D') days = val;
+                                else if (ch === 'H') hh = val;
+                                else if (ch === 'M') { if (inTime) mm = val; }
+                                else if (ch === 'S') { ss = Math.floor(val); ms = Math.round((val - ss) * 1000); }
+                            }
+                            var totalH = days * 24 + hh;
+                            function p2(n) { n = Math.floor(n); return (n < 10 ? '0' : '') + n; }
+                            var out = p2(totalH) + ':' + p2(mm) + ':' + p2(ss);
+                            if (ms > 0) { var mstr = String(ms); while (mstr.length < 3) mstr = '0' + mstr; out += '.' + mstr; }
+                            return out;
+                        }
+                        function hmsToDur(str) {
+                            str = String(str == null ? '' : str).trim();
+                            if (str === '') return 'PT0S';
+                            if (str.charAt(0) === 'P' || str.charAt(0) === 'p') return str.toUpperCase();
+                            var ms = 0, dot = str.indexOf('.');
+                            if (dot >= 0) { var frac = (str.slice(dot + 1) + '000').slice(0, 3); ms = parseInt(frac, 10) || 0; str = str.slice(0, dot); }
+                            var parts = str.split(':'), h = 0, m = 0, s = 0;
+                            if (parts.length === 3) { h = parseInt(parts[0], 10) || 0; m = parseInt(parts[1], 10) || 0; s = parseInt(parts[2], 10) || 0; }
+                            else if (parts.length === 2) { m = parseInt(parts[0], 10) || 0; s = parseInt(parts[1], 10) || 0; }
+                            else { s = parseInt(parts[0], 10) || 0; }
+                            var total = h * 3600 + m * 60 + s;
+                            var oh = Math.floor(total / 3600), om = Math.floor((total % 3600) / 60), os = total % 60;
+                            var sStr = (ms > 0) ? (os + '.' + ('00' + ms).slice(-3)) : String(os);
+                            return 'PT' + oh + 'H' + om + 'M' + sStr + 'S';
+                        }
                         function buildCellEl(r, ci, pp) {
                             var col = TCOLS[ci];
                             var td = document.createElement('td');
@@ -665,14 +498,19 @@
                                 td.appendChild(cb);
                             } else if (col.kind === 'input') {
                                 var inp = document.createElement('input');
+                                var itype = col.itype || '';
                                 inp.type = 'text';
-                                inp.value = (v === undefined || v === null) ? '' : String(v);
-                                inp.style.cssText = 'width:80px;padding:3px 6px;border:1px solid ' + pp.border + ';border-radius:5px;background:' + pp.boxBg + ';color:' + pp.bodyText + ';font-size:18px;text-align:right;';
+                                inp.value = (v === undefined || v === null) ? '' : (itype === 'time' ? durToHMS(v) : String(v));
+                                inp.style.cssText = 'width:80px;padding:3px 6px;border:1px solid ' + pp.border + ';border-radius:5px;background:' + pp.boxBg + ';color:' + pp.bodyText + ';font-size:18px;text-align:' + (itype === 'time' ? 'center' : 'right') + ';';
+                                if (itype === 'time') inp.placeholder = 'HH:MM:SS';
                                 inp.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
                                 var send = function () {
                                     var s = symFor(r, ci); if (!s) return;
                                     var raw = inp.value;
+                                    if (itype === 'time') { writeT(s, hmsToDur(raw)); return; }
+                                    if (itype === 'text') { writeT(s, raw); return; }
                                     var num = Number(raw);
+                                    if (itype === 'number') { if (raw !== '' && !isNaN(num) && isFinite(num)) writeT(s, num); return; }
                                     writeT(s, raw !== '' && !isNaN(num) && isFinite(num) ? num : raw);
                                 };
                                 inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { send(); inp.blur(); } });
@@ -813,7 +651,7 @@
                         var pp0 = palT();
                         wrap = document.createElement('div');
                         wrap.style.cssText = 'display:flex;flex-direction:column;width:100%;min-width:0;margin-bottom:16px;';
-                        var capText = loc("L_TblOverview", "Übersicht");
+                        var capText = "Zeiten";
                         if (capText || SEARCH_ON) {
                             var top = document.createElement('div');
                             top.style.cssText = 'display:flex;align-items:center;gap:10px;margin-bottom:8px;';
@@ -999,11 +837,11 @@
 
                 buildDialog();
             }
-            AC_HMI.AC_TableStatic = AC_TableStatic;
+            AC_HMI.AC_TableTime = AC_TableTime;
         })(AC_HMI = Functions.AC_HMI || (Functions.AC_HMI = {}));
     })(Functions = TcHmi.Functions || (TcHmi.Functions = {}));
 })(TcHmi);
-TcHmi.Functions.registerFunctionEx("AC_TableStatic", 'TcHmi.Functions.AC_HMI', TcHmi.Functions.AC_HMI.AC_TableStatic);
+TcHmi.Functions.registerFunctionEx("AC_TableTime", 'TcHmi.Functions.AC_HMI', TcHmi.Functions.AC_HMI.AC_TableTime);
 
 // ── AC_PopUp Generator: Konfiguration für Re-Import (diese Zeilen nicht entfernen) ──
-// AC_POPUP_CONFIG_V1: {"v":1,"mode":"registered","fnName":"AC_TableStatic","title":"Titel","titleLoc":"","titleSource":"static","titleField":"TagName","titleFallback":"Titel","titleIcon":"","titleIconColor":"","maxWidth":620,"columns":1,"hostSuffix":".btn_PopUp","blocks":[{"id":"b48","type":"table","col":0,"caption":"Übersicht","captionLoc":"L_TblOverview","dataSource":"static","arraySymbol":"","arrayCount":10,"countSymbol":"","startIndex":0,"showIndex":true,"columns":[{"id":"tc33","kind":"read","header":"Wert","headerLoc":"L_ColWert","headerIcon":"info","headerIconColor":"#3b82f6","member":"","unit":"bar","decimals":1,"label":"","loc":"","writeMode":"setTrue","pulseMs":300,"map":[],"sortable":true,"action":"symbol","fnName":"","paramSource":"member","paramMember":"","paramCol":-1},{"id":"tc34","kind":"text","header":"Bezeichnung","headerLoc":"","headerIcon":"","headerIconColor":"","member":"","unit":"","decimals":"","label":"","loc":"","writeMode":"setTrue","pulseMs":300,"map":[],"sortable":false,"action":"symbol","fnName":"","paramSource":"member","paramMember":"","paramCol":-1},{"id":"tc35","kind":"bool","header":"Aktiv","headerLoc":"","headerIcon":"","headerIconColor":"","member":"","unit":"","decimals":"","label":"","loc":"","writeMode":"setTrue","pulseMs":300,"map":[],"sortable":true,"action":"symbol","fnName":"","paramSource":"member","paramMember":"","paramCol":-1},{"id":"tc36","kind":"check","header":"Quittiert","headerLoc":"","headerIcon":"","headerIconColor":"","member":"","unit":"","decimals":"","label":"","loc":"","writeMode":"toggle","pulseMs":300,"map":[],"sortable":false,"action":"symbol","fnName":"","paramSource":"member","paramMember":"","paramCol":-1},{"id":"tc37","kind":"input","header":"Soll","headerLoc":"","headerIcon":"","headerIconColor":"","member":"","unit":"","decimals":"","label":"","loc":"","writeMode":"setTrue","pulseMs":300,"map":[],"sortable":false,"action":"symbol","fnName":"","paramSource":"member","paramMember":"","paramCol":-1},{"id":"tc38","kind":"button","header":"Aktion","headerLoc":"","headerIcon":"","headerIconColor":"","member":"","unit":"","decimals":"","label":"Reset","loc":"","writeMode":"pulse","pulseMs":200,"map":[],"sortable":false,"action":"symbol","fnName":"","paramSource":"member","paramMember":"","paramCol":-1},{"id":"tc39","kind":"enum","header":"Status","headerLoc":"","headerIcon":"","headerIconColor":"","member":"","unit":"","decimals":"","label":"","loc":"","writeMode":"setTrue","pulseMs":300,"map":[{"id":"tm40","value":"0","label":"Aus","loc":"","color":"grey","icon":"info"},{"id":"tm41","value":"1","label":"Ein","loc":"","color":"green","icon":"info"}],"sortable":true,"action":"symbol","fnName":"","paramSource":"member","paramMember":"","paramCol":-1},{"id":"tc42","kind":"icon","header":"Warnung","headerLoc":"","headerIcon":"","headerIconColor":"","member":"","unit":"","decimals":"","label":"","loc":"","writeMode":"setTrue","pulseMs":300,"map":[{"id":"tm43","value":"1","label":"Warnung","loc":"","color":"yellow","icon":"warning"},{"id":"tm44","value":"2","label":"Alarm","loc":"","color":"red","icon":"alert"}],"sortable":false,"action":"symbol","fnName":"","paramSource":"member","paramMember":"","paramCol":-1}],"rows":[{"id":"tr45","cells":[{"symbol":"ADS.…::aRow0_c0","text":"","loc":""},{"symbol":"","text":"Zeile 1","loc":""},{"symbol":"ADS.…::aRow0_c2","text":"","loc":""},{"symbol":"ADS.…::aRow0_c3","text":"","loc":""},{"symbol":"ADS.…::aRow0_c4","text":"","loc":""},{"symbol":"ADS.…::aRow0_c5","text":"","loc":""},{"symbol":"ADS.…::aRow0_c6","text":"","loc":""},{"symbol":"ADS.…::aRow0_c7","text":"","loc":""}]},{"id":"tr46","cells":[{"symbol":"ADS.…::aRow1_c0","text":"","loc":""},{"symbol":"","text":"Zeile 2","loc":""},{"symbol":"ADS.…::aRow1_c2","text":"","loc":""},{"symbol":"ADS.…::aRow1_c3","text":"","loc":""},{"symbol":"ADS.…::aRow1_c4","text":"","loc":""},{"symbol":"ADS.…::aRow1_c5","text":"","loc":""},{"symbol":"ADS.…::aRow1_c6","text":"","loc":""},{"symbol":"ADS.…::aRow1_c7","text":"","loc":""}]},{"id":"tr47","cells":[{"symbol":"ADS.…::aRow2_c0","text":"","loc":""},{"symbol":"","text":"Zeile 3","loc":""},{"symbol":"ADS.…::aRow2_c2","text":"","loc":""},{"symbol":"ADS.…::aRow2_c3","text":"","loc":""},{"symbol":"ADS.…::aRow2_c4","text":"","loc":""},{"symbol":"ADS.…::aRow2_c5","text":"","loc":""},{"symbol":"ADS.…::aRow2_c6","text":"","loc":""},{"symbol":"ADS.…::aRow2_c7","text":"","loc":""}]}],"search":true,"pageSize":2,"striped":true,"showHeader":true,"watchLimit":30,"pollMs":1000,"rules":[{"id":"tu50","colIndex":0,"op":">","value":"80","target":"row","color":"red"}],"rowFilters":[],"defaultSortCol":0,"defaultSortDir":"asc"}]}
+// AC_POPUP_CONFIG_V1: {"v":1,"mode":"registered","fnName":"AC_TableTime","title":"Titel","titleLoc":"","titleSource":"static","titleField":"TagName","titleFallback":"Titel","titleIcon":"","titleIconColor":"","maxWidth":400,"columns":1,"hostSuffix":".btn_PopUp","blocks":[{"id":"b97","type":"table","col":0,"caption":"Zeiten","captionLoc":"","dataSource":"static","arraySymbol":"","arrayCount":10,"countSymbol":"","startIndex":0,"showIndex":false,"columns":[{"id":"tc115","kind":"read","header":"Name","headerLoc":"","headerIcon":"","headerIconColor":"","member":"","unit":"","decimals":"","label":"","loc":"","writeMode":"setTrue","pulseMs":300,"map":[],"sortable":false,"action":"symbol","fnName":"","paramSource":"member","paramMember":"","paramCol":-1},{"id":"tc116","kind":"input","header":"Dauer","headerLoc":"","headerIcon":"","headerIconColor":"","member":"","unit":"","decimals":"","label":"","loc":"","writeMode":"setTrue","pulseMs":300,"map":[],"sortable":false,"action":"symbol","fnName":"","paramSource":"member","paramMember":"","paramCol":-1,"inputType":"time"},{"id":"tc117","kind":"input","header":"Menge","headerLoc":"","headerIcon":"","headerIconColor":"","member":"","unit":"l","decimals":"","label":"","loc":"","writeMode":"setTrue","pulseMs":300,"map":[],"sortable":false,"action":"symbol","fnName":"","paramSource":"member","paramMember":"","paramCol":-1,"inputType":"number"},{"id":"tc118","kind":"input","header":"Notiz","headerLoc":"","headerIcon":"","headerIconColor":"","member":"","unit":"","decimals":"","label":"","loc":"","writeMode":"setTrue","pulseMs":300,"map":[],"sortable":false,"action":"symbol","fnName":"","paramSource":"member","paramMember":"","paramCol":-1,"inputType":"text"}],"rows":[{"id":"tr119","cells":[{"symbol":"ADS.AF_PLC.MAIN::sName0","text":"","loc":""},{"symbol":"ADS.AF_PLC.MAIN::tDur0","text":"","loc":""},{"symbol":"ADS.AF_PLC.MAIN::nQty0","text":"","loc":""},{"symbol":"ADS.AF_PLC.MAIN::sNote0","text":"","loc":""}]}],"search":true,"pageSize":0,"striped":true,"showHeader":true,"watchLimit":30,"pollMs":1000,"rules":[],"rowFilters":[],"defaultSortCol":-1,"defaultSortDir":"asc"}]}

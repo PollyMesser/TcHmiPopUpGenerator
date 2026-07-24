@@ -11,9 +11,27 @@ function symMeta(mode) {
     ? { label: "ATTRIBUT (getX/setX)", ph: "z.B. Running" }
     : { label: "SYMBOL", ph: "ADS.PLC.MAIN…::xVar" };
 }
+// Optionales, vom Lese-Symbol abweichendes SCHREIB-Ziel (z. B. Command-Muster
+// Mode lesen / CmdMode schreiben). Leer = Lesen und Schreiben auf demselben
+// Symbol/Attribut (Bestandsverhalten, byte-identisch).
+function writeSymMeta(mode) {
+  return mode === "usercontrol"
+    ? { label: "SCHREIB-ATTRIBUT (setX, optional)", ph: "leer = wie Lese-Attribut (z.B. CmdMode)" }
+    : { label: "SCHREIB-SYMBOL (optional, abweichend)", ph: "leer = wie Lese-Symbol" };
+}
+function WriteSymField({ cfg, onPatch, mode }) {
+  const wm = writeSymMeta(mode);
+  return (
+    <>
+      <Field label={wm.label}><TextInput value={cfg.writeSym || ""} onChange={(e) => onPatch({ writeSym: e.target.value })} placeholder={wm.ph} /></Field>
+      <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5, margin: "-4px 0 8px" }}>Leer = Lesen und Schreiben über dasselbe {mode === "usercontrol" ? "Attribut" : "Symbol"}. Gesetzt = der Ist-Wert wird oben gelesen, geschrieben wird hierhin (z. B. Command-Attribut).</div>
+    </>
+  );
+}
 function ReadBoolFields({ cfg, onPatch, mode }) {
   const sm = symMeta(mode);
   const isRead = cfg.type === "read" || cfg.kind === "read";
+  const isCheck = cfg.type === "check" || cfg.kind === "check";
   return (
     <>
       <div style={{ display: "flex", gap: 10 }}>
@@ -26,7 +44,10 @@ function ReadBoolFields({ cfg, onPatch, mode }) {
           <div style={{ width: 96 }}><Field label="EINHEIT (optional)"><TextInput value={cfg.unit || ""} onChange={(e) => onPatch({ unit: e.target.value })} placeholder="z.B. bar" /></Field></div>
         </div>
       ) : (
-        <Field label={sm.label}><TextInput value={cfg.symbol} onChange={(e) => onPatch({ symbol: e.target.value })} placeholder={sm.ph} /></Field>
+        <>
+          <Field label={sm.label}><TextInput value={cfg.symbol} onChange={(e) => onPatch({ symbol: e.target.value })} placeholder={sm.ph} /></Field>
+          {isCheck && <WriteSymField cfg={cfg} onPatch={onPatch} mode={mode} />}
+        </>
       )}
     </>
   );
@@ -126,6 +147,7 @@ function InputFields({ cfg, onPatch, mode }) {
         <div style={{ width: 96 }}><Field label="DATENTYP"><Select value={cfg.dataType} onChange={(e) => onPatch({ dataType: e.target.value })} options={[{ value: "number", label: "Zahl" }, { value: "text", label: "Text" }, { value: "time", label: "Zeit (HH:MM:SS)" }]} /></Field></div>
         <div style={{ width: 92 }}><Field label="EINHEIT (optional)"><TextInput value={cfg.unit || ""} onChange={(e) => onPatch({ unit: e.target.value })} placeholder="z.B. bar" /></Field></div>
       </div>
+      <WriteSymField cfg={cfg} onPatch={onPatch} mode={mode} />
       <div style={{ borderTop: `1px solid ${T.border}`, margin: "2px 0 8px" }} />
       <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, fontWeight: 600, color: T.muted, cursor: "pointer", marginBottom: 6 }}>
         <input type="checkbox" checked={cfg.sendButton !== false} onChange={(e) => onPatch({ sendButton: e.target.checked })} /> SENDEN-BUTTON ANZEIGEN
@@ -147,4 +169,4 @@ function InputFields({ cfg, onPatch, mode }) {
   );
 }
 
-export { symMeta, ReadBoolFields, ButtonItemFields, TriggerFields, InputFields };
+export { symMeta, WriteSymField, ReadBoolFields, ButtonItemFields, TriggerFields, InputFields };

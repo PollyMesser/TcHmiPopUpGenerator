@@ -512,14 +512,14 @@
                 } else if (col.kind === 'bool') {
                     var led = document.createElement('span');
                     var on = (v === true || v === 1 || v === '1' || v === 'true');
-                    led.style.cssText = 'display:inline-block;width:12px;height:12px;border-radius:50%;background:' + (on ? pp.active : pp.inactive) + ';';
+                    led.style.cssText = 'display:inline-block;width:15px;height:15px;border-radius:50%;background:' + (on ? pp.active : pp.inactive) + ';';
                     td.style.textAlign = 'center';
                     td.appendChild(led);
                 } else if (col.kind === 'check') {
                     var cb = document.createElement('input');
                     cb.type = 'checkbox';
                     cb.checked = (v === true || v === 1 || v === '1' || v === 'true');
-                    cb.style.cssText = 'width:15px;height:15px;cursor:pointer;';
+                    cb.style.cssText = 'width:18px;height:18px;cursor:pointer;';
                     cb.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
                     cb.addEventListener('change', function () { var s = symFor(r, ci); if (s) writeT(s, cb.checked); });
                     td.style.textAlign = 'center';

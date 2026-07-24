@@ -15,13 +15,13 @@ function ItemPreview({ cfg, pal, on, onToggle }) {
   }
   if (cfg.kind === "bool") return (
     <div onClick={onToggle} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }} title="Klicken zum Umschalten (nur Vorschau)">
-      <span style={{ width: 14, height: 14, borderRadius: "50%", background: on ? pal.active : pal.inactive, transition: "background .15s" }} />
+      <span style={{ width: 18, height: 18, borderRadius: "50%", background: on ? pal.active : pal.inactive, transition: "background .15s" }} />
       <span style={{ fontSize: 14, color: pal.bodyText }}>{cfg.label}</span>
     </div>
   );
   if (cfg.kind === "check") return (
     <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
-      <input type="checkbox" checked={on} onChange={onToggle} style={{ width: 16, height: 16, flex: "0 0 auto", cursor: "pointer", accentColor: pal.active }} />
+      <input type="checkbox" checked={on} onChange={onToggle} style={{ width: 20, height: 20, flex: "0 0 auto", cursor: "pointer", accentColor: pal.active }} />
       <span style={{ fontSize: 14, color: pal.bodyText }}>{cfg.label}</span>
     </label>
   );
@@ -34,8 +34,8 @@ function ItemPreview({ cfg, pal, on, onToggle }) {
     <div>
       <div style={{ fontSize: 13, color: pal.bodyText, marginBottom: 6 }}>{cfg.label}</div>
       <div style={{ display: "flex", gap: 8, alignItems: "stretch" }}>
-        <input type={cfg.dataType === "text" ? "text" : "number"} placeholder="…"
-          style={{ flex: 1, minWidth: 0, boxSizing: "border-box", padding: "9px 10px", borderRadius: 8, fontSize: 14, outline: "none", textAlign: "right", border: `1px solid ${pal.border}`, background: pal.boxBg, color: pal.bodyText }} />
+        <input type={cfg.dataType === "time" || cfg.dataType === "text" ? "text" : "number"} placeholder={cfg.dataType === "time" ? "HH:MM:SS" : "…"}
+          style={{ flex: 1, minWidth: 0, boxSizing: "border-box", padding: "9px 10px", borderRadius: 8, fontSize: 14, outline: "none", textAlign: cfg.dataType === "time" ? "center" : "right", border: `1px solid ${pal.border}`, background: pal.boxBg, color: pal.bodyText }} />
         {u && <span style={{ flex: "0 0 auto", alignSelf: "center", fontSize: 13, color: pal.bodyText, opacity: 0.75 }}>{u}</span>}
         {cfg.sendButton !== false && <div style={{ flex: "0 0 auto", padding: "0 16px", display: "flex", alignItems: "center", borderRadius: 8, fontSize: 13, fontWeight: 600, background: c.bg, color: c.text }}>{cfg.sendLabel || "Setzen"}</div>}
       </div>
@@ -50,7 +50,7 @@ function BlockPreview({ b, pal, on, onToggle }) {
     </div>
   );
   if (b.type === "row") return (
-    <div style={{ display: "flex", gap: 16, marginBottom: 16, alignItems: "flex-start" }}>
+    <div style={{ display: "flex", gap: 16, marginBottom: 16, alignItems: "center" }}>
       {b.items.map((it) => <div key={it.id} style={{ flex: 1, minWidth: 0 }}><ItemPreview cfg={it} pal={pal} on={!!on[it.id]} onToggle={() => onToggle(it.id)} /></div>)}
     </div>
   );
@@ -171,7 +171,7 @@ function BlockPreview({ b, pal, on, onToggle }) {
     const nRows = b.dataSource === "array" ? Math.min(4, Math.max(1, parseInt(b.arrayCount) || 3)) : Math.min(4, (b.rows || []).length || 1);
     const cellPrev = (cl, ri) => {
       if (cl.kind === "text") { const cell = b.dataSource === "array" ? {} : (((b.rows || [])[ri] || {}).cells || [])[b.columns.indexOf(cl)] || {}; return <span>{cell.text || "Text"}</span>; }
-      if (cl.kind === "bool") return <span style={{ display: "inline-block", width: 11, height: 11, borderRadius: "50%", background: pal.inactive || "#9ca3af" }} />;
+      if (cl.kind === "bool") return <span style={{ display: "inline-block", width: 14, height: 14, borderRadius: "50%", background: pal.inactive || "#9ca3af" }} />;
       if (cl.kind === "check") return <input type="checkbox" readOnly checked={false} style={{ pointerEvents: "none" }} />;
       if (cl.kind === "input") return <span style={{ display: "inline-block", width: 56, padding: "1px 5px", border: `1px solid ${pal.border}`, borderRadius: 4, textAlign: "right", opacity: 0.7 }}>–</span>;
       if (cl.kind === "button") return <span style={{ display: "inline-block", padding: "2px 10px", border: `1px solid ${pal.border}`, borderRadius: 6, fontSize: 11, fontWeight: 600 }}>{cl.label || "OK"}</span>;

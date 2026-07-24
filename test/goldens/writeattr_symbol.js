@@ -6,8 +6,8 @@
     (function (/** @type {globalThis.TcHmi.Functions} */ Functions) {
         var AC_HMI;
         (function (AC_HMI) {
-            function AC_AccessPopup(par1) {
-                var uid = "AC_AccessPopup";
+            function AC_WriteAttrSym(par1) {
+                var uid = "AC_WriteAttrSym";
                 var watchers = [];   // watch-Abmelder
                 var symbols = [];    // Symbole zum Freigeben
                 var teardowns = [];  // Aufräum-Callbacks (z.B. Plot-Module)
@@ -165,34 +165,7 @@
                     var body = document.createElement('div');
                     body.style.cssText = 'padding:20px;overflow-y:auto;flex:1 1 auto;min-height:0;';
 
-                    // ── Gruppen-Berechtigungen (TcHmi.Server.getCurrentUserConfig().userIsInGroups) ──
-                    function acCurrentGroups() {
-                        try { var c = TcHmi.Server.getCurrentUserConfig(); return (c && c.userIsInGroups) || []; } catch (e) { return []; }
-                    }
-                    function acAllowed(allowGroups) {
-                        if (!allowGroups) return true;
-                        var g = acCurrentGroups();
-                        for (var i = 0; i < allowGroups.length; i++) { if (g.indexOf(allowGroups[i]) >= 0) return true; }
-                        return false;
-                    }
-                    var __acPopup = {"observe":["Admin","Service"],"operate":["Admin"]};
-                    if (!acAllowed(__acPopup.observe)) return; // Popup für diese Gruppe nicht anzeigen
-                    // Wert lesen: ADS.…::rPressure
-                    (function () {
-                        var row = document.createElement('div');
-                        row.style.cssText = 'display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:16px;';
-                        var lbl = document.createElement('span');
-                        lbl.style.cssText = 'font-size:14px;color:' + p.bodyText + ';';
-                        lbl.textContent = "Druck";
-                        var valEl = document.createElement('span');
-                        valEl.style.cssText = 'font-size:14px;font-weight:500;color:' + p.bodyText + ';text-align:right;font-variant-numeric:tabular-nums;';
-                        valEl.textContent = '…';
-                        row.appendChild(lbl); row.appendChild(valEl);
-                        body.appendChild(row);
-                        subscribe("%s%ADS.…::rPressure%/s%", function (v) { valEl.textContent = String(v) + " bar"; });
-                    })();
-
-                    // Boolean setzen (Checkbox): ADS.…::xEnable
+                    // Boolean setzen (Checkbox): ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::xEnable
                     (function () {
                         var wrap = document.createElement('label');
                         wrap.style.cssText = 'display:flex;align-items:center;gap:10px;margin-bottom:16px;cursor:pointer;';
@@ -201,34 +174,82 @@
                         cb.style.cssText = 'width:20px;height:20px;flex:0 0 auto;cursor:pointer;accent-color:' + p.active + ';';
                         var lbl = document.createElement('span');
                         lbl.style.cssText = 'font-size:14px;color:' + p.bodyText + ';';
-                        lbl.textContent = "Freigabe";
+                        lbl.textContent = loc("L_Enable", "Freigabe");
                         wrap.appendChild(cb); wrap.appendChild(lbl);
                         body.appendChild(wrap);
                         cb.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
-                        subscribe("%s%ADS.…::xEnable%/s%", function (v) { if (document.activeElement !== cb) cb.checked = !!v; });
-                        cb.addEventListener('change', function () { writeSymbol("%s%ADS.…::xEnable%/s%", cb.checked); });
+                        subscribe("%s%ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::xEnable%/s%", function (v) { if (document.activeElement !== cb) cb.checked = !!v; });
+                        cb.addEventListener('change', function () { writeSymbol("%s%ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::xCmdEnable%/s%", cb.checked); });
                     })();
 
-                    // Buttons
+                    // Eingabefeld + Senden: ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::rSetpoint
                     (function () {
-                        var row = document.createElement('div');
-                        row.style.cssText = 'display:flex;gap:10px;margin-bottom:16px;';
-                        // pulse: ADS.…::xStart
-                        var btn0 = document.createElement('button');
-                        btn0.style.cssText = 'flex:1;padding:12px 0;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;background:#3b82f6;color:#ffffff;';
-                        btn0.textContent = "Start";
-                        btn0.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
-                        btn0.onclick = function (e) { e.stopPropagation(); pulseSymbol("%s%ADS.…::xStart%/s%", 500);
-                            hideDialog(); };
-                        btn0.style.transition = 'transform .08s ease, filter .08s ease';
-                        btn0.addEventListener('pointerdown', function () { btn0.style.transform = 'scale(0.96)'; btn0.style.filter = 'brightness(0.88)'; });
-                        var rel_btn0 = function () { btn0.style.transform = ''; btn0.style.filter = ''; };
-                        btn0.addEventListener('pointerup', rel_btn0);
-                        btn0.addEventListener('pointerleave', rel_btn0);
-                        row.appendChild(btn0);
-                        body.appendChild(row);
+                        var wrap = document.createElement('div');
+                        wrap.style.cssText = 'margin-bottom:16px;';
+                        var lbl = document.createElement('div');
+                        lbl.style.cssText = 'font-size:13px;color:' + p.bodyText + ';margin-bottom:6px;';
+                        lbl.textContent = loc("L_Setpoint", "Sollwert");
+                        var line = document.createElement('div');
+                        line.style.cssText = 'display:flex;gap:8px;align-items:stretch;';
+                        var input = document.createElement('input');
+                        input.type = 'number';
+                        input.style.cssText = 'flex:1;min-width:0;box-sizing:border-box;padding:9px 10px;border-radius:8px;font-size:14px;outline:none;text-align:right;' +
+                            'border:1px solid ' + p.border + ';background:' + p.boxBg + ';color:' + p.bodyText + ';';
+                        input.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
+                        subscribe("%s%ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::rSetpoint%/s%", function (v) { if (document.activeElement !== input) input.value = String(v); });
+                        function commit() { var val = parseFloat(input.value); if (isNaN(val)) return; writeSymbol("%s%ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::rCmdSetpoint%/s%", val); }
+                        input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { commit(); } });
+                        var unitEl = document.createElement('span');
+                        unitEl.style.cssText = 'flex:0 0 auto;align-self:center;font-size:13px;color:' + p.bodyText + ';opacity:0.75;';
+                        unitEl.textContent = "bar";
+                        var send = document.createElement('button');
+                        send.style.cssText = 'flex:0 0 auto;padding:0 16px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;background:#3b82f6;color:#ffffff;';
+                        send.textContent = "Setzen";
+                        send.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
+                        send.style.transition = 'transform .08s ease, filter .08s ease';
+                        send.addEventListener('pointerdown', function () { send.style.transform = 'scale(0.96)'; send.style.filter = 'brightness(0.88)'; });
+                        var rel_send = function () { send.style.transform = ''; send.style.filter = ''; };
+                        send.addEventListener('pointerup', rel_send);
+                        send.addEventListener('pointerleave', rel_send);
+                        send.onclick = function (e) { e.stopPropagation(); commit(); pulseSymbol("%s%ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::xCmdSetSetpoint%/s%", 300); };
+                        line.appendChild(input);
+                        line.appendChild(unitEl);
+                        line.appendChild(send);
+                        wrap.appendChild(lbl); wrap.appendChild(line);
+                        body.appendChild(wrap);
                     })();
-                    if (!acAllowed(__acPopup.operate)) { var __acPE = body.querySelectorAll('button, input, select, textarea'); for (var __acPi = 0; __acPi < __acPE.length; __acPi++) { if (__acPE[__acPi].getAttribute && __acPE[__acPi].getAttribute('data-ac-view')) continue; __acPE[__acPi].disabled = true; } body.style.opacity = '0.6'; }
+
+                    // Enum setzen (Dropdown + Senden): ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::eMode
+                    (function () {
+                        var wrap = document.createElement('div');
+                        wrap.style.cssText = 'margin-bottom:16px;';
+                        var lbl = document.createElement('div');
+                        lbl.style.cssText = 'font-size:13px;color:' + p.bodyText + ';margin-bottom:6px;';
+                        lbl.textContent = loc("L_Mode", "Modus");
+                        var sel = document.createElement('select');
+                        sel.style.cssText = 'flex:1;min-width:0;box-sizing:border-box;padding:9px 10px;border-radius:8px;font-size:14px;outline:none;cursor:pointer;' +
+                            'border:1px solid ' + p.border + ';background:' + p.boxBg + ';color:' + p.bodyText + ';';
+                        var o0 = document.createElement('option'); o0.value = "0"; o0.textContent = "Hand"; sel.appendChild(o0);
+                        var o1 = document.createElement('option'); o1.value = "1"; o1.textContent = "Automatik"; sel.appendChild(o1);
+                        sel.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
+                        var line = document.createElement('div');
+                        line.style.cssText = 'display:flex;gap:8px;align-items:stretch;';
+                        line.appendChild(sel);
+                        var send = document.createElement('button');
+                        send.style.cssText = 'flex:0 0 auto;padding:0 16px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;background:#22c55e;color:#06240f;';
+                        send.textContent = "Übernehmen";
+                        send.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
+                        send.style.transition = 'transform .08s ease, filter .08s ease';
+                        send.addEventListener('pointerdown', function () { send.style.transform = 'scale(0.96)'; send.style.filter = 'brightness(0.88)'; });
+                        var rel_send = function () { send.style.transform = ''; send.style.filter = ''; };
+                        send.addEventListener('pointerup', rel_send);
+                        send.addEventListener('pointerleave', rel_send);
+                        send.onclick = function (e) { e.stopPropagation(); writeSymbol("%s%ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::eCmdMode%/s%", parseInt(sel.value, 10)); pulseSymbol("%s%ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::xCmdSetMode%/s%", 300); };
+                        line.appendChild(send);
+                        wrap.appendChild(lbl); wrap.appendChild(line);
+                        body.appendChild(wrap);
+                        subscribe("%s%ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::eMode%/s%", function (v) { if (document.activeElement !== sel) sel.value = String(v); });
+                    })();
 
                     box.appendChild(header);
                     box.appendChild(body);
@@ -239,11 +260,11 @@
 
                 buildDialog();
             }
-            AC_HMI.AC_AccessPopup = AC_AccessPopup;
+            AC_HMI.AC_WriteAttrSym = AC_WriteAttrSym;
         })(AC_HMI = Functions.AC_HMI || (Functions.AC_HMI = {}));
     })(Functions = TcHmi.Functions || (TcHmi.Functions = {}));
 })(TcHmi);
-TcHmi.Functions.registerFunctionEx("AC_AccessPopup", 'TcHmi.Functions.AC_HMI', TcHmi.Functions.AC_HMI.AC_AccessPopup);
+TcHmi.Functions.registerFunctionEx("AC_WriteAttrSym", 'TcHmi.Functions.AC_HMI', TcHmi.Functions.AC_HMI.AC_WriteAttrSym);
 
 // ── AC_PopUp Generator: Konfiguration für Re-Import (diese Zeilen nicht entfernen) ──
-// AC_POPUP_CONFIG_V1: {"v":1,"mode":"registered","fnName":"AC_AccessPopup","title":"Titel","titleLoc":"","titleSource":"static","titleField":"TagName","titleFallback":"Titel","titleIcon":"","titleIconColor":"","maxWidth":400,"columns":1,"hostSuffix":".btn_PopUp","blocks":[{"id":"b78","type":"read","col":0,"label":"Druck","loc":"","symbol":"ADS.…::rPressure","unit":"bar"},{"id":"b79","type":"check","col":0,"label":"Freigabe","loc":"","symbol":"ADS.…::xEnable"},{"id":"b80","type":"button","col":0,"buttons":[{"label":"Start","loc":"","icon":"","iconPos":"left","showLabel":true,"symbol":"ADS.…::xStart","writeMode":"pulse","pulseMs":500,"closeAfter":true,"color":"blue","visSym":"","enableIf":[],"fbSym":"","confirmMs":3000,"confirmAction":"pulse"}]}],"access":{"observe":{"on":true,"groups":{"Admin":"Allow","Service":"Allow","Process_Engineer":"Deny","Operator":"Deny"}},"operate":{"on":true,"groups":{"Admin":"Allow","Service":"Deny","Process_Engineer":"Deny","Operator":"Deny"}}}}
+// AC_POPUP_CONFIG_V1: {"v":1,"mode":"registered","fnName":"AC_WriteAttrSym","title":"Titel","titleLoc":"","titleSource":"static","titleField":"TagName","titleFallback":"Titel","titleIcon":"","titleIconColor":"","maxWidth":400,"columns":1,"hostSuffix":".btn_PopUp","blocks":[{"id":"b91","type":"check","col":0,"label":"Freigabe","loc":"L_Enable","symbol":"ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::xEnable","writeSym":"ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::xCmdEnable"},{"id":"b92","type":"input","col":0,"label":"Sollwert","loc":"L_Setpoint","symbol":"ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::rSetpoint","dataType":"number","unit":"bar","sendLabel":"Setzen","sendLoc":"","sendColor":"blue","trigSym":"ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::xCmdSetSetpoint","trigMode":"pulse","trigMs":300,"writeSym":"ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::rCmdSetpoint"},{"id":"b93","type":"enumset","col":0,"label":"Modus","loc":"L_Mode","symbol":"ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::eMode","numeric":true,"map":[{"id":"e107","value":"0","loc":"","text":"Hand","color":"blue"},{"id":"e108","value":"1","loc":"","text":"Automatik","color":"blue"}],"sendButton":true,"sendLabel":"Übernehmen","sendLoc":"","sendColor":"green","trigSym":"ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::xCmdSetMode","trigMode":"pulse","trigMs":300,"writeSym":"ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::eCmdMode"}]}

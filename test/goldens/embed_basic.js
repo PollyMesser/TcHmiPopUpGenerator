@@ -148,7 +148,7 @@
             var row = document.createElement('div');
             row.style.cssText = 'display:flex;align-items:center;gap:10px;margin-bottom:16px;';
             var dot = document.createElement('span');
-            dot.style.cssText = 'width:14px;height:14px;border-radius:50%;flex:0 0 auto;background:' + p.inactive + ';transition:background .15s;';
+            dot.style.cssText = 'width:18px;height:18px;border-radius:50%;flex:0 0 auto;background:' + p.inactive + ';transition:background .15s;';
             var lbl = document.createElement('span');
             lbl.style.cssText = 'font-size:14px;color:' + p.bodyText + ';';
             lbl.textContent = "Verbunden";
@@ -441,14 +441,14 @@
                 } else if (col.kind === 'bool') {
                     var led = document.createElement('span');
                     var on = (v === true || v === 1 || v === '1' || v === 'true');
-                    led.style.cssText = 'display:inline-block;width:12px;height:12px;border-radius:50%;background:' + (on ? pp.active : pp.inactive) + ';';
+                    led.style.cssText = 'display:inline-block;width:15px;height:15px;border-radius:50%;background:' + (on ? pp.active : pp.inactive) + ';';
                     td.style.textAlign = 'center';
                     td.appendChild(led);
                 } else if (col.kind === 'check') {
                     var cb = document.createElement('input');
                     cb.type = 'checkbox';
                     cb.checked = (v === true || v === 1 || v === '1' || v === 'true');
-                    cb.style.cssText = 'width:15px;height:15px;cursor:pointer;';
+                    cb.style.cssText = 'width:18px;height:18px;cursor:pointer;';
                     cb.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
                     cb.addEventListener('change', function () { var s = symFor(r, ci); if (s) writeT(s, cb.checked); });
                     td.style.textAlign = 'center';

@@ -197,7 +197,7 @@
         // Zeile (nebeneinander)
         (function () {
             var rrow = document.createElement('div');
-            rrow.style.cssText = 'display:flex;gap:16px;margin-bottom:16px;align-items:flex-start;';
+            rrow.style.cssText = 'display:flex;gap:16px;margin-bottom:16px;align-items:center;';
             var rc0 = document.createElement('div');
             rc0.style.cssText = 'flex:1;min-width:0;';
             rrow.appendChild(rc0);

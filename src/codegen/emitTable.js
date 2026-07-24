@@ -1,5 +1,6 @@
-import { jsStr, wrapSym, locExpr, indentLines, I } from "./helpers.js";
+import { jsStr, wrapSym, locExpr, indentLines, I, durHelpers } from "./helpers.js";
 import { COLORS, ICONS } from "../constants/palette.js";
+import { compileAccess, accessActive } from "../model/access.js";
 
 // ── Tabellen-Baustein: eigenständiges Modul (modus-unabhängig, eigene Watches/Subscription) ──
 // Datenquellen:
@@ -24,6 +25,12 @@ function tableBlockConfig(b) {
     })),
     // sortable nur setzen, wenn aktiv -> Bestands-JSON bleibt byte-identisch
     ...(c.sortable ? { sortable: true } : {}),
+    // Eingabe-Typ nur setzen, wenn explizit gewaehlt (time/text/number) -> Bestands-JSON byte-identisch;
+    // ohne itype gilt das bisherige Auto-Verhalten (Zahl wenn numerisch, sonst Text).
+    ...((c.kind === "input" && (c.inputType === "time" || c.inputType === "text" || c.inputType === "number")) ? { itype: c.inputType } : {}),
+    // Spalten-Berechtigung nur setzen, wenn aktiv -> Bestands-JSON byte-identisch.
+    // acc = { observe?:[Gruppen], operate?:[Gruppen] } (nur aktivierte Rechte).
+    ...(accessActive(c.access) ? { acc: compileAccess(c.access) } : {}),
     // Kopf-Icon nur setzen, wenn gewaehlt -> Bestands-JSON bleibt byte-identisch
     ...(ICONS[c.headerIcon] ? { hicon: c.headerIcon, ...((c.headerIconColor || "").trim() ? { hicolor: c.headerIconColor } : {}) } : {}),
     // Button-Funktionsaktion nur setzen, wenn action==='fn' -> Bestands-Buttons byte-identisch
@@ -91,6 +98,63 @@ function tableBlockConfig(b) {
 
 function emitTable(parent, b) {
   const c = tableBlockConfig(b);
+  // Eingabe-Typen der Spalten: bestimmen, ob Zeit-Helfer eingebettet werden und
+  // ob die (byte-neutrale) erweiterte Zell-Input-Logik statt der Original-Variante
+  // erzeugt wird. Ohne getypte Input-Spalte bleibt der Modul-Text byte-identisch.
+  const cols0 = b.columns || [];
+  const hasTime = cols0.some((cc) => cc.kind === "input" && cc.inputType === "time");
+  const hasTypedInput = cols0.some((cc) => cc.kind === "input" && (cc.inputType === "time" || cc.inputType === "text" || cc.inputType === "number"));
+  const timeHelpers = hasTime ? durHelpers("") + "\n" : "";
+  // Spalten-Berechtigungen: nur wenn mind. eine Spalte access hat, wird die
+  // Sichtbarkeits-/Bedien-Logik erzeugt. acAllowed() stammt aus dem Popup-Body-
+  // Scope (accessHelperSrc, eingebettet sobald irgendein Element Rechte nutzt).
+  // COL_VIS/COL_OP werden EINMAL beim Aufbau ausgewertet (Gruppen des Users
+  // aendern sich zur Popup-Laufzeit nicht). observe-Deny = Spalte gar nicht
+  // rendern/binden; operate-Deny = Bedienelemente der Zelle deaktivieren.
+  const hasColAccess = cols0.some((cc) => accessActive(cc.access));
+  const colVisDecl = hasColAccess
+    ? `\n    var COL_VIS = TCOLS.map(function (col) { return !col.acc || acAllowed(col.acc.observe); });\n    var COL_OP = TCOLS.map(function (col) { return !col.acc || acAllowed(col.acc.operate); });`
+    : "";
+  const bindSkip = hasColAccess ? ` if (!COL_VIS[c0]) continue;` : "";
+  const headSkip = hasColAccess ? ` if (!isIdx && col0 && !COL_VIS[colIdx]) return;` : "";
+  const searchColSkip = hasColAccess ? `if (!COL_VIS[ci]) continue; ` : "";
+  const bodyCellLoop = hasColAccess
+    ? `for (var ci = 0; ci < TCOLS.length; ci++) { if (!COL_VIS[ci]) { cellEls.push(null); continue; } var td = buildCellEl(r, ci, pp); if (!COL_OP[ci]) { var __oe = td.querySelectorAll('button, input, select, textarea'); for (var __oi = 0; __oi < __oe.length; __oi++) __oe[__oi].disabled = true; td.style.opacity = '0.55'; } cellEls.push(td); tr.appendChild(td); }`
+    : `for (var ci = 0; ci < TCOLS.length; ci++) { var td = buildCellEl(r, ci, pp); cellEls.push(td); tr.appendChild(td); }`;
+  const inputCellSrc = hasTypedInput
+    ? `            var inp = document.createElement('input');
+            var itype = col.itype || '';
+            inp.type = 'text';
+            inp.value = (v === undefined || v === null) ? '' : (itype === 'time' ? durToHMS(v) : String(v));
+            inp.style.cssText = 'width:80px;padding:3px 6px;border:1px solid ' + pp.border + ';border-radius:5px;background:' + pp.boxBg + ';color:' + pp.bodyText + ';font-size:18px;text-align:' + (itype === 'time' ? 'center' : 'right') + ';';
+            if (itype === 'time') inp.placeholder = 'HH:MM:SS';
+            inp.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
+            var send = function () {
+                var s = symFor(r, ci); if (!s) return;
+                var raw = inp.value;
+                if (itype === 'time') { writeT(s, hmsToDur(raw)); return; }
+                if (itype === 'text') { writeT(s, raw); return; }
+                var num = Number(raw);
+                if (itype === 'number') { if (raw !== '' && !isNaN(num) && isFinite(num)) writeT(s, num); return; }
+                writeT(s, raw !== '' && !isNaN(num) && isFinite(num) ? num : raw);
+            };
+            inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { send(); inp.blur(); } });
+            inp.addEventListener('blur', send);
+            td.appendChild(inp);`
+    : `            var inp = document.createElement('input');
+            inp.type = 'text';
+            inp.value = (v === undefined || v === null) ? '' : String(v);
+            inp.style.cssText = 'width:80px;padding:3px 6px;border:1px solid ' + pp.border + ';border-radius:5px;background:' + pp.boxBg + ';color:' + pp.bodyText + ';font-size:18px;text-align:right;';
+            inp.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
+            var send = function () {
+                var s = symFor(r, ci); if (!s) return;
+                var raw = inp.value;
+                var num = Number(raw);
+                writeT(s, raw !== '' && !isNaN(num) && isFinite(num) ? num : raw);
+            };
+            inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { send(); inp.blur(); } });
+            inp.addEventListener('blur', send);
+            td.appendChild(inp);`;
   const core = `// Generische Tabelle (eigenständiges Modul, eigener Lebenszyklus)
 (function () {
     var TCOLS = ${c.cols};
@@ -121,7 +185,7 @@ function emitTable(parent, b) {
     var page = 0, query = '';
     var sortCol = DEFAULT_SORT_COL, sortDir = DEFAULT_SORT_DIR; // aktive Sortierung
     var tbody = null, pageInfo = null, prevBtn = null, nextBtn = null, wrap = null;
-    var sortThs = []; // { el: <span Pfeil>, col: <Spaltenindex> } je sortierbarer Kopfzelle
+    var sortThs = []; // { el: <span Pfeil>, col: <Spaltenindex> } je sortierbarer Kopfzelle${colVisDecl}
 
     function locT(key, fallback) {
         try { var f = TcHmi.Functions.getFunction('GetLocalizedText'); if (f) { var t = f(key); if (t !== null && t !== undefined && t !== '') return t; } } catch (e) {}
@@ -235,7 +299,7 @@ function emitTable(parent, b) {
     function rowMatches(r, q) {
         if (!q) return true;
         if (SHOW_INDEX && String(START_INDEX + r).indexOf(q) >= 0) return true;
-        for (var ci = 0; ci < TCOLS.length; ci++) { if (cellSearchText(r, ci).toLowerCase().indexOf(q) >= 0) return true; }
+        for (var ci = 0; ci < TCOLS.length; ci++) { ${searchColSkip}if (cellSearchText(r, ci).toLowerCase().indexOf(q) >= 0) return true; }
         return false;
     }
     function cmpT(a, op, v) {
@@ -280,7 +344,7 @@ function emitTable(parent, b) {
         if (DATA_SOURCE === 'array') { if (dynCount >= 0 && dynCount < n) n = dynCount; if (n > ARRAY_COUNT) n = ARRAY_COUNT; }
         return n;
     }
-    function buildCellEl(r, ci, pp) {
+${timeHelpers}    function buildCellEl(r, ci, pp) {
         var col = TCOLS[ci];
         var td = document.createElement('td');
         td.style.cssText = 'padding:6px 10px;border-top:1px solid ' + pp.border + ';font-size:18px;color:' + pp.bodyText + ';white-space:nowrap;'
@@ -294,33 +358,20 @@ function emitTable(parent, b) {
         } else if (col.kind === 'bool') {
             var led = document.createElement('span');
             var on = (v === true || v === 1 || v === '1' || v === 'true');
-            led.style.cssText = 'display:inline-block;width:12px;height:12px;border-radius:50%;background:' + (on ? pp.active : pp.inactive) + ';';
+            led.style.cssText = 'display:inline-block;width:15px;height:15px;border-radius:50%;background:' + (on ? pp.active : pp.inactive) + ';';
             td.style.textAlign = 'center';
             td.appendChild(led);
         } else if (col.kind === 'check') {
             var cb = document.createElement('input');
             cb.type = 'checkbox';
             cb.checked = (v === true || v === 1 || v === '1' || v === 'true');
-            cb.style.cssText = 'width:15px;height:15px;cursor:pointer;';
+            cb.style.cssText = 'width:18px;height:18px;cursor:pointer;';
             cb.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
             cb.addEventListener('change', function () { var s = symFor(r, ci); if (s) writeT(s, cb.checked); });
             td.style.textAlign = 'center';
             td.appendChild(cb);
         } else if (col.kind === 'input') {
-            var inp = document.createElement('input');
-            inp.type = 'text';
-            inp.value = (v === undefined || v === null) ? '' : String(v);
-            inp.style.cssText = 'width:80px;padding:3px 6px;border:1px solid ' + pp.border + ';border-radius:5px;background:' + pp.boxBg + ';color:' + pp.bodyText + ';font-size:18px;text-align:right;';
-            inp.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
-            var send = function () {
-                var s = symFor(r, ci); if (!s) return;
-                var raw = inp.value;
-                var num = Number(raw);
-                writeT(s, raw !== '' && !isNaN(num) && isFinite(num) ? num : raw);
-            };
-            inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { send(); inp.blur(); } });
-            inp.addEventListener('blur', send);
-            td.appendChild(inp);
+${inputCellSrc}
         } else if (col.kind === 'button') {
             var btn = document.createElement('button');
             btn.textContent = locT(col.lloc, col.label || 'OK');
@@ -435,7 +486,7 @@ function emitTable(parent, b) {
                 tr.appendChild(tdIdx);
             }
             var cellEls = [];
-            for (var ci = 0; ci < TCOLS.length; ci++) { var td = buildCellEl(r, ci, pp); cellEls.push(td); tr.appendChild(td); }
+            ${bodyCellLoop}
             for (var ui = 0; ui < TRULES.length; ui++) {
                 var rule = TRULES[ui];
                 var a = vals[r] ? vals[r][rule.c] : undefined;
@@ -493,7 +544,7 @@ function emitTable(parent, b) {
             var th = document.createElement('th');
             var isIdx = SHOW_INDEX && hi === 0;
             var colIdx = SHOW_INDEX ? hi - 1 : hi;
-            var col0 = TCOLS[colIdx];
+            var col0 = TCOLS[colIdx];${headSkip}
             var right = !isIdx && col0 && (col0.kind === 'read' || col0.kind === 'input');
             var canSort = !isIdx && col0 && col0.sortable === true;
             var hIcon = !isIdx && col0 && col0.hicon && ICON_SVGS[col0.hicon];
@@ -569,7 +620,7 @@ function emitTable(parent, b) {
     var srcRows = DATA_SOURCE === 'array' ? ARRAY_COUNT : TROWS.length;
     for (var r0 = 0; r0 < srcRows; r0++) {
         for (var c0 = 0; c0 < TCOLS.length; c0++) {
-            var k = TCOLS[c0].kind;
+            var k = TCOLS[c0].kind;${bindSkip}
             if (k === 'text') continue;
             var needsRead = (k === 'read' || k === 'bool' || k === 'check' || k === 'input' || k === 'enum' || k === 'icon' || (k === 'button' && TCOLS[c0].wmode === 'toggle'));
             var s0 = symFor(r0, c0);

@@ -9,6 +9,7 @@ import { I } from "./helpers.js";
 function blockNeedsAccess(b) {
   if (accessActive(b.access)) return true;
   if (b.type === "button") return (b.buttons || []).some((bt) => accessActive(bt.access));
+  if (b.type === "table") return (b.columns || []).some((c) => accessActive(c.access));
   return false;
 }
 
