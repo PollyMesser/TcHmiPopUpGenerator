@@ -103,7 +103,7 @@ function makeSandbox() {
   };
   const sandbox = {
     document: documentStub,
-    window: { getComputedStyle: () => ({ backgroundColor: "" }), requestAnimationFrame: (fn) => fn(), console },
+    window: { getComputedStyle: () => ({ backgroundColor: "" }), requestAnimationFrame: (fn) => fn(), addEventListener: () => {}, removeEventListener: () => {}, console },
     TcHmi,
     console,
     setTimeout, clearTimeout,

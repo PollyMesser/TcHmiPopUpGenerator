@@ -241,6 +241,13 @@ function BlockCard({ b, opts, ui, actions }) {
                       {!a.autoscale && <div style={{ width: 80 }}><Field label="MAX"><TextInput type="number" value={a.max} onChange={(e) => patchAxis(b.id, a.id, { max: e.target.value })} /></Field></div>}
                     </div>
                     <Field label="FARBE"><HexSwatches value={a.color} onChange={(hx) => patchAxis(b.id, a.id, { color: hx })} /></Field>
+                    {mode === "usercontrol" && (
+                      <div style={{ display: "flex", gap: 6, marginTop: 2 }}>
+                        <div style={{ flex: 2 }}><Field label="TITEL ← PARAM"><TextInput value={a.labelParam || ""} onChange={(e) => patchAxis(b.id, a.id, { labelParam: e.target.value })} placeholder="getX (leer = statisch)" /></Field></div>
+                        <div style={{ flex: 1 }}><Field label="MIN ← PARAM"><TextInput value={a.minParam || ""} onChange={(e) => patchAxis(b.id, a.id, { minParam: e.target.value })} placeholder="getX" /></Field></div>
+                        <div style={{ flex: 1 }}><Field label="MAX ← PARAM"><TextInput value={a.maxParam || ""} onChange={(e) => patchAxis(b.id, a.id, { maxParam: e.target.value })} placeholder="getX" /></Field></div>
+                      </div>
+                    )}
                   </div>
                 ))}
                 {(b.axes || []).length < MAX_AXES && (
@@ -263,6 +270,12 @@ function BlockCard({ b, opts, ui, actions }) {
                       <div style={{ width: 120 }}><Field label="ACHSE"><Select value={s.axisId} onChange={(e) => patchSeries(b.id, s.id, { axisId: e.target.value })} options={axisOpts} /></Field></div>
                     </div>
                     <Field label="FARBE"><HexSwatches value={s.color} onChange={(hx) => patchSeries(b.id, s.id, { color: hx })} /></Field>
+                    {mode === "usercontrol" && (
+                      <div style={{ display: "flex", gap: 6, marginTop: 2 }}>
+                        <div style={{ flex: 2 }}><Field label="SYMBOLPFAD ← PARAM"><TextInput value={s.symbolParam || ""} onChange={(e) => patchSeries(b.id, s.id, { symbolParam: e.target.value })} placeholder="getX (leer = statisch)" /></Field></div>
+                        <div style={{ flex: 2 }}><Field label="NAME ← PARAM"><TextInput value={s.labelParam || ""} onChange={(e) => patchSeries(b.id, s.id, { labelParam: e.target.value })} placeholder="getX" /></Field></div>
+                      </div>
+                    )}
                   </div>
                 ))}
                 <button onClick={() => addSeries(b.id)} style={{ display: "flex", alignItems: "center", gap: 6, background: "transparent", color: T.text, border: `1px dashed ${T.border}`, borderRadius: 6, padding: "6px 10px", fontSize: 12, cursor: "pointer" }}>
@@ -291,6 +304,14 @@ function BlockCard({ b, opts, ui, actions }) {
                       <div style={{ flex: 1 }}><Field label="STIL"><Select value={r.dash} onChange={(e) => patchRef(b.id, r.id, { dash: e.target.value })} options={DASH_OPTS} /></Field></div>
                       <div style={{ flex: 1 }}><Field label="FARBE"><HexSwatches value={r.color} onChange={(hx) => patchRef(b.id, r.id, { color: hx })} /></Field></div>
                     </div>
+                    {mode === "usercontrol" && (
+                      <div style={{ display: "flex", gap: 6, marginTop: 2 }}>
+                        {r.mode === "symbol"
+                          ? <div style={{ flex: 2 }}><Field label="SYMBOLPFAD ← PARAM"><TextInput value={r.symbolParam || ""} onChange={(e) => patchRef(b.id, r.id, { symbolParam: e.target.value })} placeholder="getX (leer = statisch)" /></Field></div>
+                          : <div style={{ flex: 2 }}><Field label="WERT ← PARAM"><TextInput value={r.valueParam || ""} onChange={(e) => patchRef(b.id, r.id, { valueParam: e.target.value })} placeholder="getX (leer = statisch)" /></Field></div>}
+                        <div style={{ flex: 2 }}><Field label="LABEL ← PARAM"><TextInput value={r.labelParam || ""} onChange={(e) => patchRef(b.id, r.id, { labelParam: e.target.value })} placeholder="getX" /></Field></div>
+                      </div>
+                    )}
                   </div>
                 ))}
                 <button onClick={() => addRef(b.id)} style={{ display: "flex", alignItems: "center", gap: 6, background: "transparent", color: T.text, border: `1px dashed ${T.border}`, borderRadius: 6, padding: "6px 10px", fontSize: 12, cursor: "pointer" }}>
@@ -308,6 +329,9 @@ function BlockCard({ b, opts, ui, actions }) {
                       <div style={{ width: 180 }}><Field label="ART"><Select value={m.kind || "enum"} onChange={(e) => patchMarker(b.id, m.id, { kind: e.target.value })} options={[{ value: "enum", label: "Enum (Wert → Text)" }, { value: "metric", label: "Metrisch (bei Änderung)" }]} /></Field></div>
                       <div style={{ flex: 1 }}><Field label={m.kind === "metric" ? "METRISCHE VARIABLE" : "ENUM-SYMBOL"}><TextInput value={m.symbol} onChange={(e) => patchMarker(b.id, m.id, { symbol: e.target.value })} placeholder={m.kind === "metric" ? "ADS.…::nZyklusNr" : "ADS.…::eStep"} /></Field></div>
                     </div>
+                    {mode === "usercontrol" && (
+                      <div style={{ marginTop: 2 }}><Field label="SYMBOLPFAD ← PARAM"><TextInput value={m.symbolParam || ""} onChange={(e) => patchMarker(b.id, m.id, { symbolParam: e.target.value })} placeholder="getX (leer = statisch)" /></Field></div>
+                    )}
                     <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
                       <div style={{ flex: 1 }}><Field label="STIL"><Select value={m.dash} onChange={(e) => patchMarker(b.id, m.id, { dash: e.target.value })} options={DASH_OPTS} /></Field></div>
                       <div style={{ flex: 1 }}><Field label="MODUS"><Select value={m.mode} onChange={(e) => patchMarker(b.id, m.id, { mode: e.target.value })} options={[{ value: "all", label: "Alle behalten" }, { value: "latest", label: "Nur letzte" }]} /></Field></div>
@@ -341,6 +365,7 @@ function BlockCard({ b, opts, ui, actions }) {
                         {(m.mappings || []).map((mp) => (
                           <div key={mp.id} style={{ display: "flex", gap: 6, marginBottom: 6, alignItems: "flex-end" }}>
                             <div style={{ width: 64 }}><Field label="WERT"><TextInput value={mp.value} onChange={(e) => patchMapping(b.id, m.id, mp.id, { value: e.target.value })} /></Field></div>
+                            {mode === "usercontrol" && <div style={{ width: 84 }}><Field label="← PARAM"><TextInput value={mp.valueParam || ""} onChange={(e) => patchMapping(b.id, m.id, mp.id, { valueParam: e.target.value })} placeholder="getX" /></Field></div>}
                             <div style={{ flex: 1 }}><Field label="TEXT"><TextInput value={mp.label} onChange={(e) => patchMapping(b.id, m.id, mp.id, { label: e.target.value })} /></Field></div>
                             <div style={{ flex: 1 }}><Field label="LOC-KEY"><TextInput value={mp.loc} onChange={(e) => patchMapping(b.id, m.id, mp.id, { loc: e.target.value })} placeholder="L_…" /></Field></div>
                             <div style={{ marginBottom: 10 }}><IconBtn danger onClick={() => removeMapping(b.id, m.id, mp.id)}><Trash2 size={13} /></IconBtn></div>

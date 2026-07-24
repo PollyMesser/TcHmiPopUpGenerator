@@ -171,7 +171,7 @@ function emitBlockUC(b, parent) {
   if (b.type === "check") return emitCheckUC(parent, b, "16px");
   if (b.type === "input") return emitInputUC(parent, b, "16px");
   if (b.type === "progress") return emitProgressUC(parent, b, "16px");
-  if (b.type === "plot") return emitPlot(parent, b);
+  if (b.type === "plot") return emitPlot(parent, b, true);
   if (b.type === "table") return emitTable(parent, b);
   if (b.type === "divider") return emitDivider(parent, b);
   if (b.type === "row") return emitRowUC(parent, b);

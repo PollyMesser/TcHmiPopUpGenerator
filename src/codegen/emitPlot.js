@@ -1,5 +1,40 @@
-import { jsStr, wrapSym, locExpr, wrapSymAny, indentLines, I } from "./helpers.js";
+import { jsStr, wrapSym, locExpr, wrapSymAny, indentLines, I, attrName } from "./helpers.js";
 import { DEFAULT_TIME_BUTTONS } from "../model/factories.js";
+
+// ── UC-Parameter-Bindung (nur UserControl-Modus): einzelne Einstellwerte des ──
+// Plots aus getX-Parametern des Hosts auflösen, statt sie statisch einzubacken.
+// Opt-in pro Feld über optionale *Param-Felder -> ohne Bindung leerer String
+// (byte-identisch). Läuft EINMAL beim Aufbau (synchron, vor initPlot): Symbolpfade
+// werden gewrappt und danach wie bisher abonniert; Anzeige-Werte (Label/Min/Max)
+// werden hier ebenfalls einmalig gesetzt (Live-Nachführung = späterer Schritt).
+// gv()/host sind im UC-Modus im Scope des Plot-IIFE verfügbar.
+function buildPlotParamBinds(b) {
+  const g = (name) => `gv(${jsStr(attrName(name))}`;
+  const set = (p) => (p || "").trim();
+  const lines = [];
+  (b.axes || []).forEach((a, i) => {
+    if (set(a.labelParam)) lines.push(`        axes[${i}].label = String(${g(a.labelParam)}, axes[${i}].label)); axes[${i}].loc = '';`);
+    if (set(a.minParam)) lines.push(`        axes[${i}].min = Number(${g(a.minParam)}, axes[${i}].min));`);
+    if (set(a.maxParam)) lines.push(`        axes[${i}].max = Number(${g(a.maxParam)}, axes[${i}].max));`);
+  });
+  (b.series || []).forEach((s, i) => {
+    if (set(s.symbolParam)) lines.push(`        var _ss${i} = acWrapP(${g(s.symbolParam)}, '')); if (_ss${i}) series[${i}].symbol = _ss${i};`);
+    if (set(s.labelParam)) lines.push(`        series[${i}].label = String(${g(s.labelParam)}, series[${i}].label)); series[${i}].loc = '';`);
+  });
+  (b.refLines || []).forEach((r, k) => {
+    if (set(r.valueParam)) lines.push(`        refLines[${k}].value = Number(${g(r.valueParam)}, refLines[${k}].value));`);
+    if (set(r.symbolParam)) lines.push(`        var _rs${k} = acWrapP(${g(r.symbolParam)}, '')); if (_rs${k}) refLines[${k}].symbol = _rs${k};`);
+    if (set(r.labelParam)) lines.push(`        refLines[${k}].label = String(${g(r.labelParam)}, refLines[${k}].label)); refLines[${k}].loc = '';`);
+  });
+  (b.eventMarkers || []).forEach((m, k) => {
+    if (set(m.symbolParam)) lines.push(`        var _ms${k} = acWrapP(${g(m.symbolParam)}, '')); if (_ms${k}) eventMarkers[${k}].symbol = _ms${k};`);
+    (m.mappings || []).forEach((mp, j) => {
+      if (set(mp.valueParam)) lines.push(`        eventMarkers[${k}].mappings[${j}].value = String(${g(mp.valueParam)}, eventMarkers[${k}].mappings[${j}].value));`);
+    });
+  });
+  if (!lines.length) return "";
+  return `\n    // ── UC-Parameter-Bindung: Einstellwerte einmal aus getX auflösen ──\n    (function () {\n        function acWrapP(v) { v = String(v == null ? '' : v).trim(); if (!v) return ''; return v.charAt(0) === '%' ? v : ('%s%' + v + '%/s%'); }\n${lines.join("\n")}\n    })();`;
+}
 
 // ── Plot-Baustein: eigenständiges Modul (modus-unabhängig, eigene subscribe/watchers) ──
 function plotBlockConfig(b) {
@@ -30,8 +65,10 @@ function plotBlockConfig(b) {
     resetExpr: locExpr(b.resetLoc, b.resetLabel || "Zurücksetzen"),
   };
 }
-function emitPlot(parent, b) {
+function emitPlot(parent, b, uc) {
   const c = plotBlockConfig(b);
+  // Nur im UC-Modus: Einstellwerte aus getX-Parametern auflösen (sonst "" -> byte-identisch).
+  const paramBinds = uc ? buildPlotParamBinds(b) : "";
   // ── Statistik-Tabelle (optional): Alle Einfügepunkte sind leere Strings, wenn
   //    showStats aus ist – der generierte Code bleibt dann byte-identisch. ──
   const S = !!b.showStats;
@@ -143,7 +180,7 @@ function emitPlot(parent, b) {
     var series = ${c.series};
     var refLines = ${c.refLines};
     var eventMarkers = ${c.markers};
-    var TIME_BUTTONS = ${c.timeButtons};
+    var TIME_BUTTONS = ${c.timeButtons};${paramBinds}
 
     var DATA_MODE        = ${jsStr(c.dataMode)}; // 'live' | 'history'
     var FOLLOW_WINDOW_MS = ${c.followMs};

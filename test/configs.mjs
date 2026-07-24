@@ -660,4 +660,22 @@ add("embed_uc", {
   ],
 });
 
+// ── UserControl-Plot mit Einstellwerten aus UC-Parametern (getX) ──
+add("plot_uc_params", {
+  mode: "usercontrol",
+  fnName: "AC_PlotUcParams",
+  hostSuffix: ".btn_Plot",
+  blocks: [
+    (function () {
+      const p = newBlock("plot");
+      p.caption = "Verlauf";
+      p.axes[0] = { ...p.axes[0], label: "Druck", labelParam: "AxTitle", min: 0, max: 100, autoscale: false, minParam: "AxMin", maxParam: "AxMax" };
+      p.series[0] = { ...p.series[0], symbol: "ADS.AF_PLC.MAIN::fWert", symbolParam: "SigPath", label: "Signal", labelParam: "SigName" };
+      p.refLines = [{ ...mkRef(p.axes[0].id), mode: "fixed", value: 90, valueParam: "RefVal", label: "Grenze", labelParam: "RefLabel" }];
+      p.eventMarkers = [{ ...mkMarker(), symbol: "ADS.AF_PLC.MAIN::eStep", symbolParam: "MkPath", mappings: [{ ...mkMapping("1", "Auto"), valueParam: "MapVal0" }] }];
+      return p;
+    })(),
+  ],
+});
+
 export { CONFIGS };
