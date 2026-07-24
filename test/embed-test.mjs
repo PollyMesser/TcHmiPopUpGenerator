@@ -112,34 +112,38 @@ assert(warned, "Ungültiges Ziel loggt eine Warnung (console.warn)");
 // ── 4) usercontrol + embed (mode:'embedUc'): Host aus Container-ID, getX/setX + Polling ──
 {
   const cfgU = {
-    mode: "embedUc", fnName: "AC_EmbUc", embedTarget: "UcBox",
+    mode: "embedUc", fnName: "AC_EmbUc", hostSuffix: ".ucEmbed",
     title: "", titleLoc: "", titleSource: "static", titleField: "", titleFallback: "", titleIcon: "", titleIconColor: "",
-    maxWidth: 400, columns: 1, hostSuffix: "",
+    maxWidth: 400, columns: 1,
     blocks: [{ ...newBlock("check"), label: "Frei", symbol: "Enable", writeSym: "CmdEnable" }],
   };
   const codeU = generate(cfgU);
-  assert(codeU.includes("TcHmi.Controls.get(target)"), "embedUc: Host wird per Controls.get(target) aufgelöst");
+  assert(codeU.includes(".closest('[id$=\".ucEmbed\"]')"), "embedUc: Host/Container über Suffix+closest (instanzsicher)");
+  assert(codeU.includes("TcHmi.Controls.get(hostId)"), "embedUc: Host aus der ID vor dem Suffix (Controls.get(hostId))");
   assert(codeU.includes("setInterval"), "embedUc: Polling-Intervall vorhanden");
-  assert(/\}\)\("UcBox"\);/.test(codeU), "embedUc: IIFE wird mit der Container-ID aufgerufen");
+  assert(codeU.includes("})(typeof event !== 'undefined'"), "embedUc: IIFE wird mit dem Event aufgerufen (nicht fester ID)");
   assertEqual((codeU.match(/registerFunctionEx/g) || []).length, 0, "embedUc: KEINE Registrierung (reine IIFE)");
   assert(!codeU.includes("makeDraggable"), "embedUc: kein Drag/Overlay");
   assertEqual((codeU.match(/\\/g) || []).length, 0, "embedUc: backslash-frei");
 
   const { sandbox: sbU, controlsRegistry: regU } = makeSandbox();
-  const ucEl = makeElement("div"); ucEl.nodeType = 1;
+  // Auslösendes Element: id endet auf .ucEmbed -> Host-ID = "Plot1"; Container = dieses Element.
+  const trigger = makeElement("div"); trigger.nodeType = 1; trigger.id = "Plot1.ucEmbed";
+  trigger.closest = (sel) => (sel === '[id$=".ucEmbed"]' ? trigger : null);
   let written = null; const enableVal = true;
-  regU.UcBox = { getElement: () => [ucEl], getEnable: () => enableVal, setCmdEnable: (v) => { written = v; } };
+  regU.Plot1 = { getElement: () => [trigger], getEnable: () => enableVal, setCmdEnable: (v) => { written = v; } };
+  sbU.event = { target: trigger }; // onAttached-Event simulieren
   let threwU = false;
   try { vm.runInContext(codeU, vm.createContext(sbU), { filename: "embedUc.js" }); } catch (e) { threwU = true; }
   assert(!threwU, "embedUc: läuft ohne Exception");
-  assertEqual(ucEl.children.length, 1, "embedUc: rendert body in das Host-Element (getElement)");
+  assertEqual(trigger.children.length, 1, "embedUc: rendert body in das auslösende Element");
 
   const findCb = (el) => {
     if (el.tagName === "input" && el.type === "checkbox") return el;
     for (const c of (el.children || [])) { const f = findCb(c); if (f) return f; }
     return null;
   };
-  const cb = findCb(ucEl);
+  const cb = findCb(trigger);
   assert(!!cb, "embedUc: Zell-/Checkbox gerendert");
   assertEqual(cb.checked, true, "embedUc: Checkbox zeigt Ist-Wert aus getEnable (initialer refresh/Polling)");
   cb.checked = false;

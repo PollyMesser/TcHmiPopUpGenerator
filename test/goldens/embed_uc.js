@@ -2,16 +2,20 @@
 /// <reference path="./../../Packages/Beckhoff.TwinCAT.HMI.Framework.14.3.500/runtimes/native1.12-tchmi/TcHmi.d.ts" />
 
 /*
- * Als JavaScript-Action im onAttached des UserControls einfügen.
- * Container-ID (= Name des UserControls): MyUserControl
- * Host wird per TcHmi.Controls.get(id) aufgelöst; gelesen/geschrieben über getX/setX.
+ * Als JavaScript-Action im onAttached des Ziel-Elements (id endet auf .ucEmbed) einfügen.
+ * Container = dieses Element; Host = Control mit der ID davor (TcHmi.Controls.get);
+ * gelesen/geschrieben über getX/setX. Mehrfachinstanzen-sicher.
  */
-(function (target) {
+(function (ev) {
+    // ── Host + Container über das auslösende Element ermitteln ──
     var host = null, container = null;
-    try { host = TcHmi.Controls.get(target); } catch (e) {}
-    if (host && typeof host.getElement === 'function') { try { var _hel = host.getElement(); if (_hel && _hel[0]) container = _hel[0]; } catch (e) {} }
-    if (!container && typeof target === 'string') container = document.getElementById(target);
-    if (!container) { if (window.console) console.warn('AC_PopUp Embed (UserControl): Host/Container nicht gefunden:', target); return; }
+    var trigger = (ev && ev.target && ev.target.closest) ? ev.target.closest('[id$=".ucEmbed"]') : null;
+    if (trigger) {
+        var hostId = trigger.id.split(".ucEmbed")[0];
+        host = TcHmi.Controls.get(hostId);
+        container = trigger;
+    }
+    if (!container) { if (window.console) console.warn('AC_PopUp Embed (UserControl): auslösendes Element/Host nicht gefunden.'); return; }
     if (container.__acEmbedDestroy) { try { container.__acEmbedDestroy(); } catch (e) {} }
 
     var updaters = [];   // Werte-Aktualisierer (Polling)
@@ -156,7 +160,7 @@
         body = null;
         try { delete container.__acEmbedDestroy; } catch (e) { container.__acEmbedDestroy = null; }
     };
-})("MyUserControl");
+})(typeof event !== 'undefined' ? event : (typeof window !== 'undefined' ? window.event : null));
 
 // ── AC_PopUp Generator: Konfiguration für Re-Import (diese Zeilen nicht entfernen) ──
-// AC_POPUP_CONFIG_V1: {"v":1,"mode":"embedUc","fnName":"AC_EmbedUc","title":"Titel","titleLoc":"","titleSource":"static","titleField":"TagName","titleFallback":"Titel","titleIcon":"","titleIconColor":"","maxWidth":400,"columns":1,"hostSuffix":".btn_PopUp","blocks":[{"id":"b101","type":"read","col":0,"label":"Ist-Modus","loc":"L_Mode","symbol":"Mode","unit":""},{"id":"b102","type":"enumset","col":0,"label":"Modus","loc":"L_ModeSet","symbol":"Mode","numeric":true,"map":[{"id":"e128","value":"0","loc":"","text":"Hand","color":"blue"},{"id":"e129","value":"1","loc":"","text":"Automatik","color":"blue"}],"sendButton":true,"sendLabel":"Übernehmen","sendLoc":"","sendColor":"blue","trigSym":"CmdSetMode","trigMode":"pulse","trigMs":300,"writeSym":"CmdMode"}],"embedTarget":"MyUserControl"}
+// AC_POPUP_CONFIG_V1: {"v":1,"mode":"embedUc","fnName":"AC_EmbedUc","title":"Titel","titleLoc":"","titleSource":"static","titleField":"TagName","titleFallback":"Titel","titleIcon":"","titleIconColor":"","maxWidth":400,"columns":1,"hostSuffix":".ucEmbed","blocks":[{"id":"b101","type":"read","col":0,"label":"Ist-Modus","loc":"L_Mode","symbol":"Mode","unit":""},{"id":"b102","type":"enumset","col":0,"label":"Modus","loc":"L_ModeSet","symbol":"Mode","numeric":true,"map":[{"id":"e128","value":"0","loc":"","text":"Hand","color":"blue"},{"id":"e129","value":"1","loc":"","text":"Automatik","color":"blue"}],"sendButton":true,"sendLabel":"Übernehmen","sendLoc":"","sendColor":"blue","trigSym":"CmdSetMode","trigMode":"pulse","trigMs":300,"writeSym":"CmdMode"}]}

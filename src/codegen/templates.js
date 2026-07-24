@@ -458,16 +458,12 @@ ${bodyContent}
 }
 
 // ── Innerer Rumpf (Embed-Modus, UserControl-Datenzugriff): rendert in den ──
-// Host-Container statt als Overlay. Host = TcHmi.Controls.get(target); Container
-// = dessen Element (Fallback: rohes div per id). Werte über gv()/sv() + 1s-Polling
-// (wie innerUC), aber kein Overlay/Drag/Header. Idempotenter Auf-/Abbau über
-// container.__acEmbedDestroy. Groesse orientiert sich am Elternelement (inset:0).
+// Host-Container statt als Overlay. host + container werden VOM WRAPPER gesetzt
+// (instanzsicher aus dem auslösenden Element via Suffix/closest). Werte über
+// gv()/sv() + 1s-Polling (wie innerUC), aber kein Overlay/Drag/Header. Idempotenter
+// Auf-/Abbau über container.__acEmbedDestroy. Groesse orientiert sich am Parent (inset:0).
 function innerEmbedUC(bodyContent) {
-  return `                var host = null, container = null;
-                try { host = TcHmi.Controls.get(target); } catch (e) {}
-                if (host && typeof host.getElement === 'function') { try { var _hel = host.getElement(); if (_hel && _hel[0]) container = _hel[0]; } catch (e) {} }
-                if (!container && typeof target === 'string') container = document.getElementById(target);
-                if (!container) { if (window.console) console.warn('AC_PopUp Embed (UserControl): Host/Container nicht gefunden:', target); return; }
+  return `                if (!container) { if (window.console) console.warn('AC_PopUp Embed (UserControl): auslösendes Element/Host nicht gefunden.'); return; }
                 if (container.__acEmbedDestroy) { try { container.__acEmbedDestroy(); } catch (e) {} }
 
                 var updaters = [];   // Werte-Aktualisierer (Polling)

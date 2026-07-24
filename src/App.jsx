@@ -320,13 +320,15 @@ export default function App() {
             <Field label={functionType === "registered" ? "FUNKTIONSNAME (registerFunctionEx)" : "NAME / UID"}>
               <TextInput value={fnName} onChange={(e) => setFnName(e.target.value)} placeholder="AC_PopUp" />
             </Field>
-            {mode === "usercontrol" && (
+            {(mode === "usercontrol" || mode === "embedUc") && (
               <>
-                <Field label="AUSLÖSER-SUFFIX (id-Endung der Trigger-Fläche)">
+                <Field label={mode === "embedUc" ? "CONTAINER-SUFFIX (id-Endung des Ziel-Elements)" : "AUSLÖSER-SUFFIX (id-Endung der Trigger-Fläche)"}>
                   <TextInput value={hostSuffix} onChange={(e) => setHostSuffix(e.target.value)} placeholder=".btn_PopUp" />
                 </Field>
                 <div style={{ fontSize: 11, color: T.muted, marginTop: -4, marginBottom: 12, lineHeight: 1.5 }}>
-                  Host über <code style={{ color: T.text }}>event.target.closest('[id$="{hostSuffix || ".btn_PopUp"}"]')</code>. Bausteine lesen/schreiben per <code style={{ color: T.text }}>get…/set…</code>-Attribut.
+                  {mode === "embedUc"
+                    ? <>Das Element mit dieser id-Endung (per <code style={{ color: T.text }}>onAttached</code>) ist der Ziel-Container; der Teil davor ist die Host-ID (<code style={{ color: T.text }}>TcHmi.Controls.get</code>). Mehrfachinstanzen-sicher; gelesen/geschrieben per <code style={{ color: T.text }}>get…/set…</code>.</>
+                    : <>Host über <code style={{ color: T.text }}>event.target.closest('[id$="{hostSuffix || ".btn_PopUp"}"]')</code>. Bausteine lesen/schreiben per <code style={{ color: T.text }}>get…/set…</code>-Attribut.</>}
                 </div>
               </>
             )}
@@ -335,15 +337,13 @@ export default function App() {
                 Aufruf an <code style={{ color: T.text }}>onAttached</code>: <code style={{ color: T.text }}>TcHmi.Functions.AC_HMI.{fnName || "AC_PopUp"}('MeinContainer')</code>, Abbau an <code style={{ color: T.text }}>onDetached</code>: <code style={{ color: T.text }}>…{fnName || "AC_PopUp"}Destroy('MeinContainer')</code>.
               </div>
             )}
-            {(mode === "embedEvent" || mode === "embedUc") && (
+            {mode === "embedEvent" && (
               <>
-                <Field label={mode === "embedUc" ? "CONTAINER-ID (Name des UserControls)" : "CONTAINER-ID (Container-Control oder div-id)"}>
+                <Field label="CONTAINER-ID (Container-Control oder div-id)">
                   <TextInput value={embedTarget} onChange={(e) => setEmbedTarget(e.target.value)} placeholder="MeinContainer" />
                 </Field>
                 <div style={{ fontSize: 11, color: T.muted, marginTop: -4, marginBottom: 12, lineHeight: 1.5 }}>
-                  {mode === "embedUc"
-                    ? <>Als JavaScript-Action im <code style={{ color: T.text }}>onAttached</code> des UserControls. Host wird über <code style={{ color: T.text }}>TcHmi.Controls.get(ID)</code> ermittelt; gelesen/geschrieben per <code style={{ color: T.text }}>get…/set…</code>.</>
-                    : <>Als JavaScript-Action ins Event. Die Funktion wird direkt mit dieser Container-ID aufgerufen; gerendert wird per Symbol (ADS) in den Container.</>}
+                  Als JavaScript-Action ins Event. Die Funktion wird direkt mit dieser Container-ID aufgerufen; gerendert wird per Symbol (ADS) in den Container.
                 </div>
               </>
             )}

@@ -652,7 +652,7 @@ add("embed_event", {
 add("embed_uc", {
   mode: "embedUc",
   fnName: "AC_EmbedUc",
-  embedTarget: "MyUserControl",
+  hostSuffix: ".ucEmbed",
   blocks: [
     { ...newBlock("read"), label: "Ist-Modus", loc: "L_Mode", symbol: "Mode" },
     { ...newBlock("enumset"), label: "Modus", loc: "L_ModeSet", symbol: "Mode", numeric: true, writeSym: "CmdMode",

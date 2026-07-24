@@ -136,25 +136,34 @@ ${inner}
 `;
   }
 
-  // ── usercontrol + embed: UC-Datenzugriff (gv/sv + Polling), rendert in den ──
-  // Host-Container. Host + Container aus der übergebenen Container-ID (UC-Name):
-  // TcHmi.Controls.get(id) -> Host, dessen Element -> Container. Als JS-Action
-  // im onAttached des UserControls einfügen; die ID unten auf das UC setzen.
+  // ── usercontrol + embed: UC-Datenzugriff (gv/sv + Polling), rendert in das ──
+  // auslösende Element (onAttached). Host + Container instanzsicher aus dem Event
+  // (wie Popup-UC): das Element mit id-Endung = Auslöser-Suffix ist der Container;
+  // der Teil davor ist die Host-ID -> TcHmi.Controls.get(). So funktioniert es auch
+  // bei mehreren UC-Instanzen (jede hat ihre eigene, dynamische ID).
   if (cfg.mode === "embedUc") {
+    const suffix = (cfg.hostSuffix || ".btn_PopUp").trim() || ".btn_PopUp";
     const bodyContentUC = buildBody(cfg, cols, blockCodeUC);
     const inner = dedent(innerEmbedUC(bodyContentUC), 12);
-    const tgt = jsStr((cfg.embedTarget || "").trim());
     return `// Auto-generiert vom AC_PopUp Generator – eingebettet, UserControl-gebunden
 ${REF}
 
 /*
- * Als JavaScript-Action im onAttached des UserControls einfügen.
- * Container-ID (= Name des UserControls): ${(cfg.embedTarget || "").trim() || "(Container-ID im Generator setzen)"}
- * Host wird per TcHmi.Controls.get(id) aufgelöst; gelesen/geschrieben über getX/setX.
+ * Als JavaScript-Action im onAttached des Ziel-Elements (id endet auf ${suffix}) einfügen.
+ * Container = dieses Element; Host = Control mit der ID davor (TcHmi.Controls.get);
+ * gelesen/geschrieben über getX/setX. Mehrfachinstanzen-sicher.
  */
-(function (target) {
+(function (ev) {
+    // ── Host + Container über das auslösende Element ermitteln ──
+    var host = null, container = null;
+    var trigger = (ev && ev.target && ev.target.closest) ? ev.target.closest('[id$=${jsStr(suffix)}]') : null;
+    if (trigger) {
+        var hostId = trigger.id.split(${jsStr(suffix)})[0];
+        host = TcHmi.Controls.get(hostId);
+        container = trigger;
+    }
 ${inner}
-})(${tgt});
+})(typeof event !== 'undefined' ? event : (typeof window !== 'undefined' ? window.event : null));
 `;
   }
 
