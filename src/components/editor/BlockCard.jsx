@@ -8,6 +8,7 @@ import { condOp, condVal } from "../../codegen/helpers.js";
 import { ColorSwatches, Field, HexSwatches, IconBtn, IconPicker, IconColorPicker, Select, TextArea, TextInput } from "../primitives.jsx";
 import { ButtonItemFields, InputFields, ReadBoolFields, TriggerFields, WriteSymField } from "../fields.jsx";
 import { AccessFields } from "../access.jsx";
+import { parseTpl, checkTplRefs, tplPreview } from "../../model/locTemplate.js";
 
 // ── Baustein-Karte des Editors (Accordion + Griff-Drag), auch für volle-Breite-Zeilen ──
 // ui: Ansichts-Zustand aus App(); actions: alle Block-Handler aus App().
@@ -501,7 +502,7 @@ function BlockCard({ b, opts, ui, actions }) {
             )}
 
             {b.type === "table" && (() => {
-              const KIND_OPTS = [["read", "Wert (lesen)"], ["text", "Text (statisch)"], ["bool", "LED (Bool)"], ["check", "Checkbox (schreiben)"], ["input", "Eingabe (schreiben)"], ["button", "Button"], ["enum", "Badge (Enum)"], ["icon", "Symbol (SVG)"]];
+              const KIND_OPTS = [["read", "Wert (lesen)"], ["text", "Text (statisch / Vorlage)"], ["bool", "LED (Bool)"], ["check", "Checkbox (schreiben)"], ["input", "Eingabe (schreiben)"], ["button", "Button"], ["enum", "Enum (Badge / Text)"], ["icon", "Symbol (SVG)"]];
               const OPS = ["==", "!=", ">", ">=", "<", "<="];
               const isArr = b.dataSource === "array";
               const boundKinds = ["read", "bool", "check", "input", "enum", "icon", "button"];
@@ -568,6 +569,46 @@ function BlockCard({ b, opts, ui, actions }) {
                         <div style={{ flex: 3 }}><Field label="KOPF-SYMBOL (optional)"><IconPicker value={cl.headerIcon || ""} onChange={(k) => patchTblCol(b.id, cl.id, { headerIcon: k })} /></Field></div>
                         {cl.headerIcon ? <div style={{ flex: 2 }}><Field label="SYMBOLFARBE"><IconColorPicker value={cl.headerIconColor || ""} onChange={(hex) => patchTblCol(b.id, cl.id, { headerIconColor: hex })} noneTitle="Wie Kopftext" /></Field></div> : null}
                       </div>
+                      {cl.kind === "text" && (() => {
+                        const lt = parseTpl(cl.locTpl);
+                        const ft = parseTpl(cl.textTpl);
+                        const errs = lt.errors.concat(ft.errors);
+                        const warns = checkTplRefs(lt.parts.concat(ft.parts), b.columns, isArr);
+                        const keyCol = (b.columns || []).findIndex((c2) => c2.kind === "read");
+                        const ex = isArr ? "L_alarm + {nId}" : `L_alarm + {${keyCol >= 0 ? keyCol + 1 : 1}}`;
+                        return (
+                          <div style={{ marginTop: 6 }}>
+                            <div style={{ display: "flex", gap: 8 }}>
+                              <div style={{ flex: 3 }}><Field label="LOC-KEY-VORLAGE (je Zeile, optional)"><TextInput value={cl.locTpl || ""} onChange={(e) => patchTblCol(b.id, cl.id, { locTpl: e.target.value })} placeholder={ex} /></Field></div>
+                              <div style={{ flex: 2 }}><Field label="FALLBACK (optional)"><TextInput value={cl.textTpl || ""} onChange={(e) => patchTblCol(b.id, cl.id, { textTpl: e.target.value })} placeholder={isArr ? "Alarm {nId}" : "Alarm {1}"} /></Field></div>
+                            </div>
+                            {lt.parts.length > 0 && (
+                              <div style={{ fontSize: 11, color: T.muted, marginTop: 4 }}>
+                                Pro Zeile: <code style={{ color: T.text }}>GetLocalizedText("{tplPreview(lt.parts, b.columns)}")</code>
+                                {ft.parts.length > 0 ? <> · sonst <code style={{ color: T.text }}>{tplPreview(ft.parts, b.columns)}</code></> : <> · sonst der Key selbst</>}
+                              </div>
+                            )}
+                            {errs.concat(warns).map((m, i) => <div key={i} style={{ fontSize: 11, color: errs.includes(m) ? T.danger : "#f59e0b", marginTop: 3 }}>⚠ {m}</div>)}
+                            <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5, margin: "6px 0 0" }}>
+                              Setzt den Loc-Key je Zeile aus Text und Zellwerten zusammen, z. B. <code style={{ color: T.text }}>L_alarm + {"{1}"}</code> → <code style={{ color: T.text }}>L_alarm101</code>.
+                              {" "}<code style={{ color: T.text }}>{"{1}"}</code> = Wert aus Spalte 1{isArr ? <>, <code style={{ color: T.text }}>{"{nId}"}</code> = Struct-Member (muss keine Spalte sein)</> : null}, <code style={{ color: T.text }}>{"{#}"}</code> = Zeilenindex.
+                              {" "}Mit Stellenzahl <code style={{ color: T.text }}>{"{1:3}"}</code> werden Zahlen mit Nullen aufgefüllt (2 → 002). Das „+" ist optional, <code style={{ color: T.text }}>L_alarm{"{1}"}</code> ist gleichwertig.
+                              {!isArr ? " Hat Vorrang vor den Zeilen-Texten unten." : null}
+                            </div>
+                          </div>
+                        );
+                      })()}
+                      {cl.kind === "enum" && (
+                        <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+                          <div style={{ flex: 2 }}>
+                            <Field label="DARSTELLUNG">
+                              <Select value={cl.enumDisplay || "badge"} onChange={(e) => patchTblCol(b.id, cl.id, { enumDisplay: e.target.value })}
+                                options={[{ value: "badge", label: "Badge (farbig)" }, { value: "text", label: "Text" }, { value: "ctext", label: "Text (farbig)" }, { value: "dot", label: "Farbpunkt + Text" }]} />
+                            </Field>
+                          </div>
+                          <div style={{ flex: 3 }} />
+                        </div>
+                      )}
                       {cl.kind === "button" && (
                         <div style={{ marginTop: 6 }}>
                           <div style={{ display: "flex", gap: 8 }}>

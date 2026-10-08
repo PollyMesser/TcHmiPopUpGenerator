@@ -8,7 +8,7 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "node test/run.mjs && node test/smoke-render.mjs && node test/smoke-blockcard.mjs && node test/sort-logic.mjs && node test/fn-logic.mjs && node test/bool-filter-logic.mjs && node test/embed-test.mjs && node test/access-logic.mjs && node test/plot-uc-logic.mjs",
+    "test": "node test/run.mjs && node test/smoke-render.mjs && node test/smoke-blockcard.mjs && node test/sort-logic.mjs && node test/fn-logic.mjs && node test/bool-filter-logic.mjs && node test/embed-test.mjs && node test/access-logic.mjs && node test/plot-uc-logic.mjs && node test/tpl-logic.mjs",
     "test:record": "node test/run.mjs --record"
   },
   "dependencies": {
@@ -19,6 +19,7 @@
   "devDependencies": {
     "@babel/parser": "^8.0.4",
     "@eslint/js": "^10.0.1",
+    "@tauri-apps/cli": "^2.11.4",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.3",

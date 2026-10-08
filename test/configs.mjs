@@ -678,4 +678,28 @@ add("plot_uc_params", {
   ],
 });
 
+// ── Fehlertabelle (embed): Loc-Key-Vorlage je Zeile + Enum als Text/Farbpunkt ──
+add("table_loc_template", {
+  mode: "embed",
+  fnName: "AC_FehlerTabelleTpl",
+  embedTarget: "MeinContainer",
+  blocks: (() => {
+    const cId = { ...mkTableCol("read"), header: "Fehlernummer", member: "nId", sortable: true };
+    const cTxt = { ...mkTableCol("text"), header: "Alarmtext", locTpl: "L_alarm + {1:3}", textTpl: "Alarm {1}", sortable: true };
+    const cCode = { ...mkTableCol("text"), header: "Code", locTpl: "L_code{nCode}" };
+    const cEnum = { ...mkTableCol("enum"), header: "Fehlertyp", member: "eType", enumDisplay: "text",
+      map: [mkTableMapEntry("1", "Information", "blue"), mkTableMapEntry("2", "Warnung", "yellow")] };
+    const cDot = { ...mkTableCol("enum"), header: "Typ (Punkt)", member: "eType", enumDisplay: "dot",
+      map: [mkTableMapEntry("1", "Information", "blue"), mkTableMapEntry("4", "Kritisch", "red")] };
+    const cColor = { ...mkTableCol("enum"), header: "Typ (farbig)", member: "eType", enumDisplay: "ctext",
+      map: [mkTableMapEntry("4", "Kritisch", "red")] };
+    const columns = [cId, cTxt, cCode, cEnum, cDot, cColor];
+    return [{
+      ...newBlock("table"), dataSource: "array", arraySymbol: "ADS.AF_PLC.MAIN.aAlarmHmi", arrayCount: 12,
+      columns, rows: [], search: true, pageSize: 10, defaultSortCol: 0,
+      rowFilters: [{ ...mkRowFilter(), colIndex: 0, op: "notZero", value: "" }],
+    }];
+  })(),
+});
+
 export { CONFIGS };

@@ -19,6 +19,10 @@ const REF_NAMES = [
   "symFor", "updateSortIndicators",
 ];
 
+// Optionale Namen: existieren nur, wenn das Feature im Block genutzt wird
+// (byte-neutrale Codegen-Varianten), daher per typeof abgesichert.
+const OPT_NAMES = ["tplVal", "tplStr", "tplText", "tplVals", "buildCellEl", "palT"];
+
 function buildTableHooks(block, parentVarName = "parent") {
   const raw = emitTable(parentVarName, block);
   const marker = raw.lastIndexOf("})();");
@@ -26,6 +30,7 @@ function buildTableHooks(block, parentVarName = "parent") {
   const hookAssign = `
     __hooks__.value = {
       ${REF_NAMES.map((n) => `${n}: ${n}`).join(",\n      ")},
+      ${OPT_NAMES.map((n) => `${n}: (typeof ${n} !== 'undefined' ? ${n} : undefined)`).join(",\n      ")},
       getSortCol: function () { return sortCol; }, setSortCol: function (v) { sortCol = v; },
       getSortDir: function () { return sortDir; }, setSortDir: function (v) { sortDir = v; },
       getPage: function () { return page; }, setPage: function (v) { page = v; },

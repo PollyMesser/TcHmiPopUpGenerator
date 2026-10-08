@@ -9,7 +9,7 @@ import React from "react";
 import { renderToString } from "react-dom/server";
 import { bundleJsx } from "./_bundle.mjs";
 import { BLOCK_META } from "../src/constants/options.js";
-import { newBlock } from "../src/model/factories.js";
+import { newBlock, mkTableCol, mkTableMapEntry } from "../src/model/factories.js";
 
 const MODES = ["registered", "event", "usercontrol"];
 const symMeta = (mode) => (mode === "usercontrol"
@@ -48,6 +48,33 @@ async function main() {
         renderToString(React.createElement(BlockCard, { b, opts: optsFor(b), ui, actions: noopActions }));
       } catch (e) {
         failures.push(`${type} × ${mode}: ${e.message}`);
+      }
+    }
+  }
+
+  // Tabellen-Sonderfälle: Text-Vorlage (gültig/fehlerhaft) + Enum-Darstellungen, statisch & Array
+  const prevMod = await bundleJsx("src/components/preview.jsx", "preview.smoke.mjs");
+  const tplCols = [
+    { ...mkTableCol("read"), header: "Nr", member: "nId" },
+    { ...mkTableCol("text"), header: "Text", locTpl: "L_alarm + {1:3}", textTpl: "Alarm {1}" },
+    { ...mkTableCol("text"), header: "Kaputt", locTpl: "L_{9} + {x:0} + {" },
+    { ...mkTableCol("enum"), header: "E1", member: "eType", enumDisplay: "text", map: [mkTableMapEntry("1", "Info", "blue")] },
+    { ...mkTableCol("enum"), header: "E2", member: "eType", enumDisplay: "dot", map: [mkTableMapEntry("1", "Info", "blue")] },
+    { ...mkTableCol("enum"), header: "E3", member: "eType", enumDisplay: "ctext", map: [] },
+  ];
+  for (const ds of ["static", "array"]) {
+    for (const mode of MODES) {
+      count++;
+      const b = { ...newBlock("table"), dataSource: ds, columns: tplCols, rows: [] };
+      const ui = { openId: b.id, setOpenId: () => {}, dragId: null, setDragId: () => {}, grabbedId: null, setGrabbedId: () => {}, dropTarget: null, setDropTarget: () => {}, columns: 1, mode, sm: symMeta(mode) };
+      try {
+        const html = renderToString(React.createElement(BlockCard, { b, opts: optsFor(b), ui, actions: noopActions }));
+        if (html.indexOf("LOC-KEY-VORLAGE") < 0) failures.push(`table-tpl ${ds} × ${mode}: Vorlagen-Feld fehlt`);
+        if (html.indexOf("DARSTELLUNG") < 0) failures.push(`table-tpl ${ds} × ${mode}: Enum-Darstellung fehlt`);
+        const ph = renderToString(React.createElement(prevMod.BlockPreview, { b, pal: { border: "#ccc", headerBg: "#eee", titleColor: "#000", bodyText: "#333", inactive: "#999" }, on: {}, onToggle: () => {} }));
+        if (ph.indexOf("Alarm") < 0) failures.push(`table-tpl ${ds} × ${mode}: Vorschau zeigt Fallback-Vorlage nicht`);
+      } catch (e) {
+        failures.push(`table-tpl ${ds} × ${mode}: ${e.message}`);
       }
     }
   }

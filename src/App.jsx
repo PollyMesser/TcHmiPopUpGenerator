@@ -10,6 +10,7 @@ import { clampCol, groupByCol } from "./model/layout.js";
 
 import { generate } from "./codegen/index.js";
 import { parseConfigComment, reidBlocks } from "./model/config.js";
+import { remapTplCols } from "./model/locTemplate.js";
 import { Field, TextInput, Tab, IconPicker, IconColorPicker } from "./components/primitives.jsx";
 import { AccessFields } from "./components/access.jsx";
 import { symMeta } from "./components/fields.jsx";
@@ -132,6 +133,8 @@ export default function App() {
     const shiftIdx = (n) => (n === colIdx ? null : (n > colIdx ? n - 1 : n));
     return { ...b,
       columns: b.columns.filter((_, i) => i !== colIdx).map((c) => {
+        // Text-Vorlagen: {N}-Spaltenreferenzen mitziehen (geloeschte Spalte -> {0}, Editor warnt)
+        if (c.kind === "text" && (c.locTpl || c.textTpl)) c = { ...c, locTpl: remapTplCols(c.locTpl, shiftIdx), textTpl: remapTplCols(c.textTpl, shiftIdx) };
         if (c.action === "fn" && c.paramSource === "col" && typeof c.paramCol === "number" && c.paramCol >= 0) {
           const np = shiftIdx(c.paramCol);
           return { ...c, paramCol: np == null ? -1 : np }; // geloeschte Parameter-Spalte -> -1 (neu waehlen)
@@ -163,6 +166,10 @@ export default function App() {
     const cols = swap(b.columns).map((c) => (
       (c.action === "fn" && c.paramSource === "col" && typeof c.paramCol === "number" && c.paramCol >= 0)
         ? { ...c, paramCol: remap(c.paramCol) } : c
+    )).map((c) => (
+      // Text-Vorlagen: {N}-Spaltenreferenzen mitziehen
+      (c.kind === "text" && (c.locTpl || c.textTpl))
+        ? { ...c, locTpl: remapTplCols(c.locTpl, remap), textTpl: remapTplCols(c.textTpl, remap) } : c
     ));
     return { ...b,
       columns: cols,

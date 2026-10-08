@@ -1,5 +1,6 @@
 import React from "react";
 import { COLORS, ICONS, TEXT_BG } from "../constants/palette.js";
+import { parseTpl, tplPreview } from "../model/locTemplate.js";
 
 // ── Vorschau-Renderer (Editor-Vorschau, nicht der generierte Code) ──
 function ItemPreview({ cfg, pal, on, onToggle }) {
@@ -170,12 +171,17 @@ function BlockPreview({ b, pal, on, onToggle }) {
   if (b.type === "table") {
     const nRows = b.dataSource === "array" ? Math.min(4, Math.max(1, parseInt(b.arrayCount) || 3)) : Math.min(4, (b.rows || []).length || 1);
     const cellPrev = (cl, ri) => {
+      if (cl.kind === "text" && (cl.locTpl || "").trim()) { const ft = parseTpl(cl.textTpl).parts; return <span style={{ opacity: 0.8 }}>{tplPreview(ft.length ? ft : parseTpl(cl.locTpl).parts, b.columns)}</span>; }
       if (cl.kind === "text") { const cell = b.dataSource === "array" ? {} : (((b.rows || [])[ri] || {}).cells || [])[b.columns.indexOf(cl)] || {}; return <span>{cell.text || "Text"}</span>; }
       if (cl.kind === "bool") return <span style={{ display: "inline-block", width: 14, height: 14, borderRadius: "50%", background: pal.inactive || "#9ca3af" }} />;
       if (cl.kind === "check") return <input type="checkbox" readOnly checked={false} style={{ pointerEvents: "none" }} />;
       if (cl.kind === "input") return <span style={{ display: "inline-block", width: 56, padding: "1px 5px", border: `1px solid ${pal.border}`, borderRadius: 4, textAlign: "right", opacity: 0.7 }}>–</span>;
       if (cl.kind === "button") return <span style={{ display: "inline-block", padding: "2px 10px", border: `1px solid ${pal.border}`, borderRadius: 6, fontSize: 11, fontWeight: 600 }}>{cl.label || "OK"}</span>;
-      if (cl.kind === "enum") { const e = (cl.map || [])[ri % Math.max(1, (cl.map || []).length)] ; const col = COLORS[e?.color] || COLORS.grey; return <span style={{ display: "inline-block", padding: "1px 8px", borderRadius: 9, fontSize: 11, fontWeight: 600, background: col.bg, color: col.text }}>{e?.label || "?"}</span>; }
+      if (cl.kind === "enum") { const e = (cl.map || [])[ri % Math.max(1, (cl.map || []).length)] ; const col = COLORS[e?.color] || COLORS.grey;
+        if (cl.enumDisplay === "text") return <span>{e?.label || "?"}</span>;
+        if (cl.enumDisplay === "ctext") return <span style={{ color: col.bg, fontWeight: 600 }}>{e?.label || "?"}</span>;
+        if (cl.enumDisplay === "dot") return <span><span style={{ display: "inline-block", width: 9, height: 9, borderRadius: "50%", marginRight: 6, background: col.bg }} />{e?.label || "?"}</span>;
+        return <span style={{ display: "inline-block", padding: "1px 8px", borderRadius: 9, fontSize: 11, fontWeight: 600, background: col.bg, color: col.text }}>{e?.label || "?"}</span>; }
       if (cl.kind === "icon") { const e = (cl.map || [])[ri % Math.max(1, (cl.map || []).length)]; const col = COLORS[e?.color] || COLORS.grey; const ic = ICONS[e?.icon] || ICONS.info; return <span style={{ display: "inline-flex", color: col.bg, verticalAlign: "middle" }} dangerouslySetInnerHTML={{ __html: ic.svg }} />; }
       return <span style={{ opacity: 0.6, fontVariantNumeric: "tabular-nums" }}>–</span>;
     };
@@ -202,7 +208,7 @@ function BlockPreview({ b, pal, on, onToggle }) {
                 <tr key={ri} style={{ background: b.striped !== false && ri % 2 === 1 ? "rgba(127,127,127,0.06)" : "transparent" }}>
                   {!!b.showIndex && <td style={{ padding: "5px 10px", borderTop: `1px solid ${pal.border}`, fontSize: 11, opacity: 0.6, textAlign: "right" }}>{(parseInt(b.startIndex) || 0) + ri}</td>}
                   {(b.columns || []).map((cl) => (
-                    <td key={cl.id} style={{ padding: "5px 10px", borderTop: `1px solid ${pal.border}`, textAlign: cl.kind === "read" || cl.kind === "input" ? "right" : cl.kind === "text" ? "left" : "center", whiteSpace: "nowrap" }}>{cellPrev(cl, ri)}</td>
+                    <td key={cl.id} style={{ padding: "5px 10px", borderTop: `1px solid ${pal.border}`, textAlign: cl.kind === "read" || cl.kind === "input" ? "right" : (cl.kind === "text" || (cl.kind === "enum" && cl.enumDisplay && cl.enumDisplay !== "badge")) ? "left" : "center", whiteSpace: "nowrap" }}>{cellPrev(cl, ri)}</td>
                   ))}
                 </tr>
               ))}
