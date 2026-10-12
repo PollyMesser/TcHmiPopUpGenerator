@@ -1,10 +1,6 @@
 import { jsStr, wrapSym, locExpr, indentLines, I, durHelpers } from "./helpers.js";
 import { COLORS, ICONS } from "../constants/palette.js";
 import { compileAccess, accessActive } from "../model/access.js";
-import { parseTpl } from "../model/locTemplate.js";
-
-const TPL_BOUND_KINDS = ["read", "bool", "check", "input", "enum", "icon"];
-const ENUM_DISPLAYS = ["text", "ctext", "dot"];
 
 // ── Tabellen-Baustein: eigenständiges Modul (modus-unabhängig, eigene Watches/Subscription) ──
 // Datenquellen:
@@ -14,16 +10,6 @@ const ENUM_DISPLAYS = ["text", "ctext", "dot"];
 //   'array'  – EIN TcHmi.Symbol.watch auf das ganze PLC-Array (BESTÄTIGTE API); Spalten
 //              greifen per Member-Name (JSON-Feldname der Struktur) auf die Zeilenobjekte zu.
 function tableBlockConfig(b) {
-  const isArr = b.dataSource === "array";
-  // Text-Vorlage -> Teile-Array. {member} wird auf eine sichtbare, ungesperrte Spalte
-  // mit demselben Member umgebogen (Wert ist dort ohnehin abonniert); sonst bleibt es
-  // eine Member-Referenz und wird separat gelesen (TPL_MEMBERS, nur Array-Modus).
-  const tplParts = (src) => parseTpl(src).parts.map((pt) => {
-    if (typeof pt === "string" || !pt.m) return pt;
-    if (!isArr) return pt;
-    const ci = (b.columns || []).findIndex((cc) => TPL_BOUND_KINDS.includes(cc.kind) && !accessActive(cc.access) && (cc.member || "").trim() === pt.m);
-    return ci >= 0 ? (pt.p ? { c: ci, p: pt.p } : { c: ci }) : pt;
-  });
   const colsOut = (b.columns || []).map((c) => ({
     kind: c.kind || "read",
     header: c.header || "", loc: (c.headerLoc || "").trim(),
@@ -55,19 +41,6 @@ function tableBlockConfig(b) {
       pmember: (c.paramMember || "").trim(),
       pcol: (function () { var n = parseInt(c.paramCol); return (isNaN(n) || n < 0) ? -1 : n; })(),
     } : {}),
-    // Text-Vorlage (dynamischer Loc-Key je Zeile) nur setzen, wenn gefuellt -> Bestands-JSON byte-identisch.
-    //   ltpl = Loc-Key-Teile, ftpl = Fallback-Teile (optional; ohne Fallback wird der Key angezeigt).
-    ...((c.kind === "text" && (c.locTpl || "").trim()) ? {
-      ltpl: tplParts(c.locTpl),
-      ...((c.textTpl || "").trim() ? { ftpl: tplParts(c.textTpl) } : {}),
-    } : {}),
-    // Enum-Darstellung nur setzen, wenn nicht Badge (Default) -> Bestands-JSON byte-identisch.
-    ...((c.kind === "enum" && ENUM_DISPLAYS.includes(c.enumDisplay)) ? { edisp: c.enumDisplay } : {}),
-  }));
-  // Member, die nur fuer Text-Vorlagen zusaetzlich gelesen werden muessen
-  const tplMembers = [];
-  if (isArr) colsOut.forEach((c) => [].concat(c.ltpl || [], c.ftpl || []).forEach((pt) => {
-    if (pt && typeof pt === "object" && pt.m && tplMembers.indexOf(pt.m) < 0) tplMembers.push(pt.m);
   }));
   const rowsOut = (b.dataSource === "array") ? [] : (b.rows || []).map((r) =>
     (b.columns || []).map((c, ci) => {
@@ -99,7 +72,6 @@ function tableBlockConfig(b) {
   }));
   const J = (o) => JSON.stringify(o, null, 4);
   return {
-    colsArr: colsOut, tplMembers,
     cols: J(colsOut), rows: J(rowsOut), rules: J(rulesOut), icons: J(usedIcons),
     filters: J(filtersOut),
     dataSource: b.dataSource === "array" ? "array" : "static",
@@ -133,95 +105,6 @@ function emitTable(parent, b) {
   const hasTime = cols0.some((cc) => cc.kind === "input" && cc.inputType === "time");
   const hasTypedInput = cols0.some((cc) => cc.kind === "input" && (cc.inputType === "time" || cc.inputType === "text" || cc.inputType === "number"));
   const timeHelpers = hasTime ? durHelpers("") + "\n" : "";
-  // Text-Vorlagen / Enum-Darstellung: Zusatzlogik nur erzeugen, wenn genutzt
-  // (sonst bleibt der Modul-Text byte-identisch -> Golden Master unveraendert).
-  const hasTpl = c.colsArr.some((cc) => cc.ltpl);
-  const hasTplMembers = c.tplMembers.length > 0;
-  const hasEnumDisp = c.colsArr.some((cc) => cc.edisp);
-  const tplHelpers = hasTpl ? `    // ── Text-Vorlagen: Loc-Key je Zeile aus Literalen + Zellwerten zusammensetzen ──
-    // Teil: 'Text' | { c: Spalte } | { m: Member } | { x: 1 } (Zeilenindex), optional p = Stellen (fuehrende Nullen).
-    // Fehlt ein referenzierter Wert noch (PLC liefert nach), wird '–' angezeigt.
-    function tplVal(r, pt) {
-        if (typeof pt === 'string') return pt;
-        var v;
-        if (pt.x) v = START_INDEX + r;
-        else if (pt.m) v = tplVals[pt.m] ? tplVals[pt.m][r] : undefined;
-        else v = vals[r] ? vals[r][pt.c] : undefined;
-        if (v === undefined || v === null) return null;
-        var s = String(v).trim();
-        if (pt.p) {
-            var n = Number(s);
-            if (s !== '' && !isNaN(n) && isFinite(n) && n >= 0 && Math.floor(n) === n) { s = String(n); while (s.length < pt.p) s = '0' + s; }
-        }
-        return s;
-    }
-    function tplStr(r, parts) {
-        var out = '';
-        for (var i = 0; i < parts.length; i++) { var s = tplVal(r, parts[i]); if (s === null) return null; out += s; }
-        return out;
-    }
-    function tplText(r, col) {
-        var key = tplStr(r, col.ltpl);
-        if (key === null) return '–';
-        var fb = col.ftpl ? tplStr(r, col.ftpl) : null;
-        return locT(key, fb !== null && fb !== '' ? fb : key);
-    }
-` : "";
-  const tplValsDecl = hasTpl ? `\n    var tplVals = {};     // tplVals[member][zeile] – nur fuer Text-Vorlagen gelesene Member (Array-Modus)` : "";
-  const searchTextSrc = hasTpl
-    ? `if (col.kind === 'text') { if (col.ltpl) return tplText(r, col); var cell = (TROWS[r] || [])[ci] || {}; return locT(cell.loc, cell.t); }`
-    : `if (col.kind === 'text') { var cell = (TROWS[r] || [])[ci] || {}; return locT(cell.loc, cell.t); }`;
-  const textCellSrc = hasTpl
-    ? `            if (col.ltpl) { td.textContent = tplText(r, col); } else {
-                var cell = (TROWS[r] || [])[ci] || {};
-                td.textContent = locT(cell.loc, cell.t);
-            }`
-    : `            var cell = (TROWS[r] || [])[ci] || {};
-            td.textContent = locT(cell.loc, cell.t);`;
-  const enumCellSrc = hasEnumDisp
-    ? `            var e2 = mapEntry(ci, v);
-            var etx = e2 ? locT(e2.loc, e2.label) : (v === undefined || v === null ? '–' : String(v));
-            if (col.edisp === 'text') {
-                td.textContent = etx;
-            } else if (col.edisp === 'ctext') {
-                td.textContent = etx;
-                if (e2) { td.style.color = e2.color; td.style.fontWeight = '600'; }
-            } else if (col.edisp === 'dot') {
-                var dot = document.createElement('span');
-                dot.style.cssText = 'display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:8px;vertical-align:middle;background:' + (e2 ? e2.color : pp.inactive) + ';';
-                var dtx = document.createElement('span');
-                dtx.style.verticalAlign = 'middle';
-                dtx.textContent = etx;
-                td.appendChild(dot);
-                td.appendChild(dtx);
-            } else {
-                var badge = document.createElement('span');
-                badge.style.cssText = 'display:inline-block;padding:2px 10px;border-radius:10px;font-size:16px;font-weight:600;background:' + (e2 ? e2.color : pp.inactive) + ';color:' + (e2 ? e2.text : '#ffffff') + ';';
-                badge.textContent = etx;
-                td.style.textAlign = 'center';
-                td.appendChild(badge);
-            }`
-    : `            var e2 = mapEntry(ci, v);
-            var badge = document.createElement('span');
-            badge.style.cssText = 'display:inline-block;padding:2px 10px;border-radius:10px;font-size:16px;font-weight:600;background:' + (e2 ? e2.color : pp.inactive) + ';color:' + (e2 ? e2.text : '#ffffff') + ';';
-            badge.textContent = e2 ? locT(e2.loc, e2.label) : (v === undefined || v === null ? '–' : String(v));
-            td.style.textAlign = 'center';
-            td.appendChild(badge);`;
-  const tplMembersSrc = hasTplMembers ? `
-    // ── Text-Vorlagen: zusaetzlich gelesene Struct-Member ──
-    // Member aus {member}-Referenzen, die keine eigene (sichtbare) Spalte haben, werden
-    // je Zeile per Element-Pfad (dynSym) separat abonniert; Aenderung -> neu zeichnen.
-    var TPL_MEMBERS = ${JSON.stringify(c.tplMembers)};
-    if (DATA_SOURCE === 'array') {
-        TPL_MEMBERS.forEach(function (member) {
-            if (!tplVals[member]) tplVals[member] = [];
-            for (var tr0 = 0; tr0 < ARRAY_COUNT; tr0++) {
-                (function (rr) {
-                    subscribeT(dynSym(rr, member), function (v) { tplVals[member][rr] = v; queueRender(); });
-                })(tr0);
-            }
-        });
-    }` : "";
   // Spalten-Berechtigungen: nur wenn mind. eine Spalte access hat, wird die
   // Sichtbarkeits-/Bedien-Logik erzeugt. acAllowed() stammt aus dem Popup-Body-
   // Scope (accessHelperSrc, eingebettet sobald irgendein Element Rechte nutzt).
@@ -302,7 +185,7 @@ function emitTable(parent, b) {
     var page = 0, query = '';
     var sortCol = DEFAULT_SORT_COL, sortDir = DEFAULT_SORT_DIR; // aktive Sortierung
     var tbody = null, pageInfo = null, prevBtn = null, nextBtn = null, wrap = null;
-    var sortThs = []; // { el: <span Pfeil>, col: <Spaltenindex> } je sortierbarer Kopfzelle${colVisDecl}${tplValsDecl}
+    var sortThs = []; // { el: <span Pfeil>, col: <Spaltenindex> } je sortierbarer Kopfzelle${colVisDecl}
 
     function locT(key, fallback) {
         try { var f = TcHmi.Functions.getFunction('GetLocalizedText'); if (f) { var t = f(key); if (t !== null && t !== undefined && t !== '') return t; } } catch (e) {}
@@ -408,7 +291,7 @@ function emitTable(parent, b) {
     }
     function cellSearchText(r, ci) {
         var col = TCOLS[ci], v = vals[r] ? vals[r][ci] : undefined;
-        ${searchTextSrc}
+        if (col.kind === 'text') { var cell = (TROWS[r] || [])[ci] || {}; return locT(cell.loc, cell.t); }
         if (col.kind === 'read' || col.kind === 'input') return fmtRead(ci, v);
         if (col.kind === 'enum' || col.kind === 'icon') { var e = mapEntry(ci, v); return e ? locT(e.loc, e.label) : String(v === undefined ? '' : v); }
         return '';
@@ -461,14 +344,15 @@ function emitTable(parent, b) {
         if (DATA_SOURCE === 'array') { if (dynCount >= 0 && dynCount < n) n = dynCount; if (n > ARRAY_COUNT) n = ARRAY_COUNT; }
         return n;
     }
-${tplHelpers}${timeHelpers}    function buildCellEl(r, ci, pp) {
+${timeHelpers}    function buildCellEl(r, ci, pp) {
         var col = TCOLS[ci];
         var td = document.createElement('td');
         td.style.cssText = 'padding:6px 10px;border-top:1px solid ' + pp.border + ';font-size:18px;color:' + pp.bodyText + ';white-space:nowrap;'
             + ((col.kind === 'read' || col.kind === 'input') ? 'text-align:right;font-variant-numeric:tabular-nums;' : '');
         var v = vals[r] ? vals[r][ci] : undefined;
         if (col.kind === 'text') {
-${textCellSrc}
+            var cell = (TROWS[r] || [])[ci] || {};
+            td.textContent = locT(cell.loc, cell.t);
         } else if (col.kind === 'read') {
             td.textContent = fmtRead(ci, v);
         } else if (col.kind === 'bool') {
@@ -505,7 +389,12 @@ ${inputCellSrc}
             td.style.textAlign = 'center';
             td.appendChild(btn);
         } else if (col.kind === 'enum') {
-${enumCellSrc}
+            var e2 = mapEntry(ci, v);
+            var badge = document.createElement('span');
+            badge.style.cssText = 'display:inline-block;padding:2px 10px;border-radius:10px;font-size:16px;font-weight:600;background:' + (e2 ? e2.color : pp.inactive) + ';color:' + (e2 ? e2.text : '#ffffff') + ';';
+            badge.textContent = e2 ? locT(e2.loc, e2.label) : (v === undefined || v === null ? '–' : String(v));
+            td.style.textAlign = 'center';
+            td.appendChild(badge);
         } else if (col.kind === 'icon') {
             var e3 = mapEntry(ci, v);
             if (e3 && ICON_SVGS[e3.icon]) {
@@ -741,6 +630,12 @@ ${enumCellSrc}
     if (bound.length <= WATCH_LIMIT) {
         bound.forEach(function (bd) { subscribeT(bd.s, function (v) { setVal(bd.r, bd.c, v); }); });
     } else {
+        // Zuordnung der Antworten ueber den Symbolnamen: Nach der ersten Antwort
+        // schickt der Server nur noch geaenderte Werte, die Position i passt dann
+        // nicht mehr zu bound[i]. (Bestaetigt an der Alarmtabelle, 345 Zellen.)
+        var boundBySym = {};
+        bound.forEach(function (bd) { boundBySym[plainSymT(bd.s)] = bd; });
+        var warnedUnknownSym = false;
         try {
             TcHmi.Server.requestEx({
                 requestType: 'Subscription',
@@ -751,10 +646,16 @@ ${enumCellSrc}
                 var resp = data.response;
                 if (!resp || !resp.commands) return;
                 if (resp.id != null) batchSubId = resp.id;
-                for (var i = 0; i < resp.commands.length && i < bound.length; i++) {
+                var full = resp.commands.length === bound.length;   // vollstaendige Antwort (z. B. die erste)
+                for (var i = 0; i < resp.commands.length; i++) {
                     var cmd = resp.commands[i];
                     if (cmd.error != null && cmd.error !== 0) continue;
-                    var bd = bound[i];
+                    var bd = boundBySym[cmd.symbol];
+                    if (!bd && full) bd = bound[i];                  // Rueckfall nur bei vollstaendiger Antwort
+                    if (!bd) {
+                        if (!warnedUnknownSym && window.console) { warnedUnknownSym = true; console.warn('AC_PopUp Tabelle: unbekanntes Symbol in Subscription-Antwort:', cmd.symbol); }
+                        continue;
+                    }
                     if (!vals[bd.r]) vals[bd.r] = [];
                     vals[bd.r][bd.c] = cmd.readValue;
                 }
@@ -782,7 +683,7 @@ ${enumCellSrc}
                 })(pr);
             }
         });
-    }${tplMembersSrc}
+    }
     renderBody();
 
     // Aufräumen beim Schließen des Popups (siehe hideDialog -> teardowns)
