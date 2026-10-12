@@ -797,6 +797,12 @@
             if (bound.length <= WATCH_LIMIT) {
                 bound.forEach(function (bd) { subscribeT(bd.s, function (v) { setVal(bd.r, bd.c, v); }); });
             } else {
+                // Zuordnung der Antworten ueber den Symbolnamen: Nach der ersten Antwort
+                // schickt der Server nur noch geaenderte Werte, die Position i passt dann
+                // nicht mehr zu bound[i]. (Bestaetigt an der Alarmtabelle, 345 Zellen.)
+                var boundBySym = {};
+                bound.forEach(function (bd) { boundBySym[plainSymT(bd.s)] = bd; });
+                var warnedUnknownSym = false;
                 try {
                     TcHmi.Server.requestEx({
                         requestType: 'Subscription',
@@ -807,10 +813,16 @@
                         var resp = data.response;
                         if (!resp || !resp.commands) return;
                         if (resp.id != null) batchSubId = resp.id;
-                        for (var i = 0; i < resp.commands.length && i < bound.length; i++) {
+                        var full = resp.commands.length === bound.length;   // vollstaendige Antwort (z. B. die erste)
+                        for (var i = 0; i < resp.commands.length; i++) {
                             var cmd = resp.commands[i];
                             if (cmd.error != null && cmd.error !== 0) continue;
-                            var bd = bound[i];
+                            var bd = boundBySym[cmd.symbol];
+                            if (!bd && full) bd = bound[i];                  // Rueckfall nur bei vollstaendiger Antwort
+                            if (!bd) {
+                                if (!warnedUnknownSym && window.console) { warnedUnknownSym = true; console.warn('AC_PopUp Tabelle: unbekanntes Symbol in Subscription-Antwort:', cmd.symbol); }
+                                continue;
+                            }
                             if (!vals[bd.r]) vals[bd.r] = [];
                             vals[bd.r][bd.c] = cmd.readValue;
                         }
