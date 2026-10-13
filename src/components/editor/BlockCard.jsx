@@ -8,6 +8,7 @@ import { condOp, condVal } from "../../codegen/helpers.js";
 import { ColorSwatches, Field, HexSwatches, IconBtn, IconPicker, IconColorPicker, Select, TextArea, TextInput } from "../primitives.jsx";
 import { ButtonItemFields, InputFields, ReadBoolFields, TriggerFields, WriteSymField } from "../fields.jsx";
 import { AccessFields } from "../access.jsx";
+import { NUMPAD_FN } from "../../codegen/emitNumPad.js";
 import { parseTpl, checkTplRefs, tplPreview } from "../../model/locTemplate.js";
 
 // ── Baustein-Karte des Editors (Accordion + Griff-Drag), auch für volle-Breite-Zeilen ──
@@ -556,7 +557,7 @@ function BlockCard({ b, opts, ui, actions }) {
                         <div style={{ flex: 2 }}><Field label="LOC-KEY"><TextInput value={cl.headerLoc || ""} onChange={(e) => patchTblCol(b.id, cl.id, { headerLoc: e.target.value })} placeholder="L_…" /></Field></div>
                         {isArr && cl.kind !== "text" && <div style={{ flex: 2 }}><Field label="MEMBER"><TextInput value={cl.member || ""} onChange={(e) => patchTblCol(b.id, cl.id, { member: e.target.value })} placeholder="bAck" /></Field></div>}
                         {(cl.kind === "read" || cl.kind === "input") && <div style={{ flex: 1 }}><Field label="EINHEIT"><TextInput value={cl.unit || ""} onChange={(e) => patchTblCol(b.id, cl.id, { unit: e.target.value })} /></Field></div>}
-                        {cl.kind === "read" && <div style={{ flex: 1 }}><Field label="DEZIMALEN"><TextInput value={cl.decimals} onChange={(e) => patchTblCol(b.id, cl.id, { decimals: e.target.value })} placeholder="auto" /></Field></div>}
+                        {(cl.kind === "read" || (cl.kind === "input" && cl.keypad && cl.inputType !== "text" && cl.inputType !== "time")) && <div style={{ flex: 1 }}><Field label="DEZIMALEN"><TextInput value={cl.decimals} onChange={(e) => patchTblCol(b.id, cl.id, { decimals: e.target.value })} placeholder="auto" /></Field></div>}
                         {cl.kind === "input" && <div style={{ flex: 2 }}><Field label="EINGABE-TYP"><Select value={cl.inputType || "auto"} onChange={(e) => patchTblCol(b.id, cl.id, { inputType: e.target.value })} options={[{ value: "auto", label: "Auto (Zahl/Text)" }, { value: "number", label: "Zahl" }, { value: "text", label: "Text" }, { value: "time", label: "Zeit (HH:MM:SS)" }]} /></Field></div>}
                         <IconBtn disabled={ci === 0} title="Spalte nach links" onClick={() => moveTblCol(b.id, ci, -1)}><ChevronLeft size={13} /></IconBtn>
                         <IconBtn disabled={ci === b.columns.length - 1} title="Spalte nach rechts" onClick={() => moveTblCol(b.id, ci, 1)}><ChevronRight size={13} /></IconBtn>
@@ -565,6 +566,26 @@ function BlockCard({ b, opts, ui, actions }) {
                       <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: T.muted, cursor: "pointer", marginTop: 6 }}>
                         <input type="checkbox" checked={!!cl.sortable} onChange={(e) => patchTblCol(b.id, cl.id, { sortable: e.target.checked })} /> Sortierbar (Klick auf Kopfzeile sortiert)
                       </label>
+                      {cl.kind === "input" && cl.inputType !== "text" && cl.inputType !== "time" && (
+                        <>
+                          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: T.muted, cursor: "pointer", marginTop: 6 }}>
+                            <input type="checkbox" checked={!!cl.keypad} onChange={(e) => patchTblCol(b.id, cl.id, { keypad: e.target.checked })} /> Keypad ({NUMPAD_FN}) – Zelle öffnet Zahleneingabe-Popup
+                          </label>
+                          {cl.keypad && (
+                            <>
+                              <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
+                                <div style={{ flex: 1 }}><Field label="MIN (MEMBER ODER ZAHL)"><TextInput value={cl.kpMin || ""} onChange={(e) => patchTblCol(b.id, cl.id, { kpMin: e.target.value })} placeholder={isArr ? "rMin" : "rMin oder 0"} /></Field></div>
+                                <div style={{ flex: 1 }}><Field label="MAX (MEMBER ODER ZAHL)"><TextInput value={cl.kpMax || ""} onChange={(e) => patchTblCol(b.id, cl.id, { kpMax: e.target.value })} placeholder={isArr ? "rMax" : "rMax oder 16"} /></Field></div>
+                              </div>
+                              <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5 }}>
+                                {isArr
+                                  ? "Member wird je Zeile aus derselben Struktur gelesen: Array[i]::rMin / ::rMax. Zahl = feste Grenze, leer = ohne Grenze."
+                                  : "Member ersetzt den letzten Pfadteil des Zellsymbols (z. B. …stP101::rValue → …stP101::rMin bzw. …GVL.rP101 → …GVL.rMin). Zahl = feste Grenze, leer = ohne Grenze."}
+                              </div>
+                            </>
+                          )}
+                        </>
+                      )}
                       <div style={{ display: "flex", gap: 10, marginTop: 6, alignItems: "flex-start" }}>
                         <div style={{ flex: 3 }}><Field label="KOPF-SYMBOL (optional)"><IconPicker value={cl.headerIcon || ""} onChange={(k) => patchTblCol(b.id, cl.id, { headerIcon: k })} /></Field></div>
                         {cl.headerIcon ? <div style={{ flex: 2 }}><Field label="SYMBOLFARBE"><IconColorPicker value={cl.headerIconColor || ""} onChange={(hex) => patchTblCol(b.id, cl.id, { headerIconColor: hex })} noneTitle="Wie Kopftext" /></Field></div> : null}

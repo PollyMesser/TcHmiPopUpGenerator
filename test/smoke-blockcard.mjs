@@ -79,6 +79,29 @@ async function main() {
     }
   }
 
+  // Keypad (AC_NumPad): Eingabefeld-Baustein + Tabellen-Eingabespalte mit aktivierter Option
+  const pal0 = { border: "#ccc", headerBg: "#eee", titleColor: "#000", bodyText: "#333", inactive: "#999", boxBg: "#fff" };
+  for (const mode of MODES) {
+    count++;
+    const ui = (b) => ({ openId: b.id, setOpenId: () => {}, dragId: null, setDragId: () => {}, grabbedId: null, setGrabbedId: () => {}, dropTarget: null, setDropTarget: () => {}, columns: 1, mode, sm: symMeta(mode) });
+    try {
+      const bi = { ...newBlock("input"), keypad: true, kpMin: "0", kpMax: "rMax", kpDecimals: "1" };
+      const h1 = renderToString(React.createElement(BlockCard, { b: bi, opts: optsFor(bi), ui: ui(bi), actions: noopActions }));
+      if (h1.indexOf("NACHKOMMA") < 0) failures.push(`keypad-input × ${mode}: Keypad-Felder fehlen`);
+      if (h1.indexOf("SENDEN-BUTTON ANZEIGEN") >= 0) failures.push(`keypad-input × ${mode}: Senden-Button-Option trotz Keypad sichtbar`);
+      const p1 = renderToString(React.createElement(prevMod.BlockPreview, { b: bi, pal: pal0, on: {}, onToggle: () => {} }));
+      if (p1.indexOf("Keypad") < 0) failures.push(`keypad-input × ${mode}: Vorschau ohne Keypad-Hinweis`);
+      for (const ds of ["static", "array"]) {
+        const bt = { ...newBlock("table"), dataSource: ds, columns: [{ ...mkTableCol("input"), header: "Wert", member: "rValue", keypad: true, kpMin: "rMin", kpMax: "16" }], rows: [] };
+        const h2 = renderToString(React.createElement(BlockCard, { b: bt, opts: optsFor(bt), ui: ui(bt), actions: noopActions }));
+        if (h2.indexOf("MIN (MEMBER ODER ZAHL)") < 0) failures.push(`keypad-table ${ds} × ${mode}: Min/Max-Felder fehlen`);
+        renderToString(React.createElement(prevMod.BlockPreview, { b: bt, pal: pal0, on: {}, onToggle: () => {} }));
+      }
+    } catch (e) {
+      failures.push(`keypad × ${mode}: ${e.message}`);
+    }
+  }
+
   if (failures.length) {
     console.error(`✗ smoke-blockcard: ${failures.length}/${count} Kombinationen fehlgeschlagen:`);
     failures.forEach((f) => console.error(`  - ${f}`));

@@ -4,6 +4,7 @@ import { emitPlot } from "./emitPlot.js";
 import { emitTable } from "./emitTable.js";
 import { emitDivider } from "./shared.js";
 import { gateBlock, gateButton } from "./access.js";
+import { usesKeypad, emitInputKeypad } from "./emitNumPad.js";
 
 // ─────────────────────────────────────────────────────────────
 //  Button-Beschriftung: Text, Icon oder Icon+Text.
@@ -95,6 +96,7 @@ function trigActionUC(b) {
   return `; pulse(${t}, ${ms})`;
 }
 function emitInput(parent, b, mb) {
+  if (usesKeypad(b)) return emitInputKeypad(parent, b, mb, false, (b.trigSym || "").trim() ? trigActionSym(b) : "");
   const sym = jsStr(wrapSym(b.symbol));
   const wsym = jsStr(wrapSym((b.writeSym || "").trim() ? b.writeSym : b.symbol));
   const trig = (b.trigSym || "").trim() ? trigActionSym(b) : "";

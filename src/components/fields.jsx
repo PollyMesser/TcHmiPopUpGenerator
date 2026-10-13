@@ -1,7 +1,8 @@
 import React from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { T } from "../constants/theme.js";
-import { WRITE_OPTS } from "../constants/options.js";
+import { WRITE_OPTS, isUC } from "../constants/options.js";
+import { NUMPAD_FN } from "../codegen/emitNumPad.js";
 import { condOp, condVal } from "../codegen/helpers.js";
 import { Field, TextInput, Select, ColorSwatches, IconBtn, IconPicker } from "./primitives.jsx";
 
@@ -134,8 +135,26 @@ function TriggerFields({ cfg, onPatch, mode }) {
     </>
   );
 }
+// ── Keypad-Optionen (AC_NumPad): Min/Max als Zahl oder Symbol/Attribut, Nachkommastellen ──
+function KeypadFields({ cfg, onPatch, uc }) {
+  const ph = uc ? "Zahl oder Attribut" : "Zahl oder Symbol";
+  return (
+    <>
+      <div style={{ display: "flex", gap: 10 }}>
+        <div style={{ flex: 2 }}><Field label="MIN"><TextInput value={cfg.kpMin || ""} onChange={(e) => onPatch({ kpMin: e.target.value })} placeholder={ph} /></Field></div>
+        <div style={{ flex: 2 }}><Field label="MAX"><TextInput value={cfg.kpMax || ""} onChange={(e) => onPatch({ kpMax: e.target.value })} placeholder={ph} /></Field></div>
+        <div style={{ width: 110 }}><Field label="NACHKOMMA"><TextInput value={cfg.kpDecimals == null ? "" : cfg.kpDecimals} onChange={(e) => onPatch({ kpDecimals: e.target.value })} placeholder="frei" /></Field></div>
+      </div>
+      <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5, margin: "-4px 0 8px" }}>
+        Klick auf das Feld öffnet {NUMPAD_FN} (Funktionsdatei aus dem Tab „NumPad" einmal ins HMI-Projekt legen). Min/Max: leer = ohne Grenze. NACHKOMMA 0 = Ganzzahl. OK schreibt in die SPS, danach wird die Trigger-Variable ausgelöst.
+      </div>
+    </>
+  );
+}
 function InputFields({ cfg, onPatch, mode }) {
   const sm = symMeta(mode);
+  const kpPossible = cfg.dataType !== "text" && cfg.dataType !== "time";
+  const kp = kpPossible && !!cfg.keypad;
   return (
     <>
       <div style={{ display: "flex", gap: 10 }}>
@@ -149,10 +168,17 @@ function InputFields({ cfg, onPatch, mode }) {
       </div>
       <WriteSymField cfg={cfg} onPatch={onPatch} mode={mode} />
       <div style={{ borderTop: `1px solid ${T.border}`, margin: "2px 0 8px" }} />
-      <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, fontWeight: 600, color: T.muted, cursor: "pointer", marginBottom: 6 }}>
+      {kpPossible && (
+        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, fontWeight: 600, color: T.muted, cursor: "pointer", marginBottom: 6 }}>
+          <input type="checkbox" checked={!!cfg.keypad} onChange={(e) => onPatch({ keypad: e.target.checked })} /> KEYPAD ({NUMPAD_FN}) – EINGABE ÜBER ZAHLENFELD-POPUP
+        </label>
+      )}
+      {kp && <KeypadFields cfg={cfg} onPatch={onPatch} uc={isUC(mode)} />}
+      {kp && <TriggerFields cfg={cfg} onPatch={onPatch} mode={mode} />}
+      {!kp && <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, fontWeight: 600, color: T.muted, cursor: "pointer", marginBottom: 6 }}>
         <input type="checkbox" checked={cfg.sendButton !== false} onChange={(e) => onPatch({ sendButton: e.target.checked })} /> SENDEN-BUTTON ANZEIGEN
-      </label>
-      {cfg.sendButton !== false && (
+      </label>}
+      {!kp && cfg.sendButton !== false && (
         <>
           <div style={{ display: "flex", gap: 10 }}>
             <div style={{ flex: 2 }}><Field label="TEXT"><TextInput value={cfg.sendLabel} onChange={(e) => onPatch({ sendLabel: e.target.value })} /></Field></div>
@@ -162,11 +188,11 @@ function InputFields({ cfg, onPatch, mode }) {
           <TriggerFields cfg={cfg} onPatch={onPatch} mode={mode} />
         </>
       )}
-      {cfg.sendButton === false && (
+      {!kp && cfg.sendButton === false && (
         <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5, marginBottom: 4 }}>Ohne Button wird der Wert nur mit Enter übernommen.</div>
       )}
     </>
   );
 }
 
-export { symMeta, WriteSymField, ReadBoolFields, ButtonItemFields, TriggerFields, InputFields };
+export { symMeta, WriteSymField, ReadBoolFields, ButtonItemFields, TriggerFields, InputFields, KeypadFields };

@@ -21,7 +21,7 @@ const REF_NAMES = [
 
 // Optionale Namen: existieren nur, wenn das Feature im Block genutzt wird
 // (byte-neutrale Codegen-Varianten), daher per typeof abgesichert.
-const OPT_NAMES = ["tplVal", "tplStr", "tplText", "tplVals", "buildCellEl", "palT"];
+const OPT_NAMES = ["tplVal", "tplStr", "tplText", "tplVals", "buildCellEl", "palT", "siblingSym", "kpLimit", "kpTitle", "openPadT"];
 
 function buildTableHooks(block, parentVarName = "parent") {
   const raw = emitTable(parentVarName, block);

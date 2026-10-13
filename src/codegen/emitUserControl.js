@@ -5,6 +5,7 @@ import { emitPlot } from "./emitPlot.js";
 import { emitTable } from "./emitTable.js";
 import { emitDivider } from "./shared.js";
 import { gateBlock, gateButton } from "./access.js";
+import { usesKeypad, emitInputKeypad } from "./emitNumPad.js";
 
 // ─────────────────────────────────────────────────────────────
 //  EMIT: UserControl-Modus – gv()/sv()/pulse() + updaters (Polling)
@@ -24,6 +25,7 @@ function emitCheckUC(parent, b, mb) {
   return `${I}// Boolean setzen (Attribut, Checkbox): ${attrName(b.symbol)}\n${I}(function () {\n${I}    var wrap = document.createElement('label');\n${I}    wrap.style.cssText = 'display:flex;align-items:center;gap:10px;margin-bottom:${mb};cursor:pointer;';\n${I}    var cb = document.createElement('input');\n${I}    cb.type = 'checkbox';\n${I}    cb.style.cssText = 'width:20px;height:20px;flex:0 0 auto;cursor:pointer;accent-color:' + p.active + ';';\n${I}    var lbl = document.createElement('span');\n${I}    lbl.style.cssText = 'font-size:14px;color:' + p.bodyText + ';';\n${I}    lbl.textContent = ${locExpr(b.loc, b.label)};\n${I}    wrap.appendChild(cb); wrap.appendChild(lbl);\n${I}    ${parent}.appendChild(wrap);\n${I}    cb.addEventListener('pointerdown', function (e) { e.stopPropagation(); });\n${I}    cb.addEventListener('change', function () { sv(${wa}, cb.checked); });\n${I}    updaters.push(function () { if (document.activeElement !== cb) cb.checked = !!gv(${a}, false); });\n${I}})();`;
 }
 function emitInputUC(parent, b, mb) {
+  if (usesKeypad(b)) return emitInputKeypad(parent, b, mb, true, (b.trigSym || "").trim() ? trigActionUC(b) : "");
   const a = jsStr(attrName(b.symbol));
   const wa = jsStr(attrName((b.writeSym || "").trim() ? b.writeSym : b.symbol));
   const trig = (b.trigSym || "").trim() ? trigActionUC(b) : "";

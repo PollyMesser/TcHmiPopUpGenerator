@@ -31,6 +31,19 @@ function ItemPreview({ cfg, pal, on, onToggle }) {
   ); }
   const c = COLORS[cfg.sendColor] || COLORS.blue;
   const u = (cfg.unit || "").trim();
+  const kp = !!cfg.keypad && cfg.dataType !== "text" && cfg.dataType !== "time";
+  if (kp) return (
+    <div>
+      <div style={{ fontSize: 13, color: pal.bodyText, marginBottom: 6 }}>{cfg.label}</div>
+      <div style={{ display: "flex", gap: 8, alignItems: "stretch" }}>
+        <div title="Klick öffnet das Keypad (AC_NumPad)"
+          style={{ flex: 1, minWidth: 0, boxSizing: "border-box", padding: "9px 10px", borderRadius: 8, fontSize: 14, textAlign: "right", cursor: "pointer", border: `1px solid ${pal.border}`, background: pal.boxBg, color: pal.bodyText, fontVariantNumeric: "tabular-nums", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 11, opacity: 0.55 }}>⌨ Keypad</span><span>…</span>
+        </div>
+        {u && <span style={{ flex: "0 0 auto", alignSelf: "center", fontSize: 13, color: pal.bodyText, opacity: 0.75 }}>{u}</span>}
+      </div>
+    </div>
+  );
   return (
     <div>
       <div style={{ fontSize: 13, color: pal.bodyText, marginBottom: 6 }}>{cfg.label}</div>
@@ -175,6 +188,7 @@ function BlockPreview({ b, pal, on, onToggle }) {
       if (cl.kind === "text") { const cell = b.dataSource === "array" ? {} : (((b.rows || [])[ri] || {}).cells || [])[b.columns.indexOf(cl)] || {}; return <span>{cell.text || "Text"}</span>; }
       if (cl.kind === "bool") return <span style={{ display: "inline-block", width: 14, height: 14, borderRadius: "50%", background: pal.inactive || "#9ca3af" }} />;
       if (cl.kind === "check") return <input type="checkbox" readOnly checked={false} style={{ pointerEvents: "none" }} />;
+      if (cl.kind === "input" && cl.keypad && cl.inputType !== "text" && cl.inputType !== "time") return <span title="Keypad (AC_NumPad)" style={{ display: "inline-block", minWidth: 56, padding: "1px 6px", border: `1px solid ${pal.border}`, borderRadius: 4, textAlign: "right", cursor: "pointer" }}>⌨ –</span>;
       if (cl.kind === "input") return <span style={{ display: "inline-block", width: 56, padding: "1px 5px", border: `1px solid ${pal.border}`, borderRadius: 4, textAlign: "right", opacity: 0.7 }}>–</span>;
       if (cl.kind === "button") return <span style={{ display: "inline-block", padding: "2px 10px", border: `1px solid ${pal.border}`, borderRadius: 6, fontSize: 11, fontWeight: 600 }}>{cl.label || "OK"}</span>;
       if (cl.kind === "enum") { const e = (cl.map || [])[ri % Math.max(1, (cl.map || []).length)] ; const col = COLORS[e?.color] || COLORS.grey;

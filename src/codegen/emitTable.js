@@ -2,6 +2,7 @@ import { jsStr, wrapSym, locExpr, indentLines, I, durHelpers } from "./helpers.j
 import { COLORS, ICONS } from "../constants/palette.js";
 import { compileAccess, accessActive } from "../model/access.js";
 import { parseTpl } from "../model/locTemplate.js";
+import { isNumStr, NUMPAD_FN } from "./emitNumPad.js";
 
 const TPL_BOUND_KINDS = ["read", "bool", "check", "input", "enum", "icon"];
 const ENUM_DISPLAYS = ["text", "ctext", "dot"];
@@ -13,6 +14,12 @@ const ENUM_DISPLAYS = ["text", "ctext", "dot"];
 //              in diesem Projekt noch NICHT per WS-Mitschnitt verifiziert).
 //   'array'  – EIN TcHmi.Symbol.watch auf das ganze PLC-Array (BESTÄTIGTE API); Spalten
 //              greifen per Member-Name (JSON-Feldname der Struktur) auf die Zeilenobjekte zu.
+const kpLim = (src) => {
+  const t = String(src == null ? "" : src).trim();
+  if (!t) return null;
+  return isNumStr(t) ? { n: Number(t.replace(",", ".")) } : { m: t };
+};
+
 function tableBlockConfig(b) {
   const isArr = b.dataSource === "array";
   // Text-Vorlage -> Teile-Array. {member} wird auf eine sichtbare, ungesperrte Spalte
@@ -42,6 +49,9 @@ function tableBlockConfig(b) {
     // Eingabe-Typ nur setzen, wenn explizit gewaehlt (time/text/number) -> Bestands-JSON byte-identisch;
     // ohne itype gilt das bisherige Auto-Verhalten (Zahl wenn numerisch, sonst Text).
     ...((c.kind === "input" && (c.inputType === "time" || c.inputType === "text" || c.inputType === "number")) ? { itype: c.inputType } : {}),
+    // Keypad (AC_NumPad) nur setzen, wenn aktiv und Zahl/Auto -> Bestands-JSON byte-identisch.
+    // kp.min/kp.max: null (keine Grenze) | { n: Zahl } | { m: Member/Geschwister-Variable }
+    ...((c.kind === "input" && c.keypad && c.inputType !== "text" && c.inputType !== "time") ? { kp: { min: kpLim(c.kpMin), max: kpLim(c.kpMax) } } : {}),
     // Spalten-Berechtigung nur setzen, wenn aktiv -> Bestands-JSON byte-identisch.
     // acc = { observe?:[Gruppen], operate?:[Gruppen] } (nur aktivierte Rechte).
     ...(accessActive(c.access) ? { acc: compileAccess(c.access) } : {}),
@@ -238,6 +248,58 @@ function emitTable(parent, b) {
   const bodyCellLoop = hasColAccess
     ? `for (var ci = 0; ci < TCOLS.length; ci++) { if (!COL_VIS[ci]) { cellEls.push(null); continue; } var td = buildCellEl(r, ci, pp); if (!COL_OP[ci]) { var __oe = td.querySelectorAll('button, input, select, textarea'); for (var __oi = 0; __oi < __oe.length; __oi++) __oe[__oi].disabled = true; td.style.opacity = '0.55'; } cellEls.push(td); tr.appendChild(td); }`
     : `for (var ci = 0; ci < TCOLS.length; ci++) { var td = buildCellEl(r, ci, pp); cellEls.push(td); tr.appendChild(td); }`;
+  // Keypad-Spalten (AC_NumPad): Zusatzlogik nur erzeugen, wenn genutzt (Golden-neutral).
+  const hasKeypad = c.colsArr.some((cc) => cc.kp);
+  const kpHelpers = hasKeypad ? `    // ── Keypad (${NUMPAD_FN}): Zelle oeffnet das Zahleneingabe-Popup ──
+    // Grenzwerte je Zeile: feste Zahl oder Geschwister-Member derselben Struktur.
+    //   Array-Modus: ARRAY[START_INDEX + r]::<member>
+    //   statisch:    Zellsymbol, letzter Pfadteil (nach '::' bzw. '.') durch <member> ersetzt
+    function siblingSym(s, m) {
+        var plain = plainSymT(s);
+        var a = plain.lastIndexOf('::'), d = plain.lastIndexOf('.');
+        var cut = a > d ? a : d;
+        if (cut < 0) return '';
+        var lead = m.charAt(0);
+        return '%s%' + plain.slice(0, cut) + ((lead === '.' || lead === ':') ? m : (a > d ? '::' : '.') + m) + '%/s%';
+    }
+    function kpLimit(r, ci, lim) {
+        if (!lim) return null;
+        if (lim.n !== undefined) return lim.n;
+        if (DATA_SOURCE === 'array') return dynSym(r, lim.m);
+        var s = symFor(r, ci);
+        var sib = s ? siblingSym(s, lim.m) : '';
+        return sib || NaN; // nicht ableitbar -> NaN -> ${NUMPAD_FN} sperrt OK
+    }
+    function kpTitle(r, ci) {
+        var col = TCOLS[ci];
+        var t = locT(col.loc, col.header);
+        for (var k = 0; k < TCOLS.length; k++) {
+            if (TCOLS[k].kind !== 'text') continue;
+            var name = cellSearchText(r, k);
+            if (name && name !== '–') return t ? t + ' – ' + name : name;
+            break;
+        }
+        if (DATA_SOURCE === 'array') return (t ? t + ' ' : '') + '[' + (START_INDEX + r) + ']';
+        return t;
+    }
+    function openPadT(r, ci) {
+        var col = TCOLS[ci];
+        var fns = (typeof TcHmi !== 'undefined' && TcHmi.Functions) ? TcHmi.Functions.AC_HMI : null;
+        var f = fns ? fns.${NUMPAD_FN} : null;
+        if (typeof f !== 'function') { if (window.console) console.warn('${NUMPAD_FN}: Funktionsdatei nicht geladen.'); return; }
+        var s = symFor(r, ci); if (!s) return;
+        f({ symbol: s, min: kpLimit(r, ci, col.kp.min), max: kpLimit(r, ci, col.kp.max), unit: col.unit, decimals: col.dec, title: kpTitle(r, ci) });
+    }
+` : "";
+  const kpCellSrc = hasKeypad ? `        } else if (col.kind === 'input' && col.kp) {
+            var kb = document.createElement('button');
+            kb.type = 'button';
+            kb.textContent = fmtRead(ci, v);
+            kb.style.cssText = 'min-width:80px;padding:3px 8px;border:1px solid ' + pp.border + ';border-radius:5px;background:' + pp.boxBg + ';color:' + pp.bodyText + ';font-size:18px;text-align:right;font-variant-numeric:tabular-nums;cursor:pointer;';
+            kb.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
+            kb.onclick = function (e) { e.stopPropagation(); if (kb.disabled) return; openPadT(r, ci); };
+            td.appendChild(kb);
+` : "";
   const inputCellSrc = hasTypedInput
     ? `            var inp = document.createElement('input');
             var itype = col.itype || '';
@@ -461,7 +523,7 @@ function emitTable(parent, b) {
         if (DATA_SOURCE === 'array') { if (dynCount >= 0 && dynCount < n) n = dynCount; if (n > ARRAY_COUNT) n = ARRAY_COUNT; }
         return n;
     }
-${tplHelpers}${timeHelpers}    function buildCellEl(r, ci, pp) {
+${tplHelpers}${timeHelpers}${kpHelpers}    function buildCellEl(r, ci, pp) {
         var col = TCOLS[ci];
         var td = document.createElement('td');
         td.style.cssText = 'padding:6px 10px;border-top:1px solid ' + pp.border + ';font-size:18px;color:' + pp.bodyText + ';white-space:nowrap;'
@@ -486,7 +548,7 @@ ${textCellSrc}
             cb.addEventListener('change', function () { var s = symFor(r, ci); if (s) writeT(s, cb.checked); });
             td.style.textAlign = 'center';
             td.appendChild(cb);
-        } else if (col.kind === 'input') {
+${kpCellSrc}        } else if (col.kind === 'input') {
 ${inputCellSrc}
         } else if (col.kind === 'button') {
             var btn = document.createElement('button');

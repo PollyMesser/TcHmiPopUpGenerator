@@ -1,0 +1,83 @@
+{
+  "$schema": "./../../Packages/Beckhoff.TwinCAT.HMI.Framework.14.3.500/runtimes/native1.12-tchmi/Schema/FunctionDescription.Schema.json",
+  "apiVersion": 1,
+  "version": {
+    "full": "1.0.0.0",
+    "major": 1,
+    "minor": 0,
+    "revision": 0,
+    "build": 0
+  },
+  "dependencyFiles": [
+    {
+      "name": "AC_NumPad.js",
+      "type": "EsModule",
+      "description": "Zahleneingabe-Popup (AC_PopUp Generator)"
+    }
+  ],
+  "function": {
+    "name": "AC_NumPad",
+    "namespace": "TcHmi.Functions.AC_HMI",
+    "displayName": "AC_NumPad",
+    "description": "Öffnet ein Zahleneingabe-Popup mit Min/Max-Prüfung und schreibt den Wert bei OK in die SPS. Empfohlen: Aufruf per JavaScript-Action mit Optionsobjekt.",
+    "waitMode": "Synchronous",
+    "category": "AC_HMI",
+    "returnValue": null,
+    "arguments": [
+      {
+        "name": "symbol",
+        "displayName": "Symbolpfad",
+        "type": "tchmi:general#/definitions/String",
+        "description": "Pfad der Variable als Text, ohne %s% (z. B. ADS.PLC1.GVL.stP101::rValue). Nicht binden – sonst wird der Wert statt des Pfads übergeben.",
+        "defaultValue": null,
+        "required": true,
+        "bindable": false
+      },
+      {
+        "name": "min",
+        "displayName": "Min",
+        "type": "tchmi:general#/definitions/String",
+        "description": "Untergrenze: Zahl (z. B. 0) oder Symbolpfad als Text. Leer = keine Grenze.",
+        "defaultValue": null,
+        "required": false,
+        "bindable": true
+      },
+      {
+        "name": "max",
+        "displayName": "Max",
+        "type": "tchmi:general#/definitions/String",
+        "description": "Obergrenze: Zahl (z. B. 16) oder Symbolpfad als Text. Leer = keine Grenze.",
+        "defaultValue": null,
+        "required": false,
+        "bindable": true
+      },
+      {
+        "name": "unit",
+        "displayName": "Einheit",
+        "type": "tchmi:general#/definitions/String",
+        "description": "Einheit neben dem Eingabefeld und den Grenzwerten (z. B. bar).",
+        "defaultValue": null,
+        "required": false,
+        "bindable": true
+      },
+      {
+        "name": "decimals",
+        "displayName": "Nachkommastellen",
+        "type": "tchmi:general#/definitions/Number",
+        "description": "Erlaubte Nachkommastellen. 0 = Ganzzahl, leer = frei.",
+        "defaultValue": null,
+        "required": false,
+        "bindable": true
+      },
+      {
+        "name": "title",
+        "displayName": "Titel",
+        "type": "tchmi:general#/definitions/String",
+        "description": "Titel des Popups. Leer = 'Wert eingeben' (Loc-Key L_NumPad_Title).",
+        "defaultValue": null,
+        "required": false,
+        "bindable": true
+      }
+    ]
+  }
+}

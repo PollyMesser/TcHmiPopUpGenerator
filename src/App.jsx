@@ -1,5 +1,5 @@
 import React, { useState, useRef, useMemo } from "react";
-import { Plus, Copy, Check, Code2, Monitor, Sun, Moon, Braces } from "lucide-react";
+import { Plus, Copy, Check, Code2, Monitor, Sun, Moon, Braces, Calculator } from "lucide-react";
 
 import { T, PAL } from "./constants/theme.js";
 import { PLOT_COLORS, MAX_AXES, ICONS } from "./constants/palette.js";
@@ -9,6 +9,7 @@ import { mkButton, mkItem, mkCond, mkEnumEntry, mkStatusEntry, newBlock, mkAxis,
 import { clampCol, groupByCol } from "./model/layout.js";
 
 import { generate } from "./codegen/index.js";
+import { generateNumPad, NUMPAD_FN } from "./codegen/emitNumPad.js";
 import { parseConfigComment, reidBlocks } from "./model/config.js";
 import { remapTplCols } from "./model/locTemplate.js";
 import { Field, TextInput, Tab, IconPicker, IconColorPicker } from "./components/primitives.jsx";
@@ -50,6 +51,9 @@ export default function App() {
   const [grabbedId, setGrabbedId] = useState(null);
   const [dropTarget, setDropTarget] = useState(null);
   const codeRef = useRef(null);
+  // AC_NumPad: eigenstaendige, konfigurationsunabhaengige Funktionsdatei
+  const numpadCode = useMemo(() => generateNumPad(), []);
+  const [npCopied, setNpCopied] = useState(false);
 
   const cfg = { mode, fnName, title, titleLoc, titleSource, titleField, titleFallback, titleIcon, titleIconColor, maxWidth, columns, hostSuffix, blocks, ...(access ? { access } : {}), ...(embedTarget ? { embedTarget } : {}) };
   const code = useMemo(() => generate(cfg), [mode, fnName, title, titleLoc, titleSource, titleField, titleFallback, titleIcon, titleIconColor, maxWidth, columns, hostSuffix, blocks, access, embedTarget]);
@@ -237,6 +241,10 @@ export default function App() {
   const doCopy = async () => {
     try { await navigator.clipboard.writeText(code); setCopied(true); setTimeout(() => setCopied(false), 1600); }
     catch { try { const ta = codeRef.current; if (ta) { ta.focus(); ta.select(); document.execCommand("copy"); setCopied(true); setTimeout(() => setCopied(false), 1600); } } catch {} }
+  };
+  const doCopyNumPad = async () => {
+    try { await navigator.clipboard.writeText(numpadCode); setNpCopied(true); setTimeout(() => setNpCopied(false), 1600); }
+    catch { /* Clipboard nicht verfuegbar: Code ist im Tab markierbar */ }
   };
   const doImport = () => {
     const c = parseConfigComment(importText);
@@ -471,6 +479,12 @@ export default function App() {
             <Tab active={tab === "preview"} onClick={() => setTab("preview")}><Monitor size={14} /> Vorschau</Tab>
             <Tab active={tab === "code"} onClick={() => setTab("code")}><Code2 size={14} /> Code</Tab>
             <Tab active={tab === "import"} onClick={() => setTab("import")}><Braces size={14} /> Import</Tab>
+            <Tab active={tab === "numpad"} onClick={() => setTab("numpad")}><Calculator size={14} /> NumPad</Tab>
+            {tab === "numpad" && (
+              <button onClick={doCopyNumPad} style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6, background: npCopied ? T.accentDim : T.accent, color: "#062611", border: "none", borderRadius: 6, padding: "7px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                {npCopied ? <Check size={14} /> : <Copy size={14} />} {npCopied ? "Kopiert" : "Kopieren"}
+              </button>
+            )}
             {tab === "preview" && (
               <button onClick={() => setPreviewDark((v) => !v)} style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6, background: T.panel2, color: T.text, border: `1px solid ${T.border}`, borderRadius: 6, padding: "6px 10px", fontSize: 12, cursor: "pointer" }}>
                 {previewDark ? <Moon size={13} /> : <Sun size={13} />} {previewDark ? "Dark" : "Light"}
@@ -503,6 +517,24 @@ export default function App() {
             <pre style={{ background: T.code, border: `1px solid ${T.border}`, borderRadius: 10, padding: 16, margin: 0, fontSize: 11.5, lineHeight: 1.5, color: "#c8d0e0", overflow: "auto", maxHeight: 640, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>
               {code}
             </pre>
+          )}
+          {tab === "numpad" && (
+            <div>
+              <div style={{ background: T.panel, border: `1px solid ${T.border}`, borderRadius: 10, padding: 14, marginBottom: 10, fontSize: 12, color: T.muted, lineHeight: 1.6 }}>
+                <div style={{ color: T.text, fontWeight: 600, marginBottom: 4 }}>{NUMPAD_FN} – eigenständige Funktionsdatei</div>
+                Einmal im HMI-Projekt als JavaScript-Funktion <code>{NUMPAD_FN}</code> anlegen und diesen Code einfügen. Unabhängig von der Popup-Konfiguration – wird von Eingabefeldern und Tabellenspalten mit Option „Keypad" aufgerufen.
+                <div style={{ marginTop: 8 }}>Eigene Controls (z. B. <code>onPressed</code> eines NumericInput/Buttons) als JavaScript-Action:</div>
+                <pre style={{ background: T.code, borderRadius: 6, padding: 10, margin: "6px 0 0", fontSize: 11.5, color: "#c8d0e0", overflow: "auto", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>{`TcHmi.Functions.AC_HMI.${NUMPAD_FN}({
+    symbol: 'ADS.PLC1.GVL.stP101::rValue',
+    min: 'ADS.PLC1.GVL.stP101::rMin',   // Symbol, Zahl oder leer
+    max: 16,
+    unit: 'bar', decimals: 1, title: 'Druck P101'
+});`}</pre>
+              </div>
+              <pre style={{ background: T.code, border: `1px solid ${T.border}`, borderRadius: 10, padding: 16, margin: 0, fontSize: 11.5, lineHeight: 1.5, color: "#c8d0e0", overflow: "auto", maxHeight: 560, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>
+                {numpadCode}
+              </pre>
+            </div>
           )}
           {tab === "import" && (
             <div style={{ background: T.panel, border: `1px solid ${T.border}`, borderRadius: 10, padding: 16 }}>

@@ -702,4 +702,60 @@ add("table_loc_template", {
   })(),
 });
 
+// ── Keypad (AC_NumPad): Eingabefeld-Baustein, Symbol-Modus, Min/Max als Symbol + Zahl, Trigger ──
+add("keypad_input_registered", {
+  mode: "registered",
+  fnName: "AC_KeypadInput",
+  blocks: [
+    { ...newBlock("input"), label: "Druck-Sollwert", loc: "L_PressSet", symbol: "ADS.AF_PLC.GVL.stP101::rValue", unit: "bar",
+      keypad: true, kpMin: "ADS.AF_PLC.GVL.stP101::rMin", kpMax: "16", kpDecimals: "1",
+      trigSym: "ADS.AF_PLC.GVL.stP101::xApply", trigMode: "pulse", trigMs: 500 },
+    { ...newBlock("input"), label: "Stückzahl", symbol: "ADS.AF_PLC.GVL.nCount", writeSym: "ADS.AF_PLC.GVL.nCountCmd",
+      keypad: true, kpMin: "0", kpMax: "", kpDecimals: "0" },
+    { ...newBlock("row"), items: [mkItem("read"), { ...mkItem("input"), keypad: true, kpMin: "-10", kpMax: "10" }] },
+  ],
+});
+
+// ── Keypad (AC_NumPad): Eingabefeld im UserControl-Modus (Attribut-Grenze + feste Grenze) ──
+add("keypad_input_uc", {
+  mode: "usercontrol",
+  fnName: "AC_KeypadUc",
+  hostSuffix: ".btn_PopUp",
+  blocks: [
+    { ...newBlock("input"), label: "Temperatur", symbol: "TempSet", unit: "°C",
+      keypad: true, kpMin: "TempMin", kpMax: "120", kpDecimals: "1", trigSym: "CmdApply", trigMode: "setTrue" },
+  ],
+});
+
+// ── Keypad (AC_NumPad): Tabelle Array-Modus, Grenzen aus derselben Struktur ──
+add("keypad_table_array", {
+  mode: "embed",
+  fnName: "AC_ParamTabelle",
+  embedTarget: "MeinContainer",
+  blocks: (() => {
+    const cName = { ...mkTableCol("text"), header: "Parameter" };
+    const cVal = { ...mkTableCol("input"), header: "Wert", headerLoc: "L_Value", member: "rValue", unit: "bar", decimals: "1",
+      keypad: true, kpMin: "rMin", kpMax: "rMax" };
+    const cMin = { ...mkTableCol("read"), header: "Min", member: "rMin", decimals: "1" };
+    const cMax = { ...mkTableCol("read"), header: "Max", member: "rMax", decimals: "1" };
+    return [{
+      ...newBlock("table"), dataSource: "array", arraySymbol: "ADS.AF_PLC.GVL.aParam", arrayCount: 8, startIndex: 1,
+      columns: [cName, cVal, cMin, cMax], rows: [], showIndex: true,
+    }];
+  })(),
+});
+
+// ── Keypad (AC_NumPad): Tabelle statisch, Geschwister-Variable + feste Grenze ──
+add("keypad_table_static", {
+  mode: "registered",
+  fnName: "AC_ParamStatisch",
+  blocks: (() => {
+    const cName = { ...mkTableCol("text"), header: "Parameter" };
+    const cVal = { ...mkTableCol("input"), header: "Sollwert", unit: "%", decimals: "0", keypad: true, kpMin: "0", kpMax: "rMax" };
+    const r1 = mkTableRow(2); r1.cells[0].text = "Pumpe 1"; r1.cells[1].symbol = "ADS.AF_PLC.GVL.stPump1::rSpeed";
+    const r2 = mkTableRow(2); r2.cells[0].text = "Pumpe 2"; r2.cells[1].symbol = "ADS.AF_PLC.GVL.rPump2Speed";
+    return [{ ...newBlock("table"), dataSource: "static", columns: [cName, cVal], rows: [r1, r2] }];
+  })(),
+});
+
 export { CONFIGS };

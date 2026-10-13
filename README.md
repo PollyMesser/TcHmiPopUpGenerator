@@ -63,7 +63,7 @@ Der Titel kann **statisch** (Text + optionaler Loc-Key) oder **dynamisch** aus e
 | **Wert lesen** | Zeigt den aktuellen Wert einer Variable an und aktualisiert sich live. Label links, Wert **rechtsbündig**; optional eine **Einheit**, die an den Wert angehängt wird (`%` direkt, sonst mit Leerzeichen). |
 | **Boolean-Anzeige** | Statuspunkt, grün bei `true`, grau bei `false` (nur lesend). |
 | **Boolean setzen** | Checkbox, die den Wert liest und beim Umschalten schreibt. Optional **getrenntes Schreib-Attribut** (lesen ≠ schreiben). |
-| **Eingabefeld** | Eingabe als **Zahl, Text oder Zeit** (`HH:MM:SS` ↔ ISO-8601-Dauer) mit Senden-Button (Farbe wählbar), schreibt bei Klick oder Enter. Feldinhalt **rechtsbündig**, optionale **Einheit** neben dem Feld. Optional **getrenntes Schreib-Attribut** und Trigger-Variable (z. B. SPS-Flanke). |
+| **Eingabefeld** | Eingabe als **Zahl, Text oder Zeit** (`HH:MM:SS` ↔ ISO-8601-Dauer) mit Senden-Button (Farbe wählbar), schreibt bei Klick oder Enter. Feldinhalt **rechtsbündig**, optionale **Einheit** neben dem Feld. Optional **getrenntes Schreib-Attribut** und Trigger-Variable (z. B. SPS-Flanke). Bei Zahl optional **Keypad**: Klick öffnet das Zahleneingabe-Popup `AC_NumPad` mit Min/Max-Prüfung (siehe unten). |
 | **Ladebalken** | Horizontaler Fortschrittsbalken für Prozent-/Analogwerte (z. B. Proportionalventil). Min/Max/Einheit/Nachkommastellen und Farbe konfigurierbar, Wert optional rechts eingeblendet. Füllung = (Wert − Min) / (Max − Min), auf 0–100 % begrenzt. |
 | **Verlauf (Plot)** | Plotly-basierte Trendkurve, **volle Breite**. Live oder History+Live, mehrere Y-Achsen, Referenzlinien, Setpoint-Marker u. v. m. – siehe „Verlauf (Plot) im Detail". |
 | **Tabelle** | Such-, blätter- und sortierbare Tabelle aus **festen Zeilen** oder einem **PLC-Array** (Array of Struct). Spaltentypen: Wert lesen, Text, LED (Bool), Checkbox, Eingabe (Zahl/Text/**Zeit**), Button (Symbol schreiben oder Funktion aufrufen), Badge (Enum), Symbol (SVG). Färbe-Regeln, Zeilenfilter, Standardsortierung; **Berechtigung pro Spalte** möglich. |
@@ -103,6 +103,29 @@ Der Plot-Baustein erzeugt ein in sich geschlossenes Plotly-Modul und ist immer v
 - **Aufräumen:** Beim Schließen des Popups gibt das Plot-Modul seine Abonnements/Symbole frei, trennt den ResizeObserver und ruft `Plotly.purge` auf.
 
 > **History-Vorbehalt:** Der History-Modus setzt auf `TcHmiSqliteHistorize.Query` (über `TcHmi.Server.requestEx`). Diese Query-API ist noch **nicht gegen die eingesetzte Historize-Extension bestätigt** – der History-Modus ist entsprechend ungetestet. Der **Live-Modus** ist davon unabhängig und der sichere Pfad. Der Editor blendet im History-Modus einen entsprechenden Hinweis ein.
+
+### Zahleneingabe (AC_NumPad)
+
+`AC_NumPad` ist eine **eigenständige Funktionsdatei** (Tab **NumPad**, „Kopieren"). Sie wird einmal im HMI-Projekt als JavaScript-Funktion `AC_NumPad` angelegt und ist unabhängig von der Popup-Konfiguration.
+
+- **Funktion:** zeigt Min/Max links und rechts des Eingabefelds, darunter live „o.k." bzw. „Wert zu klein/zu groß", „Zu viele Nachkommastellen", „Ungültige Eingabe". Beim Öffnen ist der aktuelle Wert komplett markiert (erste Ziffer ersetzt ihn). ←/→ bewegen den Cursor, ⌫ löscht ein Zeichen, **DEL** leert das Feld. **OK** ist nur aktiv, wenn beide Grenzen gelesen wurden und der Wert gültig ist; es schreibt in die SPS und schließt erst nach erfolgreicher Rückmeldung (bei Fehler: Meldung, Popup bleibt offen). **Abbrechen**/Esc schließt ohne Schreiben.
+- **Lesen:** Wert, Min und Max per `TcHmi.Symbol.watch`. Min/Max dürfen Symbol, Zahl oder leer (= ohne Grenze) sein. Nicht lesbare Grenzen sperren OK.
+- **Nachkommastellen:** `0` = Ganzzahl (Punkt-Taste gesperrt), leer = frei. Die ±-Taste ist gesperrt, wenn Min ≥ 0.
+- **Physische Tastatur:** Ziffern, `.`/`,`, `-` (Vorzeichen), Enter = OK, Esc = Abbrechen. `inputmode="none"` unterdrückt die Bildschirmtastatur des Panels.
+- **Eingabefeld-Baustein:** Option „Keypad" (nur Datentyp Zahl) mit MIN/MAX (Zahl oder Symbol bzw. im UserControl-Modus Attribut) und NACHKOMMA. Der Senden-Button entfällt; die Trigger-Variable wird nach erfolgreichem OK ausgelöst.
+- **Tabellen-Spalte „Eingabe":** Option „Keypad" mit MIN/MAX als **Member oder Zahl**. Array-Modus: `Array[i]::rMin` / `::rMax` aus derselben Struktur. Statisch: der letzte Pfadteil des Zellsymbols wird ersetzt (`…stP101::rValue` → `…stP101::rMin`, `…GVL.rP101` → `…GVL.rMin`). Titel = Spaltenkopf + Zeilenname (erste Textspalte) bzw. `[Index]`.
+- **Eigene Controls** (z. B. `onPressed` eines NumericInput/Buttons) als JavaScript-Action:
+
+```js
+TcHmi.Functions.AC_HMI.AC_NumPad({
+    symbol: 'ADS.PLC1.GVL.stP101::rValue',   // als Text, nicht als Symbol-Bindung
+    min: 'ADS.PLC1.GVL.stP101::rMin',        // Symbol, Zahl oder leer
+    max: 16,
+    unit: 'bar', decimals: 1, title: 'Druck P101'
+});
+```
+
+Weitere Optionen: `writeSymbol` (abweichendes Schreibziel), `value` + `write(v)` (eigener Lese-/Schreibweg), `onWritten(v)`, `onClose(written)`. Kurzform: `AC_NumPad(symbol, min, max, unit, decimals, title)`. Loc-Keys: `L_NumPad_*`, `L_Cancel`, `L_OK`, `L_Close`.
 
 ## Spalten & Layout
 
