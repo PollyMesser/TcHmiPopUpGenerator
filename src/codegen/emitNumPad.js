@@ -261,12 +261,14 @@ ${REF}
                     'display:flex;flex-direction:column;overflow:hidden;box-shadow:' + p.shadow + ';';
 
                 var header = document.createElement('div');
-                header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;' +
-                    'padding:14px 20px;background:' + p.headerBg + ';border-radius:12px 12px 0 0;' +
+                header.style.cssText = 'display:flex;align-items:flex-start;justify-content:space-between;' +
+                   'padding:14px 20px;background:' + p.headerBg + ';border-radius:12px 12px 0 0;' +
                     'flex:0 0 auto;font-size:15px;font-weight:600;color:' + p.titleColor + ';';
                 var titleEl = document.createElement('span');
-                titleEl.style.cssText = 'min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+                titleEl.style.cssText = 'flex:1 1 auto;min-width:0;white-space:normal;overflow-wrap:anywhere;line-height:1.35;' +
+                    'display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden;';
                 titleEl.textContent = o.title;
+                titleEl.title = o.title;   // voller Text als Tooltip
                 var closeBtn = document.createElement('button');
                 closeBtn.type = 'button';
                 closeBtn.style.cssText = 'border:none;background:transparent;color:' + p.closeColor + ';' +
@@ -425,7 +427,7 @@ ${REF}
                 var spacer = document.createElement('div');
                 spacer.style.cssText = 'flex:1 1 auto;min-height:0;';
                 var cancelBtn = mkKey(loc('L_Cancel', 'Abbrechen'), function () { close(false); }, '${cancelC.bg}', '${cancelC.text}', '14px');
-                var okBtn = mkKey(loc('L_OK', 'OK'), commit, '${okC.bg}', '${okC.text}', '16px');
+                var okBtn = mkKey(loc('L_Apply', 'Anwenden'), commit, '${okC.bg}', '${okC.text}', '16px');
                 side.appendChild(pair(leftKey, rightKey));
                 side.appendChild(pair(bsKey, delKey));
                 side.appendChild(spacer);

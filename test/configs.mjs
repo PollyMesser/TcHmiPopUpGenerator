@@ -758,4 +758,24 @@ add("keypad_table_static", {
   })(),
 });
 
+// ── Alarmtabelle mit Einstellwerten: Einheit/Kennbit/Nachkommastellen je Zeile (Array-Modus) ──
+add("table_row_units", {
+  mode: "embed",
+  fnName: "AC_AlarmEinstellwerte",
+  embedTarget: "MeinContainer",
+  blocks: (() => {
+    const cId = { ...mkTableCol("read"), header: "Nr.", member: "nId" };
+    const cTxt = { ...mkTableCol("text"), header: "Alarm", locTpl: "L_alarm + {nId}" };
+    const cL1 = { ...mkTableCol("input"), header: "Grenzwert 1", member: "fLimit1", inputType: "number",
+      keypad: true, kpMin: "fLimit1Min", kpMax: "fLimit1Max",
+      unitMember: "sLimit1Unit", hasMember: "bHasLimit1", decMap: "bar=2; °=1; s=0; min=0" };
+    const cAct = { ...mkTableCol("read"), header: "Istwert", member: "fActual",
+      unitMember: "sActualUnit", hasMember: "bHasActual", decMap: "bar=2; °=1; s=0; min=1", decimals: "0" };
+    return [{
+      ...newBlock("table"), dataSource: "array", arraySymbol: "ADS.AF_PLC.MAIN.aAlarmHmi", arrayCount: 6,
+      columns: [cId, cTxt, cL1, cAct], rows: [],
+    }];
+  })(),
+});
+
 export { CONFIGS };

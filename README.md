@@ -114,6 +114,11 @@ Der Plot-Baustein erzeugt ein in sich geschlossenes Plotly-Modul und ist immer v
 - **Physische Tastatur:** Ziffern, `.`/`,`, `-` (Vorzeichen), Enter = OK, Esc = Abbrechen. `inputmode="none"` unterdrückt die Bildschirmtastatur des Panels.
 - **Eingabefeld-Baustein:** Option „Keypad" (nur Datentyp Zahl) mit MIN/MAX (Zahl oder Symbol bzw. im UserControl-Modus Attribut) und NACHKOMMA. Der Senden-Button entfällt; die Trigger-Variable wird nach erfolgreichem OK ausgelöst.
 - **Tabellen-Spalte „Eingabe":** Option „Keypad" mit MIN/MAX als **Member oder Zahl**. Array-Modus: `Array[i]::rMin` / `::rMax` aus derselben Struktur. Statisch: der letzte Pfadteil des Zellsymbols wird ersetzt (`…stP101::rValue` → `…stP101::rMin`, `…GVL.rP101` → `…GVL.rMin`). Titel = Spaltenkopf + Zeilenname (erste Textspalte) bzw. `[Index]`.
+- **Tabellen-Spalten „Wert lesen" / „Eingabe" (Array-Modus): Darstellung je Zeile.** Drei optionale Felder, jeweils Member derselben Struktur:
+  - *Einheit aus Member* (z. B. `sLimit1Unit`) ersetzt die feste Einheit, auch im Keypad. Zahl und Einheit stehen in getrennten Spans, die Einheit hat eine feste Mindestbreite (Zahlen bündig).
+  - *Nur wenn Member TRUE* (z. B. `bHasLimit1`): Bei FALSE (oder noch ohne Wert) zeigt die Zelle „–" in Grau, ohne Eingabe/Keypad; beim Sortieren ans Ende.
+  - *Dezimalen je Einheit* (z. B. `bar=2; °=1; s=0; min=0`): gilt vor DEZIMALEN, nicht aufgeführte Einheiten nutzen DEZIMALEN.
+  Die Member werden je Zeile auf demselben Weg wie die Zellen gelesen (Einzel-Watches bzw. Sammel-Subscription). Ohne diese Optionen bleibt der erzeugte Code byte-identisch.
 - **Eigene Controls** (z. B. `onPressed` eines NumericInput/Buttons) als JavaScript-Action:
 
 ```js

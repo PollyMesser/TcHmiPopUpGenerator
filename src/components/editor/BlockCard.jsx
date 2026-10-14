@@ -586,6 +586,18 @@ function BlockCard({ b, opts, ui, actions }) {
                           )}
                         </>
                       )}
+                      {isArr && (cl.kind === "read" || (cl.kind === "input" && cl.inputType !== "text" && cl.inputType !== "time")) && (
+                        <>
+                          <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
+                            <div style={{ flex: 2 }}><Field label="EINHEIT AUS MEMBER (optional)"><TextInput value={cl.unitMember || ""} onChange={(e) => patchTblCol(b.id, cl.id, { unitMember: e.target.value })} placeholder="sLimit1Unit" /></Field></div>
+                            <div style={{ flex: 2 }}><Field label="NUR WENN MEMBER TRUE (optional)"><TextInput value={cl.hasMember || ""} onChange={(e) => patchTblCol(b.id, cl.id, { hasMember: e.target.value })} placeholder="bHasLimit1" /></Field></div>
+                            <div style={{ flex: 3 }}><Field label="DEZIMALEN JE EINHEIT (optional)"><TextInput value={cl.decMap || ""} onChange={(e) => patchTblCol(b.id, cl.id, { decMap: e.target.value })} placeholder="bar=2; °=1; s=0; min=0" /></Field></div>
+                          </div>
+                          <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5 }}>
+                            Je Zeile aus derselben Struktur: Einheit aus Member ersetzt EINHEIT (auch im Keypad). Ist das Kennbit FALSE, zeigt die Zelle „–“ in Grau, ohne Eingabe. Dezimalen je Einheit gelten vor DEZIMALEN; nicht aufgeführte Einheiten nutzen DEZIMALEN.
+                          </div>
+                        </>
+                      )}
                       <div style={{ display: "flex", gap: 10, marginTop: 6, alignItems: "flex-start" }}>
                         <div style={{ flex: 3 }}><Field label="KOPF-SYMBOL (optional)"><IconPicker value={cl.headerIcon || ""} onChange={(k) => patchTblCol(b.id, cl.id, { headerIcon: k })} /></Field></div>
                         {cl.headerIcon ? <div style={{ flex: 2 }}><Field label="SYMBOLFARBE"><IconColorPicker value={cl.headerIconColor || ""} onChange={(hex) => patchTblCol(b.id, cl.id, { headerIconColor: hex })} noneTitle="Wie Kopftext" /></Field></div> : null}

@@ -19,6 +19,23 @@ const kpLim = (src) => {
   if (!t) return null;
   return isNumStr(t) ? { n: Number(t.replace(",", ".")) } : { m: t };
 };
+// Nachkommastellen je Einheit: "bar=2; °=1; min=1" -> { bar: 2, "°": 1, min: 1 }.
+// Trenner ';' oder ',' zwischen Eintraegen, '=' zwischen Einheit und Stellen (0..6).
+// Ungueltige Eintraege werden ignoriert; ohne gueltigen Eintrag -> null.
+const decMapOf = (src) => {
+  const out = {};
+  let n = 0;
+  String(src == null ? "" : src).split(/[;,]/).forEach((part) => {
+    const eq = part.lastIndexOf("=");
+    if (eq <= 0) return;
+    const unit = part.slice(0, eq).trim();
+    const d = parseInt(part.slice(eq + 1).trim(), 10);
+    if (!unit || isNaN(d) || d < 0) return;
+    out[unit] = Math.min(6, d);
+    n++;
+  });
+  return n ? out : null;
+};
 
 function tableBlockConfig(b) {
   const isArr = b.dataSource === "array";
@@ -73,12 +90,23 @@ function tableBlockConfig(b) {
     } : {}),
     // Enum-Darstellung nur setzen, wenn nicht Badge (Default) -> Bestands-JSON byte-identisch.
     ...((c.kind === "enum" && ENUM_DISPLAYS.includes(c.enumDisplay)) ? { edisp: c.enumDisplay } : {}),
+    // Zeilenabhaengige Darstellung (nur Array-Modus, Wert lesen/Eingabe), jeweils nur wenn gesetzt
+    // -> Bestands-JSON byte-identisch:
+    //   unitm  = Member mit der Einheit je Zeile (ersetzt die feste Einheit)
+    //   hasm   = Member (BOOL): Zelle nur anzeigen/bedienbar, wenn TRUE, sonst '–'
+    //   decmap = Nachkommastellen je Einheit, sonst gilt dec
+    ...((isArr && (c.kind === "read" || c.kind === "input") && (c.unitMember || "").trim()) ? { unitm: c.unitMember.trim() } : {}),
+    ...((isArr && (c.kind === "read" || c.kind === "input") && (c.hasMember || "").trim()) ? { hasm: c.hasMember.trim() } : {}),
+    ...((isArr && (c.kind === "read" || c.kind === "input") && decMapOf(c.decMap)) ? { decmap: decMapOf(c.decMap) } : {}),
   }));
   // Member, die nur fuer Text-Vorlagen zusaetzlich gelesen werden muessen
   const tplMembers = [];
   if (isArr) colsOut.forEach((c) => [].concat(c.ltpl || [], c.ftpl || []).forEach((pt) => {
     if (pt && typeof pt === "object" && pt.m && tplMembers.indexOf(pt.m) < 0) tplMembers.push(pt.m);
   }));
+  // Member fuer zeilenabhaengige Einheit/Vorhanden-Kennbit (je Zeile mitgelesen)
+  const rowMembers = [];
+  colsOut.forEach((c) => [c.unitm, c.hasm].forEach((m) => { if (m && rowMembers.indexOf(m) < 0) rowMembers.push(m); }));
   const rowsOut = (b.dataSource === "array") ? [] : (b.rows || []).map((r) =>
     (b.columns || []).map((c, ci) => {
       const cl = (r.cells || [])[ci] || {};
@@ -109,7 +137,7 @@ function tableBlockConfig(b) {
   }));
   const J = (o) => JSON.stringify(o, null, 4);
   return {
-    colsArr: colsOut, tplMembers,
+    colsArr: colsOut, tplMembers, rowMembers,
     cols: J(colsOut), rows: J(rowsOut), rules: J(rulesOut), icons: J(usedIcons),
     filters: J(filtersOut),
     dataSource: b.dataSource === "array" ? "array" : "static",
@@ -248,6 +276,93 @@ function emitTable(parent, b) {
   const bodyCellLoop = hasColAccess
     ? `for (var ci = 0; ci < TCOLS.length; ci++) { if (!COL_VIS[ci]) { cellEls.push(null); continue; } var td = buildCellEl(r, ci, pp); if (!COL_OP[ci]) { var __oe = td.querySelectorAll('button, input, select, textarea'); for (var __oi = 0; __oi < __oe.length; __oi++) __oe[__oi].disabled = true; td.style.opacity = '0.55'; } cellEls.push(td); tr.appendChild(td); }`
     : `for (var ci = 0; ci < TCOLS.length; ci++) { var td = buildCellEl(r, ci, pp); cellEls.push(td); tr.appendChild(td); }`;
+  // Zeilenabhaengige Einheit/Nachkommastellen/Vorhanden: Zusatzlogik nur erzeugen,
+  // wenn eine Spalte unitm/hasm/decmap nutzt (sonst Modul-Text byte-identisch).
+  const hasRowFmt = c.colsArr.some((cc) => cc.unitm || cc.hasm || cc.decmap);
+  const rArg = hasRowFmt ? ", r" : "";
+  const xValsDecl = hasRowFmt ? `\n    var xVals = {};       // xVals[member][zeile] – zeilenabhaengige Einheit/Kennbits (Array-Modus)` : "";
+  const fmtReadSrc = hasRowFmt
+    ? `    // Zahl und Einheit getrennt (Einheit/Nachkommastellen ggf. je Zeile, siehe rowUnit/rowDec).
+    // r === undefined -> Spalten-Einstellung (z. B. Aufrufe ohne Zeilenbezug).
+    function fmtParts(ci, v, r) {
+        var col = TCOLS[ci];
+        if (r !== undefined && !rowHas(r, col)) return { n: '–', u: '' };
+        if (v === undefined || v === null) return { n: '–', u: '' };
+        var unit = r !== undefined ? rowUnit(r, col) : col.unit;
+        var dec = rowDec(col, unit);
+        var num = Number(v);
+        if (typeof v !== 'boolean' && v !== '' && !isNaN(num) && isFinite(num)) return { n: dec >= 0 ? num.toFixed(dec) : String(v), u: unit };
+        return { n: String(v), u: unit };
+    }
+    function fmtRead(ci, v, r) {
+        var f = fmtParts(ci, v, r);
+        if (f.n === '–') return f.n;
+        return f.u ? f.n + (f.u === '%' ? f.u : ' ' + f.u) : f.n;
+    }`
+    : `    function fmtRead(ci, v) {
+        var col = TCOLS[ci];
+        if (v === undefined || v === null) return '–';
+        var out;
+        var num = Number(v);
+        if (typeof v !== 'boolean' && v !== '' && !isNaN(num) && isFinite(num)) out = col.dec >= 0 ? num.toFixed(col.dec) : String(v);
+        else out = String(v);
+        if (col.unit) out += (col.unit === '%' ? col.unit : ' ' + col.unit);
+        return out;
+    }`;
+  const rowFmtHelpers = hasRowFmt ? `    // ── Zeilenabhaengige Darstellung: Einheit, Nachkommastellen, Vorhanden-Kennbit ──
+    //   col.unitm  -> Einheit aus Struct-Member der Zeile (sonst col.unit)
+    //   col.decmap -> Nachkommastellen je Einheit (sonst col.dec)
+    //   col.hasm   -> BOOL-Member: FALSE/noch unbekannt = Zelle zeigt '–', keine Eingabe
+    function xGet(m, r) { return xVals[m] ? xVals[m][r] : undefined; }
+    function setX(m, r, v) { if (!xVals[m]) xVals[m] = []; xVals[m][r] = v; queueRender(); }
+    function rowHas(r, col) {
+        if (!col.hasm) return true;
+        var b = xGet(col.hasm, r);
+        return b === true || b === 1 || b === '1' || b === 'true';
+    }
+    function rowUnit(r, col) {
+        if (!col.unitm) return col.unit;
+        var u = xGet(col.unitm, r);
+        return (u === undefined || u === null) ? '' : String(u).trim();
+    }
+    function rowDec(col, unit) {
+        if (col.decmap && unit && Object.prototype.hasOwnProperty.call(col.decmap, unit)) return col.decmap[unit];
+        return col.dec;
+    }
+    // Wert in eine Zelle/einen Button schreiben. Mit unitm: Zahl und Einheit in eigenen
+    // Spans, Einheit mit fester Mindestbreite -> Zahlen stehen buendig untereinander.
+    function putVal(el, ci, v, r) {
+        var col = TCOLS[ci];
+        if (!col.unitm) { el.textContent = fmtRead(ci, v, r); return; }
+        var f = fmtParts(ci, v, r);
+        el.textContent = '';
+        var ns = document.createElement('span');
+        ns.textContent = f.n;
+        el.appendChild(ns);
+        var us = document.createElement('span');
+        us.textContent = f.u;
+        us.style.cssText = 'display:inline-block;min-width:3.2em;margin-left:.3em;text-align:left;opacity:.75;';
+        el.appendChild(us);
+    }
+` : "";
+  const naCellSrc = hasRowFmt ? `
+        if (col.hasm && !rowHas(r, col)) {
+            td.textContent = '–';
+            td.style.textAlign = 'center';
+            td.style.color = pp.inactive;
+            return td;
+        }` : "";
+  const readCellSrc = hasRowFmt ? `putVal(td, ci, v, r);` : `td.textContent = fmtRead(ci, v);`;
+  const kpBtnTextSrc = hasRowFmt ? `putVal(kb, ci, v, r);` : `kb.textContent = fmtRead(ci, v);`;
+  const kpUnitDecSrc = hasRowFmt ? `unit: rowUnit(r, col), decimals: rowDec(col, rowUnit(r, col))` : `unit: col.unit, decimals: col.dec`;
+  const sortNaSrc = hasRowFmt ? `\n        if ((col.kind === 'read' || col.kind === 'input') && !rowHas(r, col)) return undefined;` : "";
+  const xBindSrc = hasRowFmt ? `
+    // Zeilenabhaengige Einheit/Kennbits: Member je Zeile auf demselben Weg wie die Zellen lesen
+    var XMEMBERS = ${JSON.stringify(c.rowMembers)};
+    if (DATA_SOURCE === 'array') XMEMBERS.forEach(function (m) { for (var xr = 0; xr < ARRAY_COUNT; xr++) bound.push({ r: xr, c: -1, m: m, s: dynSym(xr, m) }); });` : "";
+  const watchSetSrc = hasRowFmt ? `if (bd.m) setX(bd.m, bd.r, v); else setVal(bd.r, bd.c, v);` : `setVal(bd.r, bd.c, v);`;
+  const batchXSrc = hasRowFmt ? `
+                    if (bd.m) { if (!xVals[bd.m]) xVals[bd.m] = []; xVals[bd.m][bd.r] = cmd.readValue; continue; }` : "";
   // Keypad-Spalten (AC_NumPad): Zusatzlogik nur erzeugen, wenn genutzt (Golden-neutral).
   const hasKeypad = c.colsArr.some((cc) => cc.kp);
   const kpHelpers = hasKeypad ? `    // ── Keypad (${NUMPAD_FN}): Zelle oeffnet das Zahleneingabe-Popup ──
@@ -288,13 +403,13 @@ function emitTable(parent, b) {
         var f = fns ? fns.${NUMPAD_FN} : null;
         if (typeof f !== 'function') { if (window.console) console.warn('${NUMPAD_FN}: Funktionsdatei nicht geladen.'); return; }
         var s = symFor(r, ci); if (!s) return;
-        f({ symbol: s, min: kpLimit(r, ci, col.kp.min), max: kpLimit(r, ci, col.kp.max), unit: col.unit, decimals: col.dec, title: kpTitle(r, ci) });
+        f({ symbol: s, min: kpLimit(r, ci, col.kp.min), max: kpLimit(r, ci, col.kp.max), ${kpUnitDecSrc}, title: kpTitle(r, ci) });
     }
 ` : "";
   const kpCellSrc = hasKeypad ? `        } else if (col.kind === 'input' && col.kp) {
             var kb = document.createElement('button');
             kb.type = 'button';
-            kb.textContent = fmtRead(ci, v);
+            ${kpBtnTextSrc}
             kb.style.cssText = 'min-width:80px;padding:3px 8px;border:1px solid ' + pp.border + ';border-radius:5px;background:' + pp.boxBg + ';color:' + pp.bodyText + ';font-size:18px;text-align:right;font-variant-numeric:tabular-nums;cursor:pointer;';
             kb.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
             kb.onclick = function (e) { e.stopPropagation(); if (kb.disabled) return; openPadT(r, ci); };
@@ -364,7 +479,7 @@ function emitTable(parent, b) {
     var page = 0, query = '';
     var sortCol = DEFAULT_SORT_COL, sortDir = DEFAULT_SORT_DIR; // aktive Sortierung
     var tbody = null, pageInfo = null, prevBtn = null, nextBtn = null, wrap = null;
-    var sortThs = []; // { el: <span Pfeil>, col: <Spaltenindex> } je sortierbarer Kopfzelle${colVisDecl}${tplValsDecl}
+    var sortThs = []; // { el: <span Pfeil>, col: <Spaltenindex> } je sortierbarer Kopfzelle${colVisDecl}${tplValsDecl}${xValsDecl}
 
     function locT(key, fallback) {
         try { var f = TcHmi.Functions.getFunction('GetLocalizedText'); if (f) { var t = f(key); if (t !== null && t !== undefined && t !== '') return t; } } catch (e) {}
@@ -449,16 +564,7 @@ function emitTable(parent, b) {
         renderQueued = true;
         window.requestAnimationFrame(function () { renderQueued = false; renderBody(); });
     }
-    function fmtRead(ci, v) {
-        var col = TCOLS[ci];
-        if (v === undefined || v === null) return '–';
-        var out;
-        var num = Number(v);
-        if (typeof v !== 'boolean' && v !== '' && !isNaN(num) && isFinite(num)) out = col.dec >= 0 ? num.toFixed(col.dec) : String(v);
-        else out = String(v);
-        if (col.unit) out += (col.unit === '%' ? col.unit : ' ' + col.unit);
-        return out;
-    }
+${fmtReadSrc}
     function mapEntry(ci, v) {
         var m = TCOLS[ci].map, sv = String(v === undefined || v === null ? '' : v).trim();
         var svb = (sv === '1' || sv === 'true') ? 'true' : ((sv === '0' || sv === 'false') ? 'false' : null);
@@ -471,7 +577,7 @@ function emitTable(parent, b) {
     function cellSearchText(r, ci) {
         var col = TCOLS[ci], v = vals[r] ? vals[r][ci] : undefined;
         ${searchTextSrc}
-        if (col.kind === 'read' || col.kind === 'input') return fmtRead(ci, v);
+        if (col.kind === 'read' || col.kind === 'input') return fmtRead(ci, v${rArg});
         if (col.kind === 'enum' || col.kind === 'icon') { var e = mapEntry(ci, v); return e ? locT(e.loc, e.label) : String(v === undefined ? '' : v); }
         return '';
     }
@@ -523,16 +629,16 @@ function emitTable(parent, b) {
         if (DATA_SOURCE === 'array') { if (dynCount >= 0 && dynCount < n) n = dynCount; if (n > ARRAY_COUNT) n = ARRAY_COUNT; }
         return n;
     }
-${tplHelpers}${timeHelpers}${kpHelpers}    function buildCellEl(r, ci, pp) {
+${tplHelpers}${timeHelpers}${rowFmtHelpers}${kpHelpers}    function buildCellEl(r, ci, pp) {
         var col = TCOLS[ci];
         var td = document.createElement('td');
         td.style.cssText = 'padding:6px 10px;border-top:1px solid ' + pp.border + ';font-size:18px;color:' + pp.bodyText + ';white-space:nowrap;'
             + ((col.kind === 'read' || col.kind === 'input') ? 'text-align:right;font-variant-numeric:tabular-nums;' : '');
-        var v = vals[r] ? vals[r][ci] : undefined;
+        var v = vals[r] ? vals[r][ci] : undefined;${naCellSrc}
         if (col.kind === 'text') {
 ${textCellSrc}
         } else if (col.kind === 'read') {
-            td.textContent = fmtRead(ci, v);
+            ${readCellSrc}
         } else if (col.kind === 'bool') {
             var led = document.createElement('span');
             var on = (v === true || v === 1 || v === '1' || v === 'true');
@@ -584,7 +690,7 @@ ${enumCellSrc}
     // Sortierschluessel je Zeile fuer die aktive Spalte: text -> lokalisierter Text,
     // sonst der Rohwert. Wird typrichtig verglichen (Zahl/Bool/String).
     function sortValue(r, ci) {
-        var col = TCOLS[ci];
+        var col = TCOLS[ci];${sortNaSrc}
         if (col.kind === 'text') return cellSearchText(r, ci);
         return vals[r] ? vals[r][ci] : undefined;
     }
@@ -799,9 +905,9 @@ ${enumCellSrc}
             var s0 = symFor(r0, c0);
             if (needsRead && s0) bound.push({ r: r0, c: c0, s: s0 });
         }
-    }
+    }${xBindSrc}
     if (bound.length <= WATCH_LIMIT) {
-        bound.forEach(function (bd) { subscribeT(bd.s, function (v) { setVal(bd.r, bd.c, v); }); });
+        bound.forEach(function (bd) { subscribeT(bd.s, function (v) { ${watchSetSrc} }); });
     } else {
         // Zuordnung der Antworten ueber den Symbolnamen: Nach der ersten Antwort
         // schickt der Server nur noch geaenderte Werte, die Position i passt dann
@@ -828,7 +934,7 @@ ${enumCellSrc}
                     if (!bd) {
                         if (!warnedUnknownSym && window.console) { warnedUnknownSym = true; console.warn('AC_PopUp Tabelle: unbekanntes Symbol in Subscription-Antwort:', cmd.symbol); }
                         continue;
-                    }
+                    }${batchXSrc}
                     if (!vals[bd.r]) vals[bd.r] = [];
                     vals[bd.r][bd.c] = cmd.readValue;
                 }

@@ -21,9 +21,11 @@ const REF_NAMES = [
 
 // Optionale Namen: existieren nur, wenn das Feature im Block genutzt wird
 // (byte-neutrale Codegen-Varianten), daher per typeof abgesichert.
-const OPT_NAMES = ["tplVal", "tplStr", "tplText", "tplVals", "buildCellEl", "palT", "siblingSym", "kpLimit", "kpTitle", "openPadT"];
+const OPT_NAMES = ["tplVal", "tplStr", "tplText", "tplVals", "buildCellEl", "palT", "siblingSym", "kpLimit", "kpTitle", "openPadT",
+  "fmtRead", "fmtParts", "xVals", "setX", "rowHas", "rowUnit", "rowDec", "putVal"];
 
-function buildTableHooks(block, parentVarName = "parent") {
+// prepare(context): optional, laeuft vor dem Ausfuehren (z. B. TcHmi.Server.requestEx abfangen).
+function buildTableHooks(block, parentVarName = "parent", prepare) {
   const raw = emitTable(parentVarName, block);
   const marker = raw.lastIndexOf("})();");
   if (marker < 0) throw new Error("emitTable-Output endet nicht mit '})();' – Hook-Injektion nicht möglich.");
@@ -48,6 +50,7 @@ function buildTableHooks(block, parentVarName = "parent") {
   // stellen wir es selbst bereit, damit der Standalone-Lauf nicht platzt.
   context.teardowns = [];
   context.__hooks__ = { value: null };
+  if (typeof prepare === "function") prepare(context);
   vm.runInContext(injected, context, { filename: "emitTable-under-test.js" });
   if (!context.__hooks__.value) throw new Error("Hook wurde nicht erreicht – emitTable-Output hat vor dem Ende geworfen?");
   return { ...context.__hooks__.value, TcHmi: context.TcHmi, document: documentStub };
