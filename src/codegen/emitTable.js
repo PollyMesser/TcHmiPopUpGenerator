@@ -1,8 +1,10 @@
 import { jsStr, wrapSym, locExpr, indentLines, I, durHelpers } from "./helpers.js";
-import { COLORS, ICONS } from "../constants/palette.js";
+import { COLORS, ICONS, TABLE_SIZES } from "../constants/palette.js";
 import { compileAccess, accessActive } from "../model/access.js";
 import { parseTpl } from "../model/locTemplate.js";
 import { isNumStr, NUMPAD_FN } from "./emitNumPad.js";
+import { tableColDeps } from "../model/tableDeps.js";
+import { tableLayoutOf, tableSizeOf, fieldWidthOf } from "../model/tableLayout.js";
 
 const TPL_BOUND_KINDS = ["read", "bool", "check", "input", "enum", "icon"];
 const ENUM_DISPLAYS = ["text", "ctext", "dot"];
@@ -39,6 +41,7 @@ const decMapOf = (src) => {
 
 function tableBlockConfig(b) {
   const isArr = b.dataSource === "array";
+  const touch = tableLayoutOf(b) === "touch";
   // Text-Vorlage -> Teile-Array. {member} wird auf eine sichtbare, ungesperrte Spalte
   // mit demselben Member umgebogen (Wert ist dort ohnehin abonniert); sonst bleibt es
   // eine Member-Referenz und wird separat gelesen (TPL_MEMBERS, nur Array-Modus).
@@ -98,6 +101,21 @@ function tableBlockConfig(b) {
     ...((isArr && (c.kind === "read" || c.kind === "input") && (c.unitMember || "").trim()) ? { unitm: c.unitMember.trim() } : {}),
     ...((isArr && (c.kind === "read" || c.kind === "input") && (c.hasMember || "").trim()) ? { hasm: c.hasMember.trim() } : {}),
     ...((isArr && (c.kind === "read" || c.kind === "input") && decMapOf(c.decMap)) ? { decmap: decMapOf(c.decMap) } : {}),
+    // Ausgeblendete Spalte: wird gelesen (Filter/Regeln/Sortierung/Parameter/Suche), aber nicht
+    // angezeigt. Nur setzen, wenn aktiv -> Bestands-JSON byte-identisch.
+    ...(c.hidden ? { hide: true } : {}),
+    // Touch-Layout: einheitliche Feldbreite (ch) fuer Eingabe UND Keypad-Button einer Spalte.
+    // Nur im Touch-Layout gesetzt -> kompakte Bestandstabellen byte-identisch.
+    ...((touch && c.kind === "input") ? { fw: fieldWidthOf(c, isArr) } : {}),
+    // Textspalte kuerzen + per Tippen aufklappen: clamp = max. Breite in ch, 0 = Restbreite der
+    // Tabelle. Nur setzen, wenn aktiv -> Bestands-JSON byte-identisch.
+    //   cmin = Mindestbreite in ch (Standard 4, hoechstens clamp), Spalte wird nie schmaler.
+    ...((c.kind === "text" && c.clamp) ? (function () {
+      var n = parseInt(c.clampWidth); var w = (isNaN(n) || n < 1) ? 0 : Math.min(200, n);
+      var m = parseInt(c.clampMin); var mn = (isNaN(m) || m < 1) ? 4 : Math.min(200, m);
+      if (w && mn > w) mn = w;
+      return { clamp: w, cmin: mn };
+    })() : {}),
   }));
   // Member, die nur fuer Text-Vorlagen zusaetzlich gelesen werden muessen
   const tplMembers = [];
@@ -164,6 +182,12 @@ function tableBlockConfig(b) {
 
 function emitTable(parent, b) {
   const c = tableBlockConfig(b);
+  // ── Darstellung: 'touch' (Groessenstufe aus TABLE_SIZES als CSS-Variablen am Wrapper) oder
+  // 'compact' (bisherige Literal-Styles, byte-identisch). tv(kompakt, touch) waehlt je Stelle.
+  const touch = tableLayoutOf(b) === "touch";
+  const TS = TABLE_SIZES[tableSizeOf(b)];
+  const tv = (compact, touchSrc) => (touch ? touchSrc : compact);
+  const sizeVars = `--ac-fs:${TS.fs}px;--ac-hfs:${TS.hfs}px;--ac-rh:${TS.rh}px;--ac-ctl:${TS.ctl}px;--ac-led:${TS.led}px;--ac-pb:${TS.pb}px;--ac-pfs:${TS.pfs}px;`;
   // Eingabe-Typen der Spalten: bestimmen, ob Zeit-Helfer eingebettet werden und
   // ob die (byte-neutrale) erweiterte Zell-Input-Logik statt der Original-Variante
   // erzeugt wird. Ohne getypte Input-Spalte bleibt der Modul-Text byte-identisch.
@@ -176,6 +200,57 @@ function emitTable(parent, b) {
   const hasTpl = c.colsArr.some((cc) => cc.ltpl);
   const hasTplMembers = c.tplMembers.length > 0;
   const hasEnumDisp = c.colsArr.some((cc) => cc.edisp);
+  // Gekuerzte Textspalten (clamp): Zusatzlogik nur erzeugen, wenn genutzt (Golden-neutral).
+  const hasClamp = c.colsArr.some((cc) => cc.clamp !== undefined);
+  const clampDecl = hasClamp ? `\n    var expanded = {};    // aufgeklappte Textzellen: expanded['zeile:spalte'] (Datenzeile -> ueberlebt Neuaufbau, Sortieren, Blaettern)\n    var clampEls = [];    // gekuerzte Zellen der aktuellen Seite (fuer die Pfeil-Anzeige nach dem Einfuegen)` : "";
+  const clampHelpers = hasClamp ? `    // ── Gekuerzte Textzellen: einzeilig mit Ellipse, Tippen klappt mehrzeilig auf (mehrere gleichzeitig) ──
+    // col.clamp = max. Breite in ch; 0 = Restbreite (td width:100% + max-width:0). col.cmin = Mindestbreite in ch:
+    // so viele Zeichen bleiben mindestens sichtbar (+1ch fuer die Ellipse, +1.2em Pfeil, +20px Zellen-Padding).
+    function clampMinW(col, pad) { return 'calc(' + (col.cmin + 1) + 'ch + 1.2em' + (pad ? ' + 20px' : '') + ')'; }
+    // Der Zustand liegt in expanded[] statt im DOM, weil renderBody() bei jeder Wertaenderung neu aufbaut.
+    var CL_CLOSED = String.fromCharCode(9656), CL_OPEN = String.fromCharCode(9662);
+    function clampText(td, r, ci) {
+        var col = TCOLS[ci];
+        var key = r + ':' + ci;
+        var open = expanded[key] === true;
+        var txt = td.textContent;
+        td.textContent = '';
+        if (!col.clamp) { td.style.width = '100%'; td.style.maxWidth = '0'; }
+        td.style.minWidth = clampMinW(col, true);
+        td.style.whiteSpace = 'normal';
+        var box = document.createElement('div');
+        box.style.cssText = 'display:flex;align-items:flex-start;gap:6px;min-width:' + clampMinW(col, false) + ';' + (col.clamp ? 'max-width:' + col.clamp + 'ch;' : '');
+        var tx = document.createElement('span');
+        tx.textContent = txt;
+        tx.style.cssText = 'flex:1 1 auto;min-width:0;' + (open ? 'white-space:pre-wrap;overflow-wrap:anywhere;' : 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;');
+        var ind = document.createElement('span');
+        ind.textContent = open ? CL_OPEN : CL_CLOSED;
+        ind.style.cssText = 'flex:0 0 auto;opacity:.55;font-size:.8em;line-height:1.6;';
+        box.appendChild(tx);
+        box.appendChild(ind);
+        td.appendChild(box);
+        td.style.touchAction = 'manipulation';
+        td.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
+        td.addEventListener('click', function (e) {
+            e.stopPropagation();
+            if (!expanded[key] && !(tx.scrollWidth > tx.clientWidth + 1)) return; // passt vollstaendig -> nichts aufzuklappen
+            if (expanded[key]) delete expanded[key]; else expanded[key] = true;
+            renderBody();
+        });
+        clampEls.push({ td: td, tx: tx, ind: ind, open: open });
+    }
+    // Nach dem Einfuegen: Pfeil/Cursor nur bei tatsaechlich gekuerztem oder aufgeklapptem Text
+    function clampCheck() {
+        for (var i = 0; i < clampEls.length; i++) {
+            var ce = clampEls[i];
+            var cut = ce.open || ce.tx.scrollWidth > ce.tx.clientWidth + 1;
+            ce.ind.style.visibility = cut ? 'visible' : 'hidden';
+            ce.td.style.cursor = cut ? 'pointer' : '';
+            if (cut && !ce.open) ce.tx.title = ce.tx.textContent;
+        }
+        clampEls = [];
+    }
+` : "";
   const tplHelpers = hasTpl ? `    // ── Text-Vorlagen: Loc-Key je Zeile aus Literalen + Zellwerten zusammensetzen ──
     // Teil: 'Text' | { c: Spalte } | { m: Member } | { x: 1 } (Zeilenindex), optional p = Stellen (fuehrende Nullen).
     // Fehlt ein referenzierter Wert noch (PLC liefert nach), wird '–' angezeigt.
@@ -226,7 +301,7 @@ function emitTable(parent, b) {
                 if (e2) { td.style.color = e2.color; td.style.fontWeight = '600'; }
             } else if (col.edisp === 'dot') {
                 var dot = document.createElement('span');
-                dot.style.cssText = 'display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:8px;vertical-align:middle;background:' + (e2 ? e2.color : pp.inactive) + ';';
+                dot.style.cssText = 'display:inline-block;${tv("width:11px;height:11px;", "width:.65em;height:.65em;")}border-radius:50%;margin-right:8px;vertical-align:middle;background:' + (e2 ? e2.color : pp.inactive) + ';';
                 var dtx = document.createElement('span');
                 dtx.style.verticalAlign = 'middle';
                 dtx.textContent = etx;
@@ -234,14 +309,14 @@ function emitTable(parent, b) {
                 td.appendChild(dtx);
             } else {
                 var badge = document.createElement('span');
-                badge.style.cssText = 'display:inline-block;padding:2px 10px;border-radius:10px;font-size:16px;font-weight:600;background:' + (e2 ? e2.color : pp.inactive) + ';color:' + (e2 ? e2.text : '#ffffff') + ';';
+                badge.style.cssText = 'display:inline-block;${tv("padding:2px 10px;border-radius:10px;font-size:16px;", "padding:4px 12px;border-radius:12px;font-size:var(--ac-hfs);")}font-weight:600;background:' + (e2 ? e2.color : pp.inactive) + ';color:' + (e2 ? e2.text : '#ffffff') + ';';
                 badge.textContent = etx;
                 td.style.textAlign = 'center';
                 td.appendChild(badge);
             }`
     : `            var e2 = mapEntry(ci, v);
             var badge = document.createElement('span');
-            badge.style.cssText = 'display:inline-block;padding:2px 10px;border-radius:10px;font-size:16px;font-weight:600;background:' + (e2 ? e2.color : pp.inactive) + ';color:' + (e2 ? e2.text : '#ffffff') + ';';
+            badge.style.cssText = 'display:inline-block;${tv("padding:2px 10px;border-radius:10px;font-size:16px;", "padding:4px 12px;border-radius:12px;font-size:var(--ac-hfs);")}font-weight:600;background:' + (e2 ? e2.color : pp.inactive) + ';color:' + (e2 ? e2.text : '#ffffff') + ';';
             badge.textContent = e2 ? locT(e2.loc, e2.label) : (v === undefined || v === null ? '–' : String(v));
             td.style.textAlign = 'center';
             td.appendChild(badge);`;
@@ -267,15 +342,34 @@ function emitTable(parent, b) {
   // aendern sich zur Popup-Laufzeit nicht). observe-Deny = Spalte gar nicht
   // rendern/binden; operate-Deny = Bedienelemente der Zelle deaktivieren.
   const hasColAccess = cols0.some((cc) => accessActive(cc.access));
-  const colVisDecl = hasColAccess
+  // Ausgeblendete Spalten (col.hide): weiterhin gebunden und durchsuchbar, aber ohne
+  // Kopf-/Datenzelle. COL_SHOW = angezeigt (nicht ausgeblendet UND observe erlaubt).
+  // Ohne ausgeblendete Spalte bleibt der Modul-Text byte-identisch (COL_VIS wie bisher).
+  const hasHide = c.colsArr.some((cc) => cc.hide);
+  const showArr = hasHide ? "COL_SHOW" : "COL_VIS";
+  // observe-gesperrte Spalten, von denen Filter/Regeln/Sortierung/Button-Parameter/
+  // Text-Vorlagen abhaengen, werden trotzdem gelesen (sonst z. B. Filter 'notZero' ->
+  // alle Zeilen weg, Parameter null). Angezeigt/durchsucht werden sie weiterhin nicht.
+  const colDeps = tableColDeps(b);
+  const obsDep = c.colsArr.map((cc, i) => !!(cc.acc && cc.acc.observe) && colDeps[i].length > 0);
+  const hasObsDep = hasColAccess && obsDep.some(Boolean);
+  const colVisDecl = (hasColAccess
     ? `\n    var COL_VIS = TCOLS.map(function (col) { return !col.acc || acAllowed(col.acc.observe); });\n    var COL_OP = TCOLS.map(function (col) { return !col.acc || acAllowed(col.acc.operate); });`
-    : "";
-  const bindSkip = hasColAccess ? ` if (!COL_VIS[c0]) continue;` : "";
-  const headSkip = hasColAccess ? ` if (!isIdx && col0 && !COL_VIS[colIdx]) return;` : "";
+    : "")
+    + (hasHide
+      ? (hasColAccess
+        ? `\n    var COL_SHOW = TCOLS.map(function (col, i) { return !col.hide && COL_VIS[i]; }); // angezeigt: nicht ausgeblendet und observe erlaubt`
+        : `\n    var COL_SHOW = TCOLS.map(function (col) { return !col.hide; }); // ausgeblendete Spalten: gelesen, nicht angezeigt`)
+      : "")
+    + (hasObsDep ? `\n    var COL_DEP = ${JSON.stringify(obsDep)}; // observe-gesperrt, aber benoetigt (Filter/Regel/Sortierung/Parameter/Vorlage) -> trotzdem lesen` : "");
+  const bindSkip = hasColAccess ? (hasObsDep ? ` if (!COL_VIS[c0] && !COL_DEP[c0]) continue;` : ` if (!COL_VIS[c0]) continue;`) : "";
+  const headSkip = (hasColAccess || hasHide) ? ` if (!isIdx && col0 && !${showArr}[colIdx]) return;` : "";
   const searchColSkip = hasColAccess ? `if (!COL_VIS[ci]) continue; ` : "";
   const bodyCellLoop = hasColAccess
-    ? `for (var ci = 0; ci < TCOLS.length; ci++) { if (!COL_VIS[ci]) { cellEls.push(null); continue; } var td = buildCellEl(r, ci, pp); if (!COL_OP[ci]) { var __oe = td.querySelectorAll('button, input, select, textarea'); for (var __oi = 0; __oi < __oe.length; __oi++) __oe[__oi].disabled = true; td.style.opacity = '0.55'; } cellEls.push(td); tr.appendChild(td); }`
-    : `for (var ci = 0; ci < TCOLS.length; ci++) { var td = buildCellEl(r, ci, pp); cellEls.push(td); tr.appendChild(td); }`;
+    ? `for (var ci = 0; ci < TCOLS.length; ci++) { if (!${showArr}[ci]) { cellEls.push(null); continue; } var td = buildCellEl(r, ci, pp); if (!COL_OP[ci]) { var __oe = td.querySelectorAll('button, input, select, textarea'); for (var __oi = 0; __oi < __oe.length; __oi++) __oe[__oi].disabled = true; td.style.opacity = '0.55'; } cellEls.push(td); tr.appendChild(td); }`
+    : (hasHide
+      ? `for (var ci = 0; ci < TCOLS.length; ci++) { if (!COL_SHOW[ci]) { cellEls.push(null); continue; } var td = buildCellEl(r, ci, pp); cellEls.push(td); tr.appendChild(td); }`
+      : `for (var ci = 0; ci < TCOLS.length; ci++) { var td = buildCellEl(r, ci, pp); cellEls.push(td); tr.appendChild(td); }`);
   // Zeilenabhaengige Einheit/Nachkommastellen/Vorhanden: Zusatzlogik nur erzeugen,
   // wenn eine Spalte unitm/hasm/decmap nutzt (sonst Modul-Text byte-identisch).
   const hasRowFmt = c.colsArr.some((cc) => cc.unitm || cc.hasm || cc.decmap);
@@ -410,7 +504,7 @@ function emitTable(parent, b) {
             var kb = document.createElement('button');
             kb.type = 'button';
             ${kpBtnTextSrc}
-            kb.style.cssText = 'min-width:80px;padding:3px 8px;border:1px solid ' + pp.border + ';border-radius:5px;background:' + pp.boxBg + ';color:' + pp.bodyText + ';font-size:18px;text-align:right;font-variant-numeric:tabular-nums;cursor:pointer;';
+            kb.style.cssText = ${tv("'min-width:80px;padding:3px 8px;", "'width:' + col.fw + 'ch;min-height:calc(var(--ac-rh) - 16px);box-sizing:content-box;padding:3px 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;touch-action:manipulation;")}border:1px solid ' + pp.border + ';border-radius:5px;background:' + pp.boxBg + ';color:' + pp.bodyText + ';${tv("font-size:18px;", "font-size:var(--ac-fs);")}text-align:right;font-variant-numeric:tabular-nums;cursor:pointer;';
             kb.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
             kb.onclick = function (e) { e.stopPropagation(); if (kb.disabled) return; openPadT(r, ci); };
             td.appendChild(kb);
@@ -420,7 +514,7 @@ function emitTable(parent, b) {
             var itype = col.itype || '';
             inp.type = 'text';
             inp.value = (v === undefined || v === null) ? '' : (itype === 'time' ? durToHMS(v) : String(v));
-            inp.style.cssText = 'width:80px;padding:3px 6px;border:1px solid ' + pp.border + ';border-radius:5px;background:' + pp.boxBg + ';color:' + pp.bodyText + ';font-size:18px;text-align:' + (itype === 'time' ? 'center' : 'right') + ';';
+            inp.style.cssText = ${tv("'width:80px;padding:3px 6px;", "'width:' + col.fw + 'ch;height:calc(var(--ac-rh) - 16px);box-sizing:content-box;padding:3px 10px;font-variant-numeric:tabular-nums;")}border:1px solid ' + pp.border + ';border-radius:5px;background:' + pp.boxBg + ';color:' + pp.bodyText + ';${tv("font-size:18px;", "font-size:var(--ac-fs);")}text-align:' + (itype === 'time' ? 'center' : 'right') + ';';
             if (itype === 'time') inp.placeholder = 'HH:MM:SS';
             inp.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
             var send = function () {
@@ -438,7 +532,7 @@ function emitTable(parent, b) {
     : `            var inp = document.createElement('input');
             inp.type = 'text';
             inp.value = (v === undefined || v === null) ? '' : String(v);
-            inp.style.cssText = 'width:80px;padding:3px 6px;border:1px solid ' + pp.border + ';border-radius:5px;background:' + pp.boxBg + ';color:' + pp.bodyText + ';font-size:18px;text-align:right;';
+            inp.style.cssText = ${tv("'width:80px;padding:3px 6px;", "'width:' + col.fw + 'ch;height:calc(var(--ac-rh) - 16px);box-sizing:content-box;padding:3px 10px;font-variant-numeric:tabular-nums;")}border:1px solid ' + pp.border + ';border-radius:5px;background:' + pp.boxBg + ';color:' + pp.bodyText + ';${tv("font-size:18px;", "font-size:var(--ac-fs);")}text-align:right;';
             inp.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
             var send = function () {
                 var s = symFor(r, ci); if (!s) return;
@@ -449,6 +543,58 @@ function emitTable(parent, b) {
             inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { send(); inp.blur(); } });
             inp.addEventListener('blur', send);
             td.appendChild(inp);`;
+  // Touch-Pager: zusaetzliche Buttons
+  const pagerVarsSrc = tv(``, `
+    var firstBtn = null, lastBtn = null; // Touch-Pager: erste/letzte Seite`);
+  // Checkbox-Zelle: Touch -> groesser, ganze Zelle tippbar
+  const checkCellSrc = tv(`            cb.style.cssText = 'width:18px;height:18px;cursor:pointer;';
+            cb.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
+            cb.addEventListener('change', function () { var s = symFor(r, ci); if (s) writeT(s, cb.checked); });
+`, `            cb.style.cssText = 'width:var(--ac-ctl);height:var(--ac-ctl);margin:0;vertical-align:middle;cursor:pointer;accent-color:' + pp.active + ';';
+            cb.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
+            cb.addEventListener('change', function () { var s = symFor(r, ci); if (s) writeT(s, cb.checked); });
+            // Touch: ganze Zelle ist Trefferflaeche; operate-Sperre greift ueber cb.disabled
+            td.style.cursor = 'pointer';
+            td.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
+            td.addEventListener('click', function (e) { if (e.target === cb || cb.disabled) return; cb.checked = !cb.checked; var s = symFor(r, ci); if (s) writeT(s, cb.checked); });
+`);
+  // Pager-Zustand: Touch -> auch erste/letzte + Abdimmen
+  const pagerUpdSrc = tv(`            if (prevBtn) prevBtn.disabled = page <= 0;
+            if (nextBtn) nextBtn.disabled = page >= pages - 1;
+`, `            if (prevBtn) prevBtn.disabled = page <= 0;
+            if (nextBtn) nextBtn.disabled = page >= pages - 1;
+            if (firstBtn) firstBtn.disabled = page <= 0;
+            if (lastBtn) lastBtn.disabled = page >= pages - 1;
+            [firstBtn, prevBtn, nextBtn, lastBtn].forEach(function (pb) { if (pb) pb.style.opacity = pb.disabled ? '.35' : '1'; });
+`);
+  // Pager: Touch -> grosse Tastflaechen + erste/letzte Seite
+  const pagerSrc = tv(`        pager.style.cssText = 'display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:6px;';
+        var pbStyle = 'padding:2px 10px;border:1px solid ' + pp0.border + ';border-radius:6px;background:transparent;color:' + pp0.bodyText + ';font-size:16px;cursor:pointer;';
+        prevBtn = document.createElement('button'); prevBtn.textContent = '‹'; prevBtn.style.cssText = pbStyle; prevBtn.setAttribute('data-ac-view', '1');
+        nextBtn = document.createElement('button'); nextBtn.textContent = '›'; nextBtn.style.cssText = pbStyle; nextBtn.setAttribute('data-ac-view', '1');
+        pageInfo = document.createElement('span'); pageInfo.style.cssText = 'font-size:16px;color:' + pp0.bodyText + ';opacity:.75;font-variant-numeric:tabular-nums;';
+        prevBtn.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
+        nextBtn.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
+        prevBtn.onclick = function (e) { e.stopPropagation(); page -= 1; renderBody(); };
+        nextBtn.onclick = function (e) { e.stopPropagation(); page += 1; renderBody(); };
+        pager.appendChild(prevBtn); pager.appendChild(pageInfo); pager.appendChild(nextBtn);
+`, `        // Touch-Pager: Tastflaechen var(--ac-pb) (mind. 40-52 px), erste/letzte Seite, Seitenanzeige mittig
+        pager.style.cssText = 'display:flex;align-items:center;justify-content:flex-end;gap:10px;margin-top:8px;';
+        var pbStyle = 'width:var(--ac-pb);height:var(--ac-pb);padding:0;display:inline-flex;align-items:center;justify-content:center;border:1px solid ' + pp0.border + ';border-radius:8px;background:transparent;color:' + pp0.bodyText + ';font-size:var(--ac-pfs);line-height:1;cursor:pointer;touch-action:manipulation;';
+        var mkPb = function (txt, title, go) {
+            var bt = document.createElement('button');
+            bt.type = 'button'; bt.textContent = txt; bt.title = title; bt.style.cssText = pbStyle; bt.setAttribute('data-ac-view', '1');
+            bt.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
+            bt.onclick = function (e) { e.stopPropagation(); if (bt.disabled) return; go(); renderBody(); };
+            return bt;
+        };
+        firstBtn = mkPb('«', locT('L_Tbl_First', 'Erste Seite'), function () { page = 0; });
+        prevBtn = mkPb('‹', locT('L_Tbl_Prev', 'Vorherige Seite'), function () { page -= 1; });
+        nextBtn = mkPb('›', locT('L_Tbl_Next', 'Nächste Seite'), function () { page += 1; });
+        lastBtn = mkPb('»', locT('L_Tbl_Last', 'Letzte Seite'), function () { page = 1e9; }); // renderBody begrenzt auf letzte Seite
+        pageInfo = document.createElement('span'); pageInfo.style.cssText = 'min-width:4.5em;text-align:center;font-size:var(--ac-pfs);color:' + pp0.bodyText + ';opacity:.8;font-variant-numeric:tabular-nums;';
+        pager.appendChild(firstBtn); pager.appendChild(prevBtn); pager.appendChild(pageInfo); pager.appendChild(nextBtn); pager.appendChild(lastBtn);
+`);
   const core = `// Generische Tabelle (eigenständiges Modul, eigener Lebenszyklus)
 (function () {
     var TCOLS = ${c.cols};
@@ -478,8 +624,8 @@ function emitTable(parent, b) {
     var dynCount = -1;    // Wert aus COUNT_SYMBOL (-1 = unbenutzt)
     var page = 0, query = '';
     var sortCol = DEFAULT_SORT_COL, sortDir = DEFAULT_SORT_DIR; // aktive Sortierung
-    var tbody = null, pageInfo = null, prevBtn = null, nextBtn = null, wrap = null;
-    var sortThs = []; // { el: <span Pfeil>, col: <Spaltenindex> } je sortierbarer Kopfzelle${colVisDecl}${tplValsDecl}${xValsDecl}
+    var tbody = null, pageInfo = null, prevBtn = null, nextBtn = null, wrap = null;${pagerVarsSrc}
+    var sortThs = []; // { el: <span Pfeil>, col: <Spaltenindex> } je sortierbarer Kopfzelle${colVisDecl}${tplValsDecl}${xValsDecl}${clampDecl}
 
     function locT(key, fallback) {
         try { var f = TcHmi.Functions.getFunction('GetLocalizedText'); if (f) { var t = f(key); if (t !== null && t !== undefined && t !== '') return t; } } catch (e) {}
@@ -629,37 +775,34 @@ ${fmtReadSrc}
         if (DATA_SOURCE === 'array') { if (dynCount >= 0 && dynCount < n) n = dynCount; if (n > ARRAY_COUNT) n = ARRAY_COUNT; }
         return n;
     }
-${tplHelpers}${timeHelpers}${rowFmtHelpers}${kpHelpers}    function buildCellEl(r, ci, pp) {
+${tplHelpers}${timeHelpers}${rowFmtHelpers}${kpHelpers}${clampHelpers}    function buildCellEl(r, ci, pp) {
         var col = TCOLS[ci];
         var td = document.createElement('td');
-        td.style.cssText = 'padding:6px 10px;border-top:1px solid ' + pp.border + ';font-size:18px;color:' + pp.bodyText + ';white-space:nowrap;'
+        td.style.cssText = '${tv("padding:6px 10px;", "padding:4px 10px;height:var(--ac-rh);box-sizing:border-box;vertical-align:middle;")}border-top:1px solid ' + pp.border + ';${tv("font-size:18px;", "font-size:var(--ac-fs);")}color:' + pp.bodyText + ';white-space:nowrap;'
             + ((col.kind === 'read' || col.kind === 'input') ? 'text-align:right;font-variant-numeric:tabular-nums;' : '');
         var v = vals[r] ? vals[r][ci] : undefined;${naCellSrc}
         if (col.kind === 'text') {
-${textCellSrc}
+${textCellSrc}${hasClamp ? "\n            if (col.clamp !== undefined) clampText(td, r, ci);" : ""}
         } else if (col.kind === 'read') {
             ${readCellSrc}
         } else if (col.kind === 'bool') {
             var led = document.createElement('span');
             var on = (v === true || v === 1 || v === '1' || v === 'true');
-            led.style.cssText = 'display:inline-block;width:15px;height:15px;border-radius:50%;background:' + (on ? pp.active : pp.inactive) + ';';
+            led.style.cssText = 'display:inline-block;${tv("width:15px;height:15px;", "width:var(--ac-led);height:var(--ac-led);vertical-align:middle;")}border-radius:50%;background:' + (on ? pp.active : pp.inactive) + ';'${tv("", " + (on ? 'box-shadow:0 0 6px ' + pp.active + ';' : '')")};
             td.style.textAlign = 'center';
             td.appendChild(led);
         } else if (col.kind === 'check') {
             var cb = document.createElement('input');
             cb.type = 'checkbox';
             cb.checked = (v === true || v === 1 || v === '1' || v === 'true');
-            cb.style.cssText = 'width:18px;height:18px;cursor:pointer;';
-            cb.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
-            cb.addEventListener('change', function () { var s = symFor(r, ci); if (s) writeT(s, cb.checked); });
-            td.style.textAlign = 'center';
+${checkCellSrc}            td.style.textAlign = 'center';
             td.appendChild(cb);
 ${kpCellSrc}        } else if (col.kind === 'input') {
 ${inputCellSrc}
         } else if (col.kind === 'button') {
             var btn = document.createElement('button');
             btn.textContent = locT(col.lloc, col.label || 'OK');
-            btn.style.cssText = 'padding:4px 12px;border:1px solid ' + pp.border + ';border-radius:6px;background:transparent;color:' + pp.bodyText + ';font-size:16px;font-weight:600;cursor:pointer;';
+            btn.style.cssText = '${tv("padding:4px 12px;", "min-width:var(--ac-pb);min-height:calc(var(--ac-rh) - 8px);padding:4px 14px;touch-action:manipulation;")}border:1px solid ' + pp.border + ';border-radius:6px;background:transparent;color:' + pp.bodyText + ';${tv("font-size:16px;", "font-size:var(--ac-hfs);")}font-weight:600;cursor:pointer;';
             btn.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
             btn.onclick = function (e) {
                 e.stopPropagation();
@@ -754,14 +897,14 @@ ${enumCellSrc}
         if (page >= pages) page = pages - 1;
         if (page < 0) page = 0;
         var slice = PAGE_SIZE > 0 ? visible.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE) : visible;
-        while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
+        while (tbody.firstChild) tbody.removeChild(tbody.firstChild);${hasClamp ? "\n        clampEls = [];" : ""}
         slice.forEach(function (r, vi) {
             var tr = document.createElement('tr');
             if (STRIPED && vi % 2 === 1) tr.style.background = pp.stripe;
             if (SHOW_INDEX) {
                 var tdIdx = document.createElement('td');
                 tdIdx.textContent = String(START_INDEX + r);
-                tdIdx.style.cssText = 'padding:6px 10px;border-top:1px solid ' + pp.border + ';font-size:16px;color:' + pp.bodyText + ';opacity:.6;text-align:right;font-variant-numeric:tabular-nums;';
+                tdIdx.style.cssText = '${tv("padding:6px 10px;", "padding:4px 10px;height:var(--ac-rh);box-sizing:border-box;vertical-align:middle;")}border-top:1px solid ' + pp.border + ';${tv("font-size:16px;", "font-size:var(--ac-hfs);")}color:' + pp.bodyText + ';opacity:.6;text-align:right;font-variant-numeric:tabular-nums;';
                 tr.appendChild(tdIdx);
             }
             var cellEls = [];
@@ -774,31 +917,29 @@ ${enumCellSrc}
                 else if (cellEls[rule.c]) cellEls[rule.c].style.background = rule.color + '33';
             }
             tbody.appendChild(tr);
-        });
+        });${hasClamp ? "\n        clampCheck();" : ""}
         if (pageInfo) {
             pageInfo.textContent = pages > 1 || PAGE_SIZE > 0 ? ((page + 1) + ' / ' + pages) : '';
-            if (prevBtn) prevBtn.disabled = page <= 0;
-            if (nextBtn) nextBtn.disabled = page >= pages - 1;
-        }
+${pagerUpdSrc}        }
     }
 
     // ── DOM-Aufbau ──
     var pp0 = palT();
     wrap = document.createElement('div');
-    wrap.style.cssText = 'display:flex;flex-direction:column;width:100%;min-width:0;margin-bottom:16px;';
+    wrap.style.cssText = 'display:flex;flex-direction:column;width:100%;min-width:0;margin-bottom:16px;${touch ? sizeVars : ""}';
     var capText = ${c.captionExpr};
     if (capText || SEARCH_ON) {
         var top = document.createElement('div');
         top.style.cssText = 'display:flex;align-items:center;gap:10px;margin-bottom:8px;';
         var cap = document.createElement('span');
-        cap.style.cssText = 'flex:1 1 auto;font-size:18px;font-weight:600;color:' + pp0.titleColor + ';';
+        cap.style.cssText = 'flex:1 1 auto;${tv("font-size:18px;", "font-size:var(--ac-fs);")}font-weight:600;color:' + pp0.titleColor + ';';
         cap.textContent = capText;
         top.appendChild(cap);
         if (SEARCH_ON) {
             var se = document.createElement('input');
             se.type = 'text';
             se.placeholder = locT('L_Tbl_Search', 'Suchen…');
-            se.style.cssText = 'flex:0 0 auto;width:160px;padding:4px 8px;border:1px solid ' + pp0.border + ';border-radius:6px;background:' + pp0.boxBg + ';color:' + pp0.bodyText + ';font-size:16px;';
+            se.style.cssText = '${tv("flex:0 0 auto;width:160px;padding:4px 8px;", "flex:0 1 auto;width:220px;min-width:120px;height:var(--ac-pb);box-sizing:border-box;padding:4px 10px;")}border:1px solid ' + pp0.border + ';border-radius:6px;background:' + pp0.boxBg + ';color:' + pp0.bodyText + ';${tv("font-size:16px;", "font-size:var(--ac-hfs);")}';
             se.setAttribute('data-ac-view', '1'); // Ansichtssteuerung: bleibt bei operate-Deny nutzbar
             se.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
             se.addEventListener('input', function () { query = se.value || ''; page = 0; renderBody(); });
@@ -827,7 +968,7 @@ ${enumCellSrc}
             var right = !isIdx && col0 && (col0.kind === 'read' || col0.kind === 'input');
             var canSort = !isIdx && col0 && col0.sortable === true;
             var hIcon = !isIdx && col0 && col0.hicon && ICON_SVGS[col0.hicon];
-            th.style.cssText = 'position:sticky;top:0;z-index:1;background:' + pp0.headerBg + ';padding:7px 10px;font-size:16px;font-weight:600;color:' + pp0.titleColor + ';text-align:' + (right || isIdx ? 'right' : 'left') + ';white-space:nowrap;' + (canSort ? 'cursor:pointer;user-select:none;' : '');
+            th.style.cssText = 'position:sticky;top:0;z-index:1;background:' + pp0.headerBg + ';${tv("padding:7px 10px;font-size:16px;", "padding:6px 10px;height:var(--ac-rh);box-sizing:border-box;vertical-align:middle;font-size:var(--ac-hfs);")}font-weight:600;color:' + pp0.titleColor + ';text-align:' + (right || isIdx ? 'right' : 'left') + ';white-space:nowrap;' + (canSort ? 'cursor:pointer;user-select:none;' : '');${hasClamp ? "\n            if (!isIdx && col0 && col0.clamp !== undefined) { th.style.overflow = 'hidden'; th.style.textOverflow = 'ellipsis'; th.title = h; th.style.minWidth = clampMinW(col0, true); if (col0.clamp) th.style.maxWidth = col0.clamp + 'ch'; else { th.style.width = '100%'; th.style.maxWidth = '0'; } }" : ""}
             if (hIcon) {
                 var inner = document.createElement('span');
                 inner.style.cssText = 'display:inline-flex;align-items:center;gap:6px;vertical-align:middle;justify-content:' + (right || isIdx ? 'flex-end' : 'flex-start') + ';';
@@ -842,7 +983,7 @@ ${enumCellSrc}
                 th.appendChild(inner);
                 if (canSort) {
                     var arrh = document.createElement('span');
-                    arrh.style.cssText = 'display:inline-block;margin-left:5px;font-size:10px;opacity:.55;';
+                    arrh.style.cssText = 'display:inline-block;margin-left:5px;${tv("font-size:10px;", "font-size:.75em;")}opacity:.55;';
                     inner.appendChild(arrh);
                     sortThs.push({ el: arrh, col: colIdx });
                     th.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
@@ -852,7 +993,7 @@ ${enumCellSrc}
                 var lab = document.createElement('span');
                 lab.textContent = h;
                 var arr = document.createElement('span');
-                arr.style.cssText = 'display:inline-block;margin-left:5px;font-size:10px;opacity:.55;';
+                arr.style.cssText = 'display:inline-block;margin-left:5px;${tv("font-size:10px;", "font-size:.75em;")}opacity:.55;';
                 th.appendChild(lab);
                 th.appendChild(arr);
                 sortThs.push({ el: arr, col: colIdx });
@@ -873,17 +1014,7 @@ ${enumCellSrc}
     wrap.appendChild(scroller);
     if (PAGE_SIZE > 0) {
         var pager = document.createElement('div');
-        pager.style.cssText = 'display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:6px;';
-        var pbStyle = 'padding:2px 10px;border:1px solid ' + pp0.border + ';border-radius:6px;background:transparent;color:' + pp0.bodyText + ';font-size:16px;cursor:pointer;';
-        prevBtn = document.createElement('button'); prevBtn.textContent = '‹'; prevBtn.style.cssText = pbStyle; prevBtn.setAttribute('data-ac-view', '1');
-        nextBtn = document.createElement('button'); nextBtn.textContent = '›'; nextBtn.style.cssText = pbStyle; nextBtn.setAttribute('data-ac-view', '1');
-        pageInfo = document.createElement('span'); pageInfo.style.cssText = 'font-size:16px;color:' + pp0.bodyText + ';opacity:.75;font-variant-numeric:tabular-nums;';
-        prevBtn.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
-        nextBtn.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
-        prevBtn.onclick = function (e) { e.stopPropagation(); page -= 1; renderBody(); };
-        nextBtn.onclick = function (e) { e.stopPropagation(); page += 1; renderBody(); };
-        pager.appendChild(prevBtn); pager.appendChild(pageInfo); pager.appendChild(nextBtn);
-        wrap.appendChild(pager);
+${pagerSrc}        wrap.appendChild(pager);
     }
     ${parent}.appendChild(wrap);
 
@@ -971,7 +1102,7 @@ ${enumCellSrc}
         for (var j = 0; j < symbols.length; j++) { try { symbols[j].destroy(); } catch (e) {} }
         watchers = []; symbols = [];
         if (batchSubId != null) { try { TcHmi.Server.requestEx({ requestType: 'ReadWrite', commands: [{ symbol: 'Unsubscribe', commandOptions: ['SendErrorMessage'], writeValue: batchSubId }] }, {}, function () {}); } catch (e) {} batchSubId = null; }
-        tbody = null; wrap = null; pageInfo = null; prevBtn = null; nextBtn = null;
+        tbody = null; wrap = null; pageInfo = null; prevBtn = null; nextBtn = null;${tv("", " firstBtn = null; lastBtn = null;")}
     });
 })();`;
   return indentLines(core, I);

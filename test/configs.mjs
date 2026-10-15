@@ -778,4 +778,81 @@ add("table_row_units", {
   })(),
 });
 
+// ── Alarmtabelle: ausgeblendete Spalte nId mit Abhaengigkeiten (Filter, Sortierung, Button-Parameter, Vorlage) ──
+add("table_hidden_deps", {
+  mode: "embed",
+  fnName: "AC_AlarmHidden",
+  embedTarget: "MeinContainer",
+  blocks: (() => {
+    const cId = { ...mkTableCol("read"), header: "Nr.", member: "nId", sortable: true, hidden: true };
+    const cTxt = { ...mkTableCol("text"), header: "Alarm", locTpl: "L_alarm{1:3}" };
+    const cTrig = { ...mkTableCol("bool"), header: "Ausgelöst", member: "bTriggered" };
+    const cInfo = { ...mkTableCol("button"), header: "Info", label: "?", action: "fn", fnName: "AlarmInfoPopup", paramSource: "col", paramCol: 0 };
+    return [{
+      ...newBlock("table"), dataSource: "array", arraySymbol: "ADS.AF_PLC.MAIN.aAlarmHmi", arrayCount: 8, pageSize: 5,
+      columns: [cId, cTxt, cTrig, cInfo], rows: [],
+      rules: [{ ...mkTableRule(), colIndex: 2, op: "==", value: "true", target: "row", color: "red" }],
+      rowFilters: [{ ...mkRowFilter(), colIndex: 0, op: "notZero", value: "" }, { ...mkRowFilter(), colIndex: 0, op: ">=", value: "101" }],
+      defaultSortCol: 0, defaultSortDir: "asc",
+    }];
+  })(),
+});
+
+// ── observe-gesperrte Spalte, von der ein Zeilenfilter abhaengt (wird trotzdem gelesen) + ausgeblendete Spalte ──
+add("access_observe_deps", {
+  mode: "registered",
+  fnName: "AC_AccObsDeps",
+  blocks: (() => {
+    const cId = { ...mkTableCol("read"), header: "Nr.", member: "nId" };
+    const cSecret = { ...mkTableCol("read"), header: "Intern", member: "nPrio",
+      access: mkAcc({ observe: { Admin: "Allow", Service: "Allow", Process_Engineer: "Deny", Operator: "Deny" } }) };
+    const cFree = { ...mkTableCol("read"), header: "Frei", member: "nFree",
+      access: mkAcc({ observe: { Operator: "Deny" } }) };
+    const cHid = { ...mkTableCol("read"), header: "Versteckt", member: "nHidden", hidden: true };
+    return [{
+      ...newBlock("table"), dataSource: "array", arraySymbol: "ADS.AF_PLC.MAIN.aList", arrayCount: 4,
+      columns: [cId, cSecret, cFree, cHid], rows: [],
+      rowFilters: [{ ...mkRowFilter(), colIndex: 1, op: "notZero", value: "" }],
+    }];
+  })(),
+});
+
+// ── Touch-Layout (Groesse M): Checkbox/LED/Pager gross, einheitliche Feldbreiten, Keypad mit Einheit ──
+add("table_touch_layout", {
+  mode: "embed",
+  fnName: "AC_TouchTable",
+  embedTarget: "MeinContainer",
+  blocks: (() => {
+    const cId = { ...mkTableCol("read"), header: "Nr.", member: "nId", sortable: true };
+    const cTxt = { ...mkTableCol("text"), header: "Alarm", locTpl: "L_alarm{1:3}" };
+    const cTrig = { ...mkTableCol("bool"), header: "Ausgelöst", member: "bTriggered" };
+    const cEn = { ...mkTableCol("check"), header: "Aktiv", member: "bEnable" };
+    const cLim = { ...mkTableCol("input"), header: "Grenzwert", member: "fLimit", inputType: "number", keypad: true, unit: "bar", decimals: "1", kpMin: "0", kpMax: "fLimitMax" };
+    const cDel = { ...mkTableCol("input"), header: "Verzögerung", member: "tDelay", inputType: "time" };
+    const cTyp = { ...mkTableCol("enum"), header: "Typ", member: "eType", map: [{ ...mkTableMapEntry("1", "Info", "blue") }, { ...mkTableMapEntry("2", "Störung", "red") }] };
+    const cInfo = { ...mkTableCol("button"), header: "Info", label: "?", action: "fn", fnName: "AlarmInfoPopup", paramSource: "col", paramCol: 0 };
+    return [{
+      ...newBlock("table"), layout: "touch", size: "m", dataSource: "array", arraySymbol: "ADS.AF_PLC.MAIN.aAlarmHmi", arrayCount: 20, pageSize: 8, showIndex: true,
+      columns: [cId, cTxt, cTrig, cEn, cLim, cDel, cTyp, cInfo], rows: [],
+    }];
+  })(),
+});
+
+// ── Gekuerzte Textspalten: Restbreite (Vorlage) + feste Breite (statisch), Touch ──
+add("table_text_clamp", {
+  mode: "embed",
+  fnName: "AC_ClampTable",
+  embedTarget: "MeinContainer",
+  blocks: (() => {
+    const cId = { ...mkTableCol("read"), header: "Nr.", member: "nId", hidden: true };
+    const cTxt = { ...mkTableCol("text"), header: "Alarm", locTpl: "L_alarm{1:3}", clamp: true };
+    const cHint = { ...mkTableCol("text"), header: "Hinweis", locTpl: "L_alarm{1:3}_Ursache", clamp: true, clampWidth: "24", clampMin: "8" };
+    const cTrig = { ...mkTableCol("bool"), header: "Ausgelöst", member: "bTriggered" };
+    return [{
+      ...newBlock("table"), layout: "touch", dataSource: "array", arraySymbol: "ADS.AF_PLC.MAIN.aAlarmHmi", arrayCount: 6,
+      columns: [cId, cTxt, cHint, cTrig], rows: [],
+    }];
+  })(),
+});
+
 export { CONFIGS };

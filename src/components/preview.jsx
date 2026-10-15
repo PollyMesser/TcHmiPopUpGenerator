@@ -1,6 +1,7 @@
 import React from "react";
 import { COLORS, ICONS, TEXT_BG } from "../constants/palette.js";
 import { parseTpl, tplPreview } from "../model/locTemplate.js";
+import { tableLayoutOf } from "../model/tableLayout.js";
 
 // ── Vorschau-Renderer (Editor-Vorschau, nicht der generierte Code) ──
 function ItemPreview({ cfg, pal, on, onToggle }) {
@@ -213,7 +214,7 @@ function BlockPreview({ b, pal, on, onToggle }) {
               <thead><tr style={{ background: pal.headerBg }}>
                 {!!b.showIndex && <th style={{ padding: "6px 10px", fontSize: 11, textAlign: "right", color: pal.titleColor }}>#</th>}
                 {(b.columns || []).map((cl, ci) => (
-                  <th key={cl.id} style={{ padding: "6px 10px", fontSize: 11, fontWeight: 600, color: pal.titleColor, textAlign: cl.kind === "read" || cl.kind === "input" ? "right" : "left", whiteSpace: "nowrap" }}>{cl.header || `Spalte ${ci + 1}`}</th>
+                  <th key={cl.id} style={{ padding: "6px 10px", fontSize: 11, fontWeight: 600, color: pal.titleColor, textAlign: cl.kind === "read" || cl.kind === "input" ? "right" : "left", whiteSpace: "nowrap", ...(cl.hidden ? { opacity: 0.35, textDecoration: "line-through" } : {}) }} title={cl.hidden ? "Ausgeblendet – wird gelesen, aber im HMI nicht angezeigt" : undefined}>{cl.header || `Spalte ${ci + 1}`}</th>
                 ))}
               </tr></thead>
             )}
@@ -222,7 +223,7 @@ function BlockPreview({ b, pal, on, onToggle }) {
                 <tr key={ri} style={{ background: b.striped !== false && ri % 2 === 1 ? "rgba(127,127,127,0.06)" : "transparent" }}>
                   {!!b.showIndex && <td style={{ padding: "5px 10px", borderTop: `1px solid ${pal.border}`, fontSize: 11, opacity: 0.6, textAlign: "right" }}>{(parseInt(b.startIndex) || 0) + ri}</td>}
                   {(b.columns || []).map((cl) => (
-                    <td key={cl.id} style={{ padding: "5px 10px", borderTop: `1px solid ${pal.border}`, textAlign: cl.kind === "read" || cl.kind === "input" ? "right" : (cl.kind === "text" || (cl.kind === "enum" && cl.enumDisplay && cl.enumDisplay !== "badge")) ? "left" : "center", whiteSpace: "nowrap" }}>{cellPrev(cl, ri)}</td>
+                    <td key={cl.id} style={{ padding: "5px 10px", borderTop: `1px solid ${pal.border}`, textAlign: cl.kind === "read" || cl.kind === "input" ? "right" : (cl.kind === "text" || (cl.kind === "enum" && cl.enumDisplay && cl.enumDisplay !== "badge")) ? "left" : "center", whiteSpace: "nowrap", ...(cl.hidden ? { opacity: 0.25 } : {}), ...(cl.kind === "text" && cl.clamp ? { maxWidth: (parseInt(cl.clampWidth) > 0 ? parseInt(cl.clampWidth) + "ch" : 140), minWidth: (parseInt(cl.clampMin) > 0 ? parseInt(cl.clampMin) : 4) + "ch", overflow: "hidden", textOverflow: "ellipsis" } : {}) }}>{cellPrev(cl, ri)}</td>
                   ))}
                 </tr>
               ))}
@@ -230,8 +231,8 @@ function BlockPreview({ b, pal, on, onToggle }) {
           </table>
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: pal.bodyText, opacity: 0.55, marginTop: 4 }}>
-          <span>{b.dataSource === "array" ? `PLC-Array (max. ${b.arrayCount})` : `${(b.rows || []).length} feste Zeile(n)`}{(b.rules || []).length ? ` · ${b.rules.length} Regel(n)` : ""}</span>
-          {Number(b.pageSize) > 0 && <span>‹ 1 / n ›</span>}
+          <span>{tableLayoutOf(b) === "touch" ? "Touch · " : ""}{b.dataSource === "array" ? `PLC-Array (max. ${b.arrayCount})` : `${(b.rows || []).length} feste Zeile(n)`}{(b.rules || []).length ? ` · ${b.rules.length} Regel(n)` : ""}</span>
+          {Number(b.pageSize) > 0 && <span>{tableLayoutOf(b) === "touch" ? "« ‹ 1 / n › »" : "‹ 1 / n ›"}</span>}
         </div>
       </div>
     );

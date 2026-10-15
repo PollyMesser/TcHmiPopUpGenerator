@@ -1,7 +1,7 @@
 import React from "react";
-import { Plus, Trash2, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Check, GripVertical, Flag, Minus } from "lucide-react";
+import { Plus, Trash2, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Check, GripVertical, Flag, Minus, EyeOff } from "lucide-react";
 import { T } from "../../constants/theme.js";
-import { DASH_OPTS, ICONS, MAX_AXES, PLOT_COLORS, TEXT_BG } from "../../constants/palette.js";
+import { DASH_OPTS, ICONS, MAX_AXES, PLOT_COLORS, TEXT_BG, TABLE_SIZES } from "../../constants/palette.js";
 import { BLOCK_META, ITEM_KINDS, TIME_UNITS, WRITE_OPTS } from "../../constants/options.js";
 import { blockSummary, clampCol } from "../../model/layout.js";
 import { condOp, condVal } from "../../codegen/helpers.js";
@@ -10,6 +10,8 @@ import { ButtonItemFields, InputFields, ReadBoolFields, TriggerFields, WriteSymF
 import { AccessFields } from "../access.jsx";
 import { NUMPAD_FN } from "../../codegen/emitNumPad.js";
 import { parseTpl, checkTplRefs, tplPreview } from "../../model/locTemplate.js";
+import { tableColDeps } from "../../model/tableDeps.js";
+import { TABLE_LAYOUTS, TABLE_LAYOUT_DEFAULT, tableLayoutOf, tableSizeOf, autoFieldWidth } from "../../model/tableLayout.js";
 
 // ── Baustein-Karte des Editors (Accordion + Griff-Drag), auch für volle-Breite-Zeilen ──
 // ui: Ansichts-Zustand aus App(); actions: alle Block-Handler aus App().
@@ -507,6 +509,8 @@ function BlockCard({ b, opts, ui, actions }) {
               const OPS = ["==", "!=", ">", ">=", "<", "<="];
               const isArr = b.dataSource === "array";
               const boundKinds = ["read", "bool", "check", "input", "enum", "icon", "button"];
+              const colDeps = tableColDeps(b);
+              const isTouch = tableLayoutOf(b) === "touch";
               return (
                 <>
                   <div style={{ display: "flex", gap: 10 }}>
@@ -561,11 +565,30 @@ function BlockCard({ b, opts, ui, actions }) {
                         {cl.kind === "input" && <div style={{ flex: 2 }}><Field label="EINGABE-TYP"><Select value={cl.inputType || "auto"} onChange={(e) => patchTblCol(b.id, cl.id, { inputType: e.target.value })} options={[{ value: "auto", label: "Auto (Zahl/Text)" }, { value: "number", label: "Zahl" }, { value: "text", label: "Text" }, { value: "time", label: "Zeit (HH:MM:SS)" }]} /></Field></div>}
                         <IconBtn disabled={ci === 0} title="Spalte nach links" onClick={() => moveTblCol(b.id, ci, -1)}><ChevronLeft size={13} /></IconBtn>
                         <IconBtn disabled={ci === b.columns.length - 1} title="Spalte nach rechts" onClick={() => moveTblCol(b.id, ci, 1)}><ChevronRight size={13} /></IconBtn>
-                        <IconBtn danger disabled={b.columns.length <= 1} title="Spalte entfernen" onClick={() => removeTblCol(b.id, ci)}><Trash2 size={13} /></IconBtn>
+                        <IconBtn danger disabled={b.columns.length <= 1} title="Spalte entfernen" onClick={() => {
+                          const d = colDeps[ci] || [];
+                          // Abhaengige Regeln/Filter werden beim Loeschen mit entfernt bzw. neutralisiert -> vorher nachfragen
+                          if (d.length && typeof window !== "undefined" && window.confirm && !window.confirm(`Spalte ${ci + 1} wird verwendet von:\n• ${d.map((x) => x.label).join("\n• ")}\n\nDiese Bezüge werden beim Löschen entfernt bzw. zurückgesetzt. Tipp: „Spalte ausblenden“ behält sie.\n\nTrotzdem löschen?`)) return;
+                          removeTblCol(b.id, ci);
+                        }}><Trash2 size={13} /></IconBtn>
                       </div>
                       <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: T.muted, cursor: "pointer", marginTop: 6 }}>
                         <input type="checkbox" checked={!!cl.sortable} onChange={(e) => patchTblCol(b.id, cl.id, { sortable: e.target.checked })} /> Sortierbar (Klick auf Kopfzeile sortiert)
                       </label>
+                      <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: T.muted, cursor: "pointer", marginTop: 6 }}>
+                        <input type="checkbox" checked={!!cl.hidden} onChange={(e) => patchTblCol(b.id, cl.id, { hidden: e.target.checked })} /> <EyeOff size={12} /> Spalte ausblenden (Werte werden weiter gelesen und durchsucht)
+                      </label>
+                      {(colDeps[ci] || []).length > 0 && (
+                        <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5, marginTop: 4 }}>
+                          Verwendet von: {colDeps[ci].map((x) => x.label).join(" · ")}
+                        </div>
+                      )}
+                      {isTouch && cl.kind === "input" && (
+                        <div style={{ display: "flex", gap: 10, alignItems: "flex-end", marginTop: 6 }}>
+                          <div style={{ width: 160 }}><Field label="FELDBREITE (ZEICHEN)"><TextInput value={cl.fieldWidth || ""} onChange={(e) => patchTblCol(b.id, cl.id, { fieldWidth: e.target.value })} placeholder={`auto (${autoFieldWidth(cl, isArr)})`} /></Field></div>
+                          <div style={{ flex: 1, fontSize: 11, color: T.muted, lineHeight: 1.5, paddingBottom: 6 }}>Gilt für alle Eingabefelder bzw. Keypad-Tasten dieser Spalte. Automatisch aus Eingabe-Typ, Dezimalen und Einheit.</div>
+                        </div>
+                      )}
                       {cl.kind === "input" && cl.inputType !== "text" && cl.inputType !== "time" && (
                         <>
                           <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: T.muted, cursor: "pointer", marginTop: 6 }}>
@@ -628,6 +651,18 @@ function BlockCard({ b, opts, ui, actions }) {
                               {" "}Mit Stellenzahl <code style={{ color: T.text }}>{"{1:3}"}</code> werden Zahlen mit Nullen aufgefüllt (2 → 002). Das „+" ist optional, <code style={{ color: T.text }}>L_alarm{"{1}"}</code> ist gleichwertig.
                               {!isArr ? " Hat Vorrang vor den Zeilen-Texten unten." : null}
                             </div>
+                            <div style={{ display: "flex", gap: 10, alignItems: "flex-end", marginTop: 8 }}>
+                              <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: T.muted, cursor: "pointer", paddingBottom: 8 }}>
+                                <input type="checkbox" checked={!!cl.clamp} onChange={(e) => patchTblCol(b.id, cl.id, { clamp: e.target.checked })} /> Lange Texte kürzen (Tippen klappt mehrzeilig auf)
+                              </label>
+                              {!!cl.clamp && <div style={{ width: 160 }}><Field label="MIN. BREITE (ZEICHEN)"><TextInput value={cl.clampMin || ""} onChange={(e) => patchTblCol(b.id, cl.id, { clampMin: e.target.value })} placeholder="4" /></Field></div>}
+                              {!!cl.clamp && <div style={{ width: 180 }}><Field label="MAX. BREITE (ZEICHEN)"><TextInput value={cl.clampWidth || ""} onChange={(e) => patchTblCol(b.id, cl.id, { clampWidth: e.target.value })} placeholder="auto (Restbreite)" /></Field></div>}
+                            </div>
+                            {!!cl.clamp && (
+                              <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5, marginTop: 4 }}>
+                                Einzeilig mit „…“; ein Pfeil zeigt gekürzte Zellen. Tippen klappt auf bzw. zu, mehrere Zeilen gleichzeitig möglich. MAX. leer = Spalte nimmt die Restbreite der Tabelle. MIN. (Standard 4 Zeichen) = schmaler wird die Spalte nie, auch nicht auf kleinen Bildschirmen.
+                              </div>
+                            )}
                           </div>
                         );
                       })()}
@@ -761,6 +796,7 @@ function BlockCard({ b, opts, ui, actions }) {
                       <div style={{ width: 90 }}><Select value={u.target} onChange={(e) => patchTblRule(b.id, u.id, { target: e.target.value })} options={[{ value: "row", label: "Zeile" }, { value: "cell", label: "Zelle" }]} /></div>
                       <ColorSwatches value={u.color} onChange={(cc) => patchTblRule(b.id, u.id, { color: cc })} />
                       <IconBtn danger title="Regel entfernen" onClick={() => removeTblRule(b.id, u.id)}><Trash2 size={12} /></IconBtn>
+                      {u.target === "cell" && ((b.columns || [])[u.colIndex] || {}).hidden && <span title="Die Zielspalte ist ausgeblendet – eine Zellen-Färbung ist nicht sichtbar. Ziel „Zeile“ wählen." style={{ fontSize: 11, color: "#f59e0b", whiteSpace: "nowrap" }}>Spalte ausgeblendet</span>}
                     </div>
                   ))}
                   <div style={{ marginBottom: 10 }}><IconBtn title="Regel hinzufügen" onClick={() => addTblRule(b.id)}><Plus size={14} /></IconBtn></div>
@@ -805,6 +841,29 @@ function BlockCard({ b, opts, ui, actions }) {
                     <div style={{ flex: 3 }} />
                   </div>
                   <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5, marginBottom: 8 }}>Nur als „sortierbar" markierte Spalten erscheinen hier. Ohne Standardsortierung startet die Tabelle in Datenreihenfolge; Klick auf eine sortierbare Kopfzeile ändert Spalte/Richtung zur Laufzeit.</div>
+
+                  <div style={{ display: "flex", gap: 10, marginBottom: 4 }}>
+                    <div style={{ flex: 1 }}>
+                      <Field label="DARSTELLUNG">
+                        <Select value={tableLayoutOf(b)} onChange={(e) => patch(b.id, { layout: e.target.value })}
+                          options={TABLE_LAYOUTS.map((o) => ({ value: o.value, label: o.label + (o.value === TABLE_LAYOUT_DEFAULT ? " (Standard)" : "") }))} />
+                      </Field>
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      {isTouch && (
+                        <Field label="GRÖSSE">
+                          <Select value={tableSizeOf(b)} onChange={(e) => patch(b.id, { size: e.target.value })}
+                            options={Object.keys(TABLE_SIZES).map((k) => ({ value: k, label: TABLE_SIZES[k].label }))} />
+                        </Field>
+                      )}
+                    </div>
+                    <div style={{ flex: 2 }} />
+                  </div>
+                  <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5, marginBottom: 8 }}>
+                    {isTouch
+                      ? `Touch: Zeilenhöhe ${TABLE_SIZES[tableSizeOf(b)].rh} px, Checkbox ${TABLE_SIZES[tableSizeOf(b)].ctl} px (ganze Zelle tippbar), LED ${TABLE_SIZES[tableSizeOf(b)].led} px, Blätter-Tasten ${TABLE_SIZES[tableSizeOf(b)].pb} px mit erster/letzter Seite, einheitliche Feldbreiten je Spalte.`
+                      : "Kompakt: bisherige Darstellung für Mausbedienung."}
+                  </div>
 
                   <div style={{ display: "flex", gap: 16, marginBottom: 8, flexWrap: "wrap" }}>
                     <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: T.muted, cursor: "pointer" }}>
