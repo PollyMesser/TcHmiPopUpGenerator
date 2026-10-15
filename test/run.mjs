@@ -39,6 +39,7 @@ const REACT_ICON_NAMES = [
   "ChevronUp", "ChevronDown", "ChevronLeft", "ChevronRight", "GripVertical", "Flag", "Minus",
   "Type", "Eye", "CircleDot", "MousePointerClick", "PencilLine", "ToggleLeft", "Columns2",
   "Zap", "Box", "List", "ChevronsUpDown", "Tag", "Gauge", "LineChart", "Table",
+  "ChartColumn", "CircleGauge",
 ];
 const stubPlugin = {
   name: "stub-react-lucide",

@@ -40,6 +40,8 @@ function reidBlocks(blocks) {
       nb.rowFilters = (nb.rowFilters || []).map((f) => ({ ...f, id: eid("tf") }));
 
     }
+    if (nb.type === "bar") nb.bars = (nb.bars || []).map((x) => ({ ...x, id: pid("bb") }));
+    if (nb.type === "gauge") nb.bands = (nb.bands || []).map((x) => ({ ...x, id: pid("gb") }));
     if (nb.type === "plot") {
       const axMap = {};
       nb.axes = (nb.axes || []).map((a) => { const nid2 = pid("a"); axMap[a.id] = nid2; return { ...a, id: nid2 }; });

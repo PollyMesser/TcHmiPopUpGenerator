@@ -1,6 +1,8 @@
 import { jsStr, wrapSym, locExpr, unitSuffix, attrName, I, cmpExpr, condOp, condVal, durHelpers } from "./helpers.js";
 import { COLORS, TEXT_BG, ICONS } from "../constants/palette.js";
 import { emitPlot } from "./emitPlot.js";
+import { emitBar } from "./emitBar.js";
+import { emitGauge } from "./emitGauge.js";
 import { emitTable } from "./emitTable.js";
 import { emitDivider } from "./shared.js";
 import { gateBlock, gateButton } from "./access.js";
@@ -335,6 +337,8 @@ function emitBlockSym(b, parent) {
   if (b.type === "input") return emitInput(parent, b, "16px");
   if (b.type === "progress") return emitProgress(parent, b, "16px");
   if (b.type === "plot") return emitPlot(parent, b);
+  if (b.type === "bar") return emitBar(parent, b, false);
+  if (b.type === "gauge") return emitGauge(parent, b, false);
   if (b.type === "table") return emitTable(parent, b);
   if (b.type === "divider") return emitDivider(parent, b);
   if (b.type === "row") return emitRow(parent, b);

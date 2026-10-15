@@ -46,6 +46,10 @@ const mkTableRule = () => ({ id: eid("tu"), colIndex: 0, op: "==", value: "true"
 // Zeilenfilter: Zeile nur zeigen, wenn Bedingung erfuellt. op 'notEmpty'/'notZero' brauchen keinen Wert.
 const mkRowFilter = () => ({ id: eid("tf"), colIndex: 0, op: "notZero", value: "" });
 
+// ── Balkendiagramm / Gauge ──
+const mkBar = (label, color) => ({ id: pid("bb"), label: label || "Wert", loc: "", symbol: "ADS.AF_PLC.MAIN.…::rWert", color: color || PLOT_COLORS[0].hex });
+const mkGaugeBand = (from, to, color) => ({ id: pid("gb"), from: from == null ? 0 : from, to: to == null ? 100 : to, color: color || PLOT_COLORS[1].hex });
+
 const newBlock = (type) => {
   switch (type) {
     case "text":   return { id: nid(), type, col: 0, heading: "", headingLoc: "", text: "Hinweis…", loc: "", bgColor: "", icon: "", iconColor: "" };
@@ -54,6 +58,15 @@ const newBlock = (type) => {
     case "check":  return { id: nid(), type, col: 0, label: "Freigabe", loc: "", symbol: "ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::xEnable" };
     case "input":  return { id: nid(), type, col: 0, label: "Sollwert", loc: "", symbol: "ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::nSetpoint", dataType: "number", unit: "", sendLabel: "Setzen", sendLoc: "", sendColor: "blue", trigSym: "", trigMode: "pulse", trigMs: 500 };
     case "divider": return { id: nid(), type, col: 0, label: "", loc: "", inCol: false };
+    case "bar": return { id: nid(), type, col: 0, caption: "Füllstände", captionLoc: "", source: "list",
+      bars: [mkBar("Tank 1", PLOT_COLORS[0].hex), mkBar("Tank 2", PLOT_COLORS[0].hex), mkBar("Tank 3", PLOT_COLORS[0].hex)],
+      arraySymbol: "", arrayCount: 10, startIndex: 0, member: "", countSymbol: "", labelPrefix: "Pos. ", arrayColor: PLOT_COLORS[0].hex,
+      orientation: "v", unit: "%", decimals: 0, autoscale: false, min: 0, max: 100, showValues: true,
+      limitLow: "", limitHigh: "", limitColor: PLOT_COLORS[3].hex, height: 260 };
+    case "gauge": return { id: nid(), type, col: 0, label: "Druck", loc: "", symbol: "ADS.AF_PLC.MAIN.…::rDruck",
+      min: 0, max: 16, minSymbol: "", maxSymbol: "", unit: "bar", decimals: 1, shape: "angular", barColor: PLOT_COLORS[0].hex,
+      bands: [mkGaugeBand(0, 10, PLOT_COLORS[1].hex), mkGaugeBand(10, 13, PLOT_COLORS[2].hex), mkGaugeBand(13, 16, PLOT_COLORS[3].hex)],
+      setpointMode: "none", setpointValue: "", setpointSymbol: "", setpointColor: PLOT_COLORS[3].hex, height: 220 };
     case "progress": return { id: nid(), type, col: 0, label: "Ventilstellung", loc: "", symbol: "ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::rPosition", min: 0, max: 100, unit: "%", decimals: 0, showValue: true, color: "blue" };
     case "plot": { const ax = mkAxis(PLOT_COLORS[0].hex); return { id: nid(), type, col: 0, caption: "Verlauf", captionLoc: "", dataMode: "live", followSec: 300, historyLoadSec: 3600, maxPoints: 3600, plotHeight: 360, showRangeslider: true, showXAxis: true, showToolbar: true, zoomEnabled: true, nowLabel: "Jetzt", nowLoc: "", resetLabel: "Zurücksetzen", resetLoc: "", timeButtons: defaultTimeButtons(), axes: [ax], series: [mkSeries(ax.id, PLOT_COLORS[1].hex)], refLines: [], eventMarkers: [] }; }
     case "table":  return { id: nid(), type, col: 0, caption: "", captionLoc: "",
@@ -77,4 +90,5 @@ export {
   mkButton, mkItem, mkCond, mkEnumEntry, mkStatusEntry, newBlock,
   mkAxis, mkSeries, mkRef, mkMapping, mkMarker,
   mkTimeBtn, DEFAULT_TIME_BUTTONS, defaultTimeButtons,
+  mkBar, mkGaugeBand,
 };

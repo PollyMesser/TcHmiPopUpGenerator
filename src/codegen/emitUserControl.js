@@ -2,6 +2,8 @@ import { jsStr, locExpr, unitSuffix, attrName, I, cmpExpr, condOp, condVal, durH
 import { COLORS } from "../constants/palette.js";
 import { emitText, emitButtonItemUC, progressParams, trigActionUC } from "./emitSymbol.js";
 import { emitPlot } from "./emitPlot.js";
+import { emitBar } from "./emitBar.js";
+import { emitGauge } from "./emitGauge.js";
 import { emitTable } from "./emitTable.js";
 import { emitDivider } from "./shared.js";
 import { gateBlock, gateButton } from "./access.js";
@@ -174,6 +176,8 @@ function emitBlockUC(b, parent) {
   if (b.type === "input") return emitInputUC(parent, b, "16px");
   if (b.type === "progress") return emitProgressUC(parent, b, "16px");
   if (b.type === "plot") return emitPlot(parent, b, true);
+  if (b.type === "bar") return emitBar(parent, b, true);
+  if (b.type === "gauge") return emitGauge(parent, b, true);
   if (b.type === "table") return emitTable(parent, b);
   if (b.type === "divider") return emitDivider(parent, b);
   if (b.type === "row") return emitRowUC(parent, b);

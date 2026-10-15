@@ -8,6 +8,7 @@ import { condOp, condVal } from "../../codegen/helpers.js";
 import { ColorSwatches, Field, HexSwatches, IconBtn, IconPicker, IconColorPicker, Select, TextArea, TextInput } from "../primitives.jsx";
 import { ButtonItemFields, InputFields, ReadBoolFields, TriggerFields, WriteSymField } from "../fields.jsx";
 import { AccessFields } from "../access.jsx";
+import { BarEditor, GaugeEditor } from "./ChartEditors.jsx";
 import { NUMPAD_FN } from "../../codegen/emitNumPad.js";
 import { parseTpl, checkTplRefs, tplPreview } from "../../model/locTemplate.js";
 import { tableColDeps } from "../../model/tableDeps.js";
@@ -146,6 +147,9 @@ function BlockCard({ b, opts, ui, actions }) {
                 <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5 }}>Füllung = (Wert − Min) / (Max − Min), begrenzt auf 0–100 %. Für ein Proportionalventil z.B. Min 0, Max 100, Einheit %.</div>
               </>
             )}
+
+            {b.type === "bar" && <BarEditor b={b} patch={patch} sm={sm} mode={mode} />}
+            {b.type === "gauge" && <GaugeEditor b={b} patch={patch} sm={sm} mode={mode} />}
 
             {b.type === "plot" && (() => {
               const axisOpts = (b.axes || []).map((a, i) => ({ value: a.id, label: (a.label || a.unit) ? `${a.label || "Achse " + (i + 1)}${a.unit ? " (" + a.unit + ")" : ""}` : "Achse " + (i + 1) }));
