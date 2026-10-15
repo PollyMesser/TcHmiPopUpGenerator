@@ -872,4 +872,15 @@ add("table_auto_pages", {
   })(),
 });
 
+// ── Kompakt-Layout explizit (seit Touch Standard ist): Kopien bestehender Configs mit layout 'compact' ──
+// Der erzeugte Code muss dem Stand vor der Standard-Umstellung entsprechen (nur die Config-Zeile
+// AC_POPUP_CONFIG_V1 enthaelt zusaetzlich "layout":"compact").
+const compactCopy = (src) => {
+  const cfg = JSON.parse(JSON.stringify(CONFIGS.find((c) => c.name === src).cfg));
+  cfg.blocks = cfg.blocks.map((bl) => (bl.type === "table" ? { ...bl, layout: "compact" } : bl));
+  return cfg;
+};
+add("table_sort_filter_compact", compactCopy("table_sort_filter"));
+add("keypad_table_static_compact", compactCopy("keypad_table_static"));
+
 export { CONFIGS };

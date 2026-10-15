@@ -46,7 +46,8 @@ function embedHooks(extra, geo) {
 {
   assertEqual(emitTable("p", block({ pageMode: "fixed", pageMin: "9" })), emitTable("p", block({})), "pageMode 'fixed' == ohne Feld");
   assert(emitTable("p", block({})).indexOf("PAGE_AUTO") < 0, "fest: keine Auto-Logik");
-  assertEqual(pageAutoOf({ pageMode: "auto" }), { min: 3, max: 50, rhMin: 0, rhMax: 0 }, "kompakt: Standard 3..50, Hoehe gemessen");
+  assertEqual(pageAutoOf({ pageMode: "auto", layout: "compact" }), { min: 3, max: 50, rhMin: 0, rhMax: 0 }, "kompakt: Standard 3..50, Hoehe gemessen");
+  assertEqual(pageAutoOf({ pageMode: "auto" }), { min: 3, max: 50, rhMin: 46, rhMax: 60 }, "ohne layout: Standard Touch M");
   assertEqual(pageAutoOf({ pageMode: "auto", layout: "touch" }), { min: 3, max: 50, rhMin: 46, rhMax: 60 }, "Touch M: 46..60 px");
   assertEqual(pageAutoOf({ pageMode: "auto", layout: "touch", size: "l", rowHMax: "40", pageMin: "8", pageMax: "5" }), { min: 8, max: 8, rhMin: 54, rhMax: 54 }, "max >= min, rhMax >= rhMin");
   const H = buildTableHooks(block({ pageMode: "auto", pageMin: "4" }));
@@ -93,7 +94,7 @@ function embedHooks(extra, geo) {
 
 // ── 3) Kompakt: Zeilenhoehe gemessen ──
 {
-  const { H } = embedHooks({ pageMode: "auto", pageMin: "3" }, { h: 600, top: 100, thead: 30, pager: 24 });
+  const { H } = embedHooks({ layout: "compact", pageMode: "auto", pageMin: "3" }, { h: 600, top: 100, thead: 30, pager: 24 });
   // Flaeche: 600 - 100 - 30 - 32 - 16 - 2 - 1 = 419
   H.tbody.children.forEach((tr, i) => { tr._rect = { height: i === 1 ? 90 : 41.6 }; }); // Zeile 1 z. B. aufgeklappt
   H.autoFit();

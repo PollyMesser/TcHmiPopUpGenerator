@@ -261,6 +261,7 @@
             var page = 0, query = '';
             var sortCol = DEFAULT_SORT_COL, sortDir = DEFAULT_SORT_DIR; // aktive Sortierung
             var tbody = null, pageInfo = null, prevBtn = null, nextBtn = null, wrap = null;
+            var firstBtn = null, lastBtn = null; // Touch-Pager: erste/letzte Seite
             var sortThs = []; // { el: <span Pfeil>, col: <Spaltenindex> } je sortierbarer Kopfzelle
             var COL_SHOW = TCOLS.map(function (col) { return !col.hide; }); // ausgeblendete Spalten: gelesen, nicht angezeigt
             var tplVals = {};     // tplVals[member][zeile] – nur fuer Text-Vorlagen gelesene Member (Array-Modus)
@@ -453,7 +454,7 @@
             function buildCellEl(r, ci, pp) {
                 var col = TCOLS[ci];
                 var td = document.createElement('td');
-                td.style.cssText = 'padding:6px 10px;border-top:1px solid ' + pp.border + ';font-size:18px;color:' + pp.bodyText + ';white-space:nowrap;'
+                td.style.cssText = 'padding:4px 10px;height:var(--ac-rh);box-sizing:border-box;vertical-align:middle;border-top:1px solid ' + pp.border + ';font-size:var(--ac-fs);color:' + pp.bodyText + ';white-space:nowrap;'
                     + ((col.kind === 'read' || col.kind === 'input') ? 'text-align:right;font-variant-numeric:tabular-nums;' : '');
                 var v = vals[r] ? vals[r][ci] : undefined;
                 if (col.kind === 'text') {
@@ -466,23 +467,27 @@
                 } else if (col.kind === 'bool') {
                     var led = document.createElement('span');
                     var on = (v === true || v === 1 || v === '1' || v === 'true');
-                    led.style.cssText = 'display:inline-block;width:15px;height:15px;border-radius:50%;background:' + (on ? pp.active : pp.inactive) + ';';
+                    led.style.cssText = 'display:inline-block;width:var(--ac-led);height:var(--ac-led);vertical-align:middle;border-radius:50%;background:' + (on ? pp.active : pp.inactive) + ';' + (on ? 'box-shadow:0 0 6px ' + pp.active + ';' : '');
                     td.style.textAlign = 'center';
                     td.appendChild(led);
                 } else if (col.kind === 'check') {
                     var cb = document.createElement('input');
                     cb.type = 'checkbox';
                     cb.checked = (v === true || v === 1 || v === '1' || v === 'true');
-                    cb.style.cssText = 'width:18px;height:18px;cursor:pointer;';
+                    cb.style.cssText = 'width:var(--ac-ctl);height:var(--ac-ctl);margin:0;vertical-align:middle;cursor:pointer;accent-color:' + pp.active + ';';
                     cb.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
                     cb.addEventListener('change', function () { var s = symFor(r, ci); if (s) writeT(s, cb.checked); });
+                    // Touch: ganze Zelle ist Trefferflaeche; operate-Sperre greift ueber cb.disabled
+                    td.style.cursor = 'pointer';
+                    td.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
+                    td.addEventListener('click', function (e) { if (e.target === cb || cb.disabled) return; cb.checked = !cb.checked; var s = symFor(r, ci); if (s) writeT(s, cb.checked); });
                     td.style.textAlign = 'center';
                     td.appendChild(cb);
                 } else if (col.kind === 'input') {
                     var inp = document.createElement('input');
                     inp.type = 'text';
                     inp.value = (v === undefined || v === null) ? '' : String(v);
-                    inp.style.cssText = 'width:80px;padding:3px 6px;border:1px solid ' + pp.border + ';border-radius:5px;background:' + pp.boxBg + ';color:' + pp.bodyText + ';font-size:18px;text-align:right;';
+                    inp.style.cssText = 'width:' + col.fw + 'ch;height:calc(var(--ac-rh) - 16px);box-sizing:content-box;padding:3px 10px;font-variant-numeric:tabular-nums;border:1px solid ' + pp.border + ';border-radius:5px;background:' + pp.boxBg + ';color:' + pp.bodyText + ';font-size:var(--ac-fs);text-align:right;';
                     inp.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
                     var send = function () {
                         var s = symFor(r, ci); if (!s) return;
@@ -496,7 +501,7 @@
                 } else if (col.kind === 'button') {
                     var btn = document.createElement('button');
                     btn.textContent = locT(col.lloc, col.label || 'OK');
-                    btn.style.cssText = 'padding:4px 12px;border:1px solid ' + pp.border + ';border-radius:6px;background:transparent;color:' + pp.bodyText + ';font-size:16px;font-weight:600;cursor:pointer;';
+                    btn.style.cssText = 'min-width:var(--ac-pb);min-height:calc(var(--ac-rh) - 8px);padding:4px 14px;touch-action:manipulation;border:1px solid ' + pp.border + ';border-radius:6px;background:transparent;color:' + pp.bodyText + ';font-size:var(--ac-hfs);font-weight:600;cursor:pointer;';
                     btn.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
                     btn.onclick = function (e) {
                         e.stopPropagation();
@@ -512,7 +517,7 @@
                 } else if (col.kind === 'enum') {
                     var e2 = mapEntry(ci, v);
                     var badge = document.createElement('span');
-                    badge.style.cssText = 'display:inline-block;padding:2px 10px;border-radius:10px;font-size:16px;font-weight:600;background:' + (e2 ? e2.color : pp.inactive) + ';color:' + (e2 ? e2.text : '#ffffff') + ';';
+                    badge.style.cssText = 'display:inline-block;padding:4px 12px;border-radius:12px;font-size:var(--ac-hfs);font-weight:600;background:' + (e2 ? e2.color : pp.inactive) + ';color:' + (e2 ? e2.text : '#ffffff') + ';';
                     badge.textContent = e2 ? locT(e2.loc, e2.label) : (v === undefined || v === null ? '–' : String(v));
                     td.style.textAlign = 'center';
                     td.appendChild(badge);
@@ -603,7 +608,7 @@
                     if (SHOW_INDEX) {
                         var tdIdx = document.createElement('td');
                         tdIdx.textContent = String(START_INDEX + r);
-                        tdIdx.style.cssText = 'padding:6px 10px;border-top:1px solid ' + pp.border + ';font-size:16px;color:' + pp.bodyText + ';opacity:.6;text-align:right;font-variant-numeric:tabular-nums;';
+                        tdIdx.style.cssText = 'padding:4px 10px;height:var(--ac-rh);box-sizing:border-box;vertical-align:middle;border-top:1px solid ' + pp.border + ';font-size:var(--ac-hfs);color:' + pp.bodyText + ';opacity:.6;text-align:right;font-variant-numeric:tabular-nums;';
                         tr.appendChild(tdIdx);
                     }
                     var cellEls = [];
@@ -621,26 +626,29 @@
                     pageInfo.textContent = pages > 1 || PAGE_SIZE > 0 ? ((page + 1) + ' / ' + pages) : '';
                     if (prevBtn) prevBtn.disabled = page <= 0;
                     if (nextBtn) nextBtn.disabled = page >= pages - 1;
+                    if (firstBtn) firstBtn.disabled = page <= 0;
+                    if (lastBtn) lastBtn.disabled = page >= pages - 1;
+                    [firstBtn, prevBtn, nextBtn, lastBtn].forEach(function (pb) { if (pb) pb.style.opacity = pb.disabled ? '.35' : '1'; });
                 }
             }
 
             // ── DOM-Aufbau ──
             var pp0 = palT();
             wrap = document.createElement('div');
-            wrap.style.cssText = 'display:flex;flex-direction:column;width:100%;min-width:0;margin-bottom:16px;';
+            wrap.style.cssText = 'display:flex;flex-direction:column;width:100%;min-width:0;margin-bottom:16px;--ac-fs:18px;--ac-hfs:16px;--ac-rh:46px;--ac-ctl:28px;--ac-led:22px;--ac-pb:44px;--ac-pfs:22px;';
             var capText = "";
             if (capText || SEARCH_ON) {
                 var top = document.createElement('div');
                 top.style.cssText = 'display:flex;align-items:center;gap:10px;margin-bottom:8px;';
                 var cap = document.createElement('span');
-                cap.style.cssText = 'flex:1 1 auto;font-size:18px;font-weight:600;color:' + pp0.titleColor + ';';
+                cap.style.cssText = 'flex:1 1 auto;font-size:var(--ac-fs);font-weight:600;color:' + pp0.titleColor + ';';
                 cap.textContent = capText;
                 top.appendChild(cap);
                 if (SEARCH_ON) {
                     var se = document.createElement('input');
                     se.type = 'text';
                     se.placeholder = locT('L_Tbl_Search', 'Suchen…');
-                    se.style.cssText = 'flex:0 0 auto;width:160px;padding:4px 8px;border:1px solid ' + pp0.border + ';border-radius:6px;background:' + pp0.boxBg + ';color:' + pp0.bodyText + ';font-size:16px;';
+                    se.style.cssText = 'flex:0 1 auto;width:220px;min-width:120px;height:var(--ac-pb);box-sizing:border-box;padding:4px 10px;border:1px solid ' + pp0.border + ';border-radius:6px;background:' + pp0.boxBg + ';color:' + pp0.bodyText + ';font-size:var(--ac-hfs);';
                     se.setAttribute('data-ac-view', '1'); // Ansichtssteuerung: bleibt bei operate-Deny nutzbar
                     se.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
                     se.addEventListener('input', function () { query = se.value || ''; page = 0; renderBody(); });
@@ -669,7 +677,7 @@
                     var right = !isIdx && col0 && (col0.kind === 'read' || col0.kind === 'input');
                     var canSort = !isIdx && col0 && col0.sortable === true;
                     var hIcon = !isIdx && col0 && col0.hicon && ICON_SVGS[col0.hicon];
-                    th.style.cssText = 'position:sticky;top:0;z-index:1;background:' + pp0.headerBg + ';padding:7px 10px;font-size:16px;font-weight:600;color:' + pp0.titleColor + ';text-align:' + (right || isIdx ? 'right' : 'left') + ';white-space:nowrap;' + (canSort ? 'cursor:pointer;user-select:none;' : '');
+                    th.style.cssText = 'position:sticky;top:0;z-index:1;background:' + pp0.headerBg + ';padding:6px 10px;height:var(--ac-rh);box-sizing:border-box;vertical-align:middle;font-size:var(--ac-hfs);font-weight:600;color:' + pp0.titleColor + ';text-align:' + (right || isIdx ? 'right' : 'left') + ';white-space:nowrap;' + (canSort ? 'cursor:pointer;user-select:none;' : '');
                     if (hIcon) {
                         var inner = document.createElement('span');
                         inner.style.cssText = 'display:inline-flex;align-items:center;gap:6px;vertical-align:middle;justify-content:' + (right || isIdx ? 'flex-end' : 'flex-start') + ';';
@@ -684,7 +692,7 @@
                         th.appendChild(inner);
                         if (canSort) {
                             var arrh = document.createElement('span');
-                            arrh.style.cssText = 'display:inline-block;margin-left:5px;font-size:10px;opacity:.55;';
+                            arrh.style.cssText = 'display:inline-block;margin-left:5px;font-size:.75em;opacity:.55;';
                             inner.appendChild(arrh);
                             sortThs.push({ el: arrh, col: colIdx });
                             th.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
@@ -694,7 +702,7 @@
                         var lab = document.createElement('span');
                         lab.textContent = h;
                         var arr = document.createElement('span');
-                        arr.style.cssText = 'display:inline-block;margin-left:5px;font-size:10px;opacity:.55;';
+                        arr.style.cssText = 'display:inline-block;margin-left:5px;font-size:.75em;opacity:.55;';
                         th.appendChild(lab);
                         th.appendChild(arr);
                         sortThs.push({ el: arr, col: colIdx });
@@ -715,16 +723,22 @@
             wrap.appendChild(scroller);
             if (PAGE_SIZE > 0) {
                 var pager = document.createElement('div');
-                pager.style.cssText = 'display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:6px;';
-                var pbStyle = 'padding:2px 10px;border:1px solid ' + pp0.border + ';border-radius:6px;background:transparent;color:' + pp0.bodyText + ';font-size:16px;cursor:pointer;';
-                prevBtn = document.createElement('button'); prevBtn.textContent = '‹'; prevBtn.style.cssText = pbStyle; prevBtn.setAttribute('data-ac-view', '1');
-                nextBtn = document.createElement('button'); nextBtn.textContent = '›'; nextBtn.style.cssText = pbStyle; nextBtn.setAttribute('data-ac-view', '1');
-                pageInfo = document.createElement('span'); pageInfo.style.cssText = 'font-size:16px;color:' + pp0.bodyText + ';opacity:.75;font-variant-numeric:tabular-nums;';
-                prevBtn.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
-                nextBtn.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
-                prevBtn.onclick = function (e) { e.stopPropagation(); page -= 1; renderBody(); };
-                nextBtn.onclick = function (e) { e.stopPropagation(); page += 1; renderBody(); };
-                pager.appendChild(prevBtn); pager.appendChild(pageInfo); pager.appendChild(nextBtn);
+                // Touch-Pager: Tastflaechen var(--ac-pb) (mind. 40-52 px), erste/letzte Seite, Seitenanzeige mittig
+                pager.style.cssText = 'display:flex;align-items:center;justify-content:flex-end;gap:10px;margin-top:8px;';
+                var pbStyle = 'width:var(--ac-pb);height:var(--ac-pb);padding:0;display:inline-flex;align-items:center;justify-content:center;border:1px solid ' + pp0.border + ';border-radius:8px;background:transparent;color:' + pp0.bodyText + ';font-size:var(--ac-pfs);line-height:1;cursor:pointer;touch-action:manipulation;';
+                var mkPb = function (txt, title, go) {
+                    var bt = document.createElement('button');
+                    bt.type = 'button'; bt.textContent = txt; bt.title = title; bt.style.cssText = pbStyle; bt.setAttribute('data-ac-view', '1');
+                    bt.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
+                    bt.onclick = function (e) { e.stopPropagation(); if (bt.disabled) return; go(); renderBody(); };
+                    return bt;
+                };
+                firstBtn = mkPb('«', locT('L_Tbl_First', 'Erste Seite'), function () { page = 0; });
+                prevBtn = mkPb('‹', locT('L_Tbl_Prev', 'Vorherige Seite'), function () { page -= 1; });
+                nextBtn = mkPb('›', locT('L_Tbl_Next', 'Nächste Seite'), function () { page += 1; });
+                lastBtn = mkPb('»', locT('L_Tbl_Last', 'Letzte Seite'), function () { page = 1e9; }); // renderBody begrenzt auf letzte Seite
+                pageInfo = document.createElement('span'); pageInfo.style.cssText = 'min-width:4.5em;text-align:center;font-size:var(--ac-pfs);color:' + pp0.bodyText + ';opacity:.8;font-variant-numeric:tabular-nums;';
+                pager.appendChild(firstBtn); pager.appendChild(prevBtn); pager.appendChild(pageInfo); pager.appendChild(nextBtn); pager.appendChild(lastBtn);
                 wrap.appendChild(pager);
             }
             body.appendChild(wrap);
@@ -813,7 +827,7 @@
                 for (var j = 0; j < symbols.length; j++) { try { symbols[j].destroy(); } catch (e) {} }
                 watchers = []; symbols = [];
                 if (batchSubId != null) { try { TcHmi.Server.requestEx({ requestType: 'ReadWrite', commands: [{ symbol: 'Unsubscribe', commandOptions: ['SendErrorMessage'], writeValue: batchSubId }] }, {}, function () {}); } catch (e) {} batchSubId = null; }
-                tbody = null; wrap = null; pageInfo = null; prevBtn = null; nextBtn = null;
+                tbody = null; wrap = null; pageInfo = null; prevBtn = null; nextBtn = null; firstBtn = null; lastBtn = null;
             });
         })();
 

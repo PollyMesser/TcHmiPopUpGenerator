@@ -3,15 +3,15 @@
 //             ganze Checkbox-Zelle tippbar, grosse Blaetter-Buttons, einheitliche Feldbreiten
 // 'compact' = bisherige kompakte Darstellung (Maus)
 // TABLE_LAYOUT_DEFAULT gilt fuer Tabellen OHNE gespeichertes 'layout' (auch Bestandskonfigurationen).
-// Vorerst 'compact' -> Bestands-Goldens byte-identisch. Das Umschalten auf 'touch' erfolgt als
-// eigener Commit mit Re-Record der Tabellen-Goldens (Entscheidung 2026-10-15: Touch ist Standard).
+// Seit 2026-10-15 'touch' (Entscheidung: Touch ist Standard); die bisherige Darstellung gibt es
+// weiter ueber layout 'compact' (Editor: „Kompakt (Maus)“, Goldens *_compact).
 import { TABLE_SIZES } from "../constants/palette.js";
 
 const TABLE_LAYOUTS = [
   { value: "touch", label: "Touch" },
   { value: "compact", label: "Kompakt (Maus)" },
 ];
-const TABLE_LAYOUT_DEFAULT = "compact";
+const TABLE_LAYOUT_DEFAULT = "touch";
 const TABLE_SIZE_DEFAULT = "m";
 
 const tableLayoutOf = (b) => ((b && (b.layout === "touch" || b.layout === "compact")) ? b.layout : TABLE_LAYOUT_DEFAULT);
