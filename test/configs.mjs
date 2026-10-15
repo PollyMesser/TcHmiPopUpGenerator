@@ -855,4 +855,21 @@ add("table_text_clamp", {
   })(),
 });
 
+// ── Zeilen pro Seite automatisch (Touch, eingebettet): Hoehe nutzen, Zeilenhoehe 46..58 px ──
+add("table_auto_pages", {
+  mode: "embed",
+  fnName: "AC_AutoPages",
+  embedTarget: "MeinContainer",
+  blocks: (() => {
+    const cId = { ...mkTableCol("read"), header: "Nr.", member: "nId", sortable: true };
+    const cTxt = { ...mkTableCol("text"), header: "Alarm", locTpl: "L_alarm{1:3}", clamp: true };
+    const cTrig = { ...mkTableCol("bool"), header: "Ausgelöst", member: "bTriggered" };
+    return [{
+      ...newBlock("table"), layout: "touch", dataSource: "array", arraySymbol: "ADS.AF_PLC.MAIN.aAlarmHmi", arrayCount: 69,
+      pageMode: "auto", pageMin: "4", pageMax: "30", rowHMax: "58",
+      columns: [cId, cTxt, cTrig], rows: [],
+    }];
+  })(),
+});
+
 export { CONFIGS };

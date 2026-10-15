@@ -44,13 +44,14 @@ const MAX_AXES = 4;
 // generierten Code als CSS-Variablen am Tabellen-Wrapper gesetzt; alle Zellen-Styles
 // referenzieren nur var(--ac-…). Erster Schritt zur zentralen Schriftgroessen-Skala.
 //   fs  = Zellenschrift          hfs = Kopf/Buttons/Badges   rh = Zeilenhoehe (Minimum)
+//   rhMax = Zeilenhoehe hoechstens (nur „Zeilen pro Seite: automatisch“: Restplatz wird auf die Zeilen verteilt)
 //   ctl = Checkbox-Kantenlaenge  led = LED-Durchmesser
 //   pb  = Pager-Button (Kante)   pfs = Pager-Schrift
 // Alle Werte in px. M ist auf das 1280x800-Panel (Touch) abgestimmt.
 const TABLE_SIZES = {
-  s: { label: "S – dicht", fs: 16, hfs: 15, rh: 40, ctl: 24, led: 18, pb: 40, pfs: 20 },
-  m: { label: "M – Standard (Panel 1280×800)", fs: 18, hfs: 16, rh: 46, ctl: 28, led: 22, pb: 44, pfs: 22 },
-  l: { label: "L – groß", fs: 20, hfs: 18, rh: 54, ctl: 32, led: 26, pb: 52, pfs: 26 },
+  s: { label: "S – dicht", fs: 16, hfs: 15, rh: 40, rhMax: 52, ctl: 24, led: 18, pb: 40, pfs: 20 },
+  m: { label: "M – Standard (Panel 1280×800)", fs: 18, hfs: 16, rh: 46, rhMax: 60, ctl: 28, led: 22, pb: 44, pfs: 22 },
+  l: { label: "L – groß", fs: 20, hfs: 18, rh: 54, rhMax: 70, ctl: 32, led: 26, pb: 52, pfs: 26 },
 };
 
 export { COLORS, TEXT_BG, ICONS, PLOT_COLORS, DASH_OPTS, MAX_AXES, TABLE_SIZES };

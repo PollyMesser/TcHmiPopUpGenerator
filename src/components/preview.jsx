@@ -232,7 +232,7 @@ function BlockPreview({ b, pal, on, onToggle }) {
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: pal.bodyText, opacity: 0.55, marginTop: 4 }}>
           <span>{tableLayoutOf(b) === "touch" ? "Touch · " : ""}{b.dataSource === "array" ? `PLC-Array (max. ${b.arrayCount})` : `${(b.rows || []).length} feste Zeile(n)`}{(b.rules || []).length ? ` · ${b.rules.length} Regel(n)` : ""}</span>
-          {Number(b.pageSize) > 0 && <span>{tableLayoutOf(b) === "touch" ? "« ‹ 1 / n › »" : "‹ 1 / n ›"}</span>}
+          {(Number(b.pageSize) > 0 || b.pageMode === "auto") && <span>{b.pageMode === "auto" ? "Zeilen/Seite: auto · " : ""}{tableLayoutOf(b) === "touch" ? "« ‹ 1 / n › »" : "‹ 1 / n ›"}</span>}
         </div>
       </div>
     );

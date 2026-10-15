@@ -6,7 +6,9 @@
 function makeElement(tag) {
   const el = {
     tagName: tag,
-    style: {},
+    nodeType: 1,
+    // setProperty: CSS-Variablen (z. B. --ac-rh); als normales Feld abgelegt
+    style: { setProperty(k, v) { this[k] = v; } },
     children: [],
     _listeners: {},
     disabled: false,
@@ -32,6 +34,8 @@ function makeElement(tag) {
     setAttribute(k, v) { el[k] = v; },
     getAttribute(k) { return Object.prototype.hasOwnProperty.call(el, k) ? el[k] : null; },
     querySelector() { return null; },
+    // Layout gibt es im Stub nicht: Tests setzen el._rect gezielt (z. B. Zeilenhoehe)
+    getBoundingClientRect() { return el._rect || { top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0 }; },
     // Nur Tag-Selektoren (komma-getrennt), genau das, was der generierte
     // operate-Gate-Code nutzt: 'button, input, select, textarea'.
     querySelectorAll(selector) {

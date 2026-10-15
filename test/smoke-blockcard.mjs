@@ -79,6 +79,29 @@ async function main() {
     }
   }
 
+  // Tabellen-Touch-Varianten: Layout, Zeilen pro Seite automatisch, Feldbreite, kuerzbarer Text, ausgeblendet
+  const touchCols = [
+    { ...mkTableCol("read"), header: "Nr", member: "nId", hidden: true },
+    { ...mkTableCol("text"), header: "Text", locTpl: "L_alarm{1:3}", clamp: true, clampMin: "6" },
+    { ...mkTableCol("input"), header: "Wert", member: "fVal", keypad: true, unit: "bar" },
+  ];
+  for (const [layout, pageMode] of [["touch", "auto"], ["touch", "fixed"], ["compact", "auto"]]) {
+    count++;
+    const b = { ...newBlock("table"), dataSource: "array", columns: touchCols, rows: [], layout, pageMode, rowFilters: [{ id: "f1", colIndex: 0, op: "notZero", value: "" }] };
+    const ui = { openId: b.id, setOpenId: () => {}, dragId: null, setDragId: () => {}, grabbedId: null, setGrabbedId: () => {}, dropTarget: null, setDropTarget: () => {}, columns: 1, mode: "registered", sm: symMeta("registered") };
+    try {
+      const html = renderToString(React.createElement(BlockCard, { b, opts: optsFor(b), ui, actions: noopActions }));
+      const need = ["ZEILEN PRO SEITE", "MIN. BREITE", "Verwendet von"]
+        .concat(pageMode === "auto" ? ["MIN. ZEILEN", "MAX. ZEILEN"] : ["SEITENGRÖSSE"])
+        .concat(layout === "touch" ? ["FELDBREITE", "GRÖSSE"] : [])
+        .concat(layout === "touch" && pageMode === "auto" ? ["ZEILENHÖHE MAX."] : []);
+      need.forEach((t) => { if (html.indexOf(t) < 0) failures.push(`table-touch ${layout}/${pageMode}: '${t}' fehlt`); });
+      renderToString(React.createElement(prevMod.BlockPreview, { b, pal: { border: "#ccc", headerBg: "#eee", titleColor: "#000", bodyText: "#333", inactive: "#999" }, on: {}, onToggle: () => {} }));
+    } catch (e) {
+      failures.push(`table-touch ${layout}/${pageMode}: ${e.message}`);
+    }
+  }
+
   // Keypad (AC_NumPad): Eingabefeld-Baustein + Tabellen-Eingabespalte mit aktivierter Option
   const pal0 = { border: "#ccc", headerBg: "#eee", titleColor: "#000", bodyText: "#333", inactive: "#999", boxBg: "#fff" };
   for (const mode of MODES) {

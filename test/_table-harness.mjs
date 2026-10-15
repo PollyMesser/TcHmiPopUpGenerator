@@ -22,7 +22,8 @@ const REF_NAMES = [
 // Optionale Namen: existieren nur, wenn das Feature im Block genutzt wird
 // (byte-neutrale Codegen-Varianten), daher per typeof abgesichert.
 const OPT_NAMES = ["tplVal", "tplStr", "tplText", "tplVals", "buildCellEl", "palT", "siblingSym", "kpLimit", "kpTitle", "openPadT",
-  "fmtRead", "fmtParts", "xVals", "setX", "rowHas", "rowUnit", "rowDec", "putVal"];
+  "fmtRead", "fmtParts", "xVals", "setX", "rowHas", "rowUnit", "rowDec", "putVal",
+  "PAGE_AUTO", "autoFit", "autoArea", "queueAutoFit", "expanded"];
 
 // prepare(context): optional, laeuft vor dem Ausfuehren (z. B. TcHmi.Server.requestEx abfangen).
 function buildTableHooks(block, parentVarName = "parent", prepare) {
@@ -38,6 +39,7 @@ function buildTableHooks(block, parentVarName = "parent", prepare) {
       getPage: function () { return page; }, setPage: function (v) { page = v; },
       getQuery: function () { return query; }, setQuery: function (v) { query = v; },
       getDynCount: function () { return dynCount; },
+      getPageSize: function () { return PAGE_SIZE; },
     };
 `;
   const injected = raw.slice(0, marker) + hookAssign + raw.slice(marker);

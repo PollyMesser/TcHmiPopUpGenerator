@@ -4,7 +4,7 @@ import { compileAccess, accessActive } from "../model/access.js";
 import { parseTpl } from "../model/locTemplate.js";
 import { isNumStr, NUMPAD_FN } from "./emitNumPad.js";
 import { tableColDeps } from "../model/tableDeps.js";
-import { tableLayoutOf, tableSizeOf, fieldWidthOf } from "../model/tableLayout.js";
+import { tableLayoutOf, tableSizeOf, fieldWidthOf, pageAutoOf } from "../model/tableLayout.js";
 
 const TPL_BOUND_KINDS = ["read", "bool", "check", "input", "enum", "icon"];
 const ENUM_DISPLAYS = ["text", "ctext", "dot"];
@@ -165,7 +165,8 @@ function tableBlockConfig(b) {
     startIndex: Math.max(0, parseInt(b.startIndex) || 0),
     showIndex: b.showIndex ? "true" : "false",
     search: b.search !== false ? "true" : "false",
-    pageSize: Math.max(0, parseInt(b.pageSize) || 0),
+    // Zeilen pro Seite automatisch: Startwert = Minimum (Pager wird dadurch immer aufgebaut)
+    pageSize: pageAutoOf(b) ? pageAutoOf(b).min : Math.max(0, parseInt(b.pageSize) || 0),
     striped: b.striped !== false ? "true" : "false",
     showHeader: b.showHeader !== false ? "true" : "false",
     watchLimit: Math.max(0, parseInt(b.watchLimit) || 30),
@@ -202,6 +203,66 @@ function emitTable(parent, b) {
   const hasEnumDisp = c.colsArr.some((cc) => cc.edisp);
   // Gekuerzte Textspalten (clamp): Zusatzlogik nur erzeugen, wenn genutzt (Golden-neutral).
   const hasClamp = c.colsArr.some((cc) => cc.clamp !== undefined);
+  // Zeilen pro Seite automatisch (Phase 6): Zusatzlogik nur erzeugen, wenn gewaehlt (Golden-neutral).
+  const pageAuto = pageAutoOf(b);
+  const autoDecl = pageAuto ? `\n    var PAGE_AUTO = ${JSON.stringify(pageAuto)}; // Zeilen pro Seite aus verfuegbarer Hoehe: min/max Zeilen, Zeilenhoehe rhMin..rhMax (0 = gemessen)\n    var autoRO = null, autoQueued = false, autoRowH = 0;` : "";
+  const autoHelpers = pageAuto ? `    // ── Zeilen pro Seite automatisch: verfuegbare Hoehe ausnutzen ──
+    // Eingebettet: Hoehe des scrollenden Elternelements (Embed-Body) ab Tabellenanfang, abzueglich
+    // Kopfzeile, Pager und Abstand -> Tabelle sollte der letzte Baustein sein. Popup: 60vh wie der Scroller.
+    // Zeilenzahl = Hoehe / Mindest-Zeilenhoehe (Touch: Groessenstufe; kompakt: kleinste gemessene Zeile),
+    // begrenzt auf PAGE_AUTO.min..max. Touch verteilt den Rest bis rhMax auf die Zeilen (--ac-rh am tbody,
+    // damit die Kopfzeile nicht mitwaechst). Beim Wechsel bleibt der erste sichtbare Datensatz sichtbar.
+    function scrollParentT(el) {
+        var n = el ? el.parentNode : null;
+        while (n && n.nodeType === 1) {
+            var cs = window.getComputedStyle(n);
+            if (cs && (cs.overflowY === 'auto' || cs.overflowY === 'scroll')) return n;
+            n = n.parentNode;
+        }
+        return null;
+    }
+    function autoArea() {
+        if (!tbody || !wrap) return 0;
+        var thH = (typeof thead !== 'undefined' && thead) ? thead.getBoundingClientRect().height : 0;
+        var pgH = (typeof pager !== 'undefined' && pager) ? pager.getBoundingClientRect().height + 8 : 0;
+        if (typeof AC_EMBED !== 'undefined' && AC_EMBED) {
+            var sp = scrollParentT(wrap);
+            if (!sp) return 0;
+            var pb = parseFloat(window.getComputedStyle(sp).paddingBottom) || 0;
+            var off = scroller.getBoundingClientRect().top - sp.getBoundingClientRect().top + sp.scrollTop;
+            return Math.floor(sp.clientHeight - pb - off - thH - pgH - 16 - 2) - 1; // 1 px Reserve gegen Rundung
+        }
+        return Math.floor(window.innerHeight * 0.6 - thH - 2) - 1;
+    }
+    function autoFit() {
+        autoQueued = false;
+        if (!tbody) return;
+        var area = autoArea();
+        if (!(area > 0)) return;
+        var rhMin = PAGE_AUTO.rhMin;
+        if (!rhMin) {
+            var rs = tbody.children;
+            for (var i = 0; i < rs.length; i++) { var h = Math.ceil(rs[i].getBoundingClientRect().height); if (h > 0 && (!rhMin || h < rhMin)) rhMin = h; } // aufgerundet: Bruchteil-Pixel duerfen nicht ueberlaufen
+            if (!rhMin) return; // noch keine Zeile zum Messen
+        }
+        var n = Math.floor(area / rhMin);
+        if (n < PAGE_AUTO.min) n = PAGE_AUTO.min;
+        if (n > PAGE_AUTO.max) n = PAGE_AUTO.max;
+        var rh = 0;
+        if (PAGE_AUTO.rhMax) { rh = Math.floor(area / n); if (rh < PAGE_AUTO.rhMin) rh = PAGE_AUTO.rhMin; if (rh > PAGE_AUTO.rhMax) rh = PAGE_AUTO.rhMax; }
+        if (n === PAGE_SIZE && rh === autoRowH) return;
+        var first = page * PAGE_SIZE;
+        PAGE_SIZE = n;
+        page = Math.floor(first / n);
+        if (rh && rh !== autoRowH) { autoRowH = rh; tbody.style.setProperty('--ac-rh', rh + 'px'); }
+        renderBody();
+    }
+    function queueAutoFit() {
+        if (autoQueued) return;
+        autoQueued = true;
+        window.requestAnimationFrame(autoFit);
+    }
+` : "";
   const clampDecl = hasClamp ? `\n    var expanded = {};    // aufgeklappte Textzellen: expanded['zeile:spalte'] (Datenzeile -> ueberlebt Neuaufbau, Sortieren, Blaettern)\n    var clampEls = [];    // gekuerzte Zellen der aktuellen Seite (fuer die Pfeil-Anzeige nach dem Einfuegen)` : "";
   const clampHelpers = hasClamp ? `    // ── Gekuerzte Textzellen: einzeilig mit Ellipse, Tippen klappt mehrzeilig auf (mehrere gleichzeitig) ──
     // col.clamp = max. Breite in ch; 0 = Restbreite (td width:100% + max-width:0). col.cmin = Mindestbreite in ch:
@@ -625,7 +686,7 @@ function emitTable(parent, b) {
     var page = 0, query = '';
     var sortCol = DEFAULT_SORT_COL, sortDir = DEFAULT_SORT_DIR; // aktive Sortierung
     var tbody = null, pageInfo = null, prevBtn = null, nextBtn = null, wrap = null;${pagerVarsSrc}
-    var sortThs = []; // { el: <span Pfeil>, col: <Spaltenindex> } je sortierbarer Kopfzelle${colVisDecl}${tplValsDecl}${xValsDecl}${clampDecl}
+    var sortThs = []; // { el: <span Pfeil>, col: <Spaltenindex> } je sortierbarer Kopfzelle${colVisDecl}${tplValsDecl}${xValsDecl}${clampDecl}${autoDecl}
 
     function locT(key, fallback) {
         try { var f = TcHmi.Functions.getFunction('GetLocalizedText'); if (f) { var t = f(key); if (t !== null && t !== undefined && t !== '') return t; } } catch (e) {}
@@ -775,7 +836,7 @@ ${fmtReadSrc}
         if (DATA_SOURCE === 'array') { if (dynCount >= 0 && dynCount < n) n = dynCount; if (n > ARRAY_COUNT) n = ARRAY_COUNT; }
         return n;
     }
-${tplHelpers}${timeHelpers}${rowFmtHelpers}${kpHelpers}${clampHelpers}    function buildCellEl(r, ci, pp) {
+${tplHelpers}${timeHelpers}${rowFmtHelpers}${kpHelpers}${clampHelpers}${autoHelpers}    function buildCellEl(r, ci, pp) {
         var col = TCOLS[ci];
         var td = document.createElement('td');
         td.style.cssText = '${tv("padding:6px 10px;", "padding:4px 10px;height:var(--ac-rh);box-sizing:border-box;vertical-align:middle;")}border-top:1px solid ' + pp.border + ';${tv("font-size:18px;", "font-size:var(--ac-fs);")}color:' + pp.bodyText + ';white-space:nowrap;'
@@ -917,7 +978,7 @@ ${enumCellSrc}
                 else if (cellEls[rule.c]) cellEls[rule.c].style.background = rule.color + '33';
             }
             tbody.appendChild(tr);
-        });${hasClamp ? "\n        clampCheck();" : ""}
+        });${hasClamp ? "\n        clampCheck();" : ""}${pageAuto ? "\n        queueAutoFit(); // Zeilenzahl/-hoehe pruefen (z. B. erste gemessene Zeile, geaenderte Hoehe)" : ""}
         if (pageInfo) {
             pageInfo.textContent = pages > 1 || PAGE_SIZE > 0 ? ((page + 1) + ' / ' + pages) : '';
 ${pagerUpdSrc}        }
@@ -1094,7 +1155,13 @@ ${pagerSrc}        wrap.appendChild(pager);
             }
         });
     }${tplMembersSrc}
-    renderBody();
+    renderBody();${pageAuto ? `
+    // Groessenaenderung des Containers/Fensters -> Zeilen pro Seite neu bestimmen
+    if (typeof ResizeObserver !== 'undefined' && typeof AC_EMBED !== 'undefined' && AC_EMBED) {
+        var autoSp = scrollParentT(wrap);
+        if (autoSp) { try { autoRO = new ResizeObserver(function () { queueAutoFit(); }); autoRO.observe(autoSp); } catch (e) { autoRO = null; } }
+    }
+    window.addEventListener('resize', queueAutoFit);` : ""}
 
     // Aufräumen beim Schließen des Popups (siehe hideDialog -> teardowns)
     teardowns.push(function () {
@@ -1102,7 +1169,7 @@ ${pagerSrc}        wrap.appendChild(pager);
         for (var j = 0; j < symbols.length; j++) { try { symbols[j].destroy(); } catch (e) {} }
         watchers = []; symbols = [];
         if (batchSubId != null) { try { TcHmi.Server.requestEx({ requestType: 'ReadWrite', commands: [{ symbol: 'Unsubscribe', commandOptions: ['SendErrorMessage'], writeValue: batchSubId }] }, {}, function () {}); } catch (e) {} batchSubId = null; }
-        tbody = null; wrap = null; pageInfo = null; prevBtn = null; nextBtn = null;${tv("", " firstBtn = null; lastBtn = null;")}
+        tbody = null; wrap = null; pageInfo = null; prevBtn = null; nextBtn = null;${tv("", " firstBtn = null; lastBtn = null;")}${pageAuto ? "\n        if (autoRO) { try { autoRO.disconnect(); } catch (e) {} autoRO = null; }\n        window.removeEventListener('resize', queueAutoFit);" : ""}
     });
 })();`;
   return indentLines(core, I);

@@ -11,7 +11,7 @@ import { AccessFields } from "../access.jsx";
 import { NUMPAD_FN } from "../../codegen/emitNumPad.js";
 import { parseTpl, checkTplRefs, tplPreview } from "../../model/locTemplate.js";
 import { tableColDeps } from "../../model/tableDeps.js";
-import { TABLE_LAYOUTS, TABLE_LAYOUT_DEFAULT, tableLayoutOf, tableSizeOf, autoFieldWidth } from "../../model/tableLayout.js";
+import { TABLE_LAYOUTS, TABLE_LAYOUT_DEFAULT, tableLayoutOf, tableSizeOf, autoFieldWidth, PAGE_AUTO_MIN, PAGE_AUTO_MAX } from "../../model/tableLayout.js";
 
 // ── Baustein-Karte des Editors (Accordion + Griff-Drag), auch für volle-Breite-Zeilen ──
 // ui: Ansichts-Zustand aus App(); actions: alle Block-Handler aus App().
@@ -880,10 +880,35 @@ function BlockCard({ b, opts, ui, actions }) {
                     </label>
                   </div>
                   <div style={{ display: "flex", gap: 10 }}>
-                    <div style={{ flex: 1 }}><Field label="SEITENGRÖSSE (0 = aus)"><TextInput value={b.pageSize} onChange={(e) => patch(b.id, { pageSize: e.target.value })} /></Field></div>
+                    <div style={{ flex: 1 }}>
+                      <Field label="ZEILEN PRO SEITE">
+                        <Select value={b.pageMode === "auto" ? "auto" : "fixed"} onChange={(e) => patch(b.id, { pageMode: e.target.value })}
+                          options={[{ value: "fixed", label: "Fest" }, { value: "auto", label: "Automatisch (Höhe nutzen)" }]} />
+                      </Field>
+                    </div>
+                    {b.pageMode === "auto" ? (
+                      <>
+                        <div style={{ flex: 1 }}><Field label="MIN. ZEILEN"><TextInput value={b.pageMin || ""} onChange={(e) => patch(b.id, { pageMin: e.target.value })} placeholder={String(PAGE_AUTO_MIN)} /></Field></div>
+                        <div style={{ flex: 1 }}><Field label="MAX. ZEILEN"><TextInput value={b.pageMax || ""} onChange={(e) => patch(b.id, { pageMax: e.target.value })} placeholder={String(PAGE_AUTO_MAX)} /></Field></div>
+                        {isTouch && <div style={{ flex: 1 }}><Field label="ZEILENHÖHE MAX. (px)"><TextInput value={b.rowHMax || ""} onChange={(e) => patch(b.id, { rowHMax: e.target.value })} placeholder={String(TABLE_SIZES[tableSizeOf(b)].rhMax)} /></Field></div>}
+                      </>
+                    ) : (
+                      <div style={{ flex: 1 }}><Field label="SEITENGRÖSSE (0 = aus)"><TextInput value={b.pageSize} onChange={(e) => patch(b.id, { pageSize: e.target.value })} /></Field></div>
+                    )}
+                    {b.pageMode !== "auto" && <div style={{ flex: 1 }} />}
+                    {b.pageMode !== "auto" && <div style={{ flex: 1 }} />}
+                    {!(b.pageMode === "auto" && isTouch) && <div style={{ flex: 1 }} />}
+                  </div>
+                  {b.pageMode === "auto" && (
+                    <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5, margin: "4px 0 8px" }}>
+                      Zeilenzahl aus der verfügbaren Höhe: eingebettet die Containerhöhe ab Tabellenanfang (Tabelle sollte der letzte Baustein sein), im Popup 60 % der Fensterhöhe. Passt sich bei Größenänderung an; der erste sichtbare Eintrag bleibt sichtbar.
+                      {isTouch ? ` Touch: Restplatz wird auf die Zeilen verteilt (${TABLE_SIZES[tableSizeOf(b)].rh} px bis Zeilenhöhe max.), die Tabelle füllt die Höhe.` : " Kompakt: Zeilenhöhe wird an der ersten Zeile gemessen."}
+                    </div>
+                  )}
+                  <div style={{ display: "flex", gap: 10 }}>
                     <div style={{ flex: 1 }}><Field label="WATCH-LIMIT"><TextInput value={b.watchLimit} onChange={(e) => patch(b.id, { watchLimit: e.target.value })} /></Field></div>
                     <div style={{ flex: 1 }}><Field label="SAMMEL-INTERVALL (ms)"><TextInput value={b.pollMs} onChange={(e) => patch(b.id, { pollMs: e.target.value })} /></Field></div>
-                    <div style={{ flex: 3 }} />
+                    <div style={{ flex: 2 }} />
                   </div>
                   <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5, marginBottom: 8 }}>Bis WATCH-LIMIT gebundene Zellen: einzelne Symbol-Watches (bestätigte API). Darüber: EINE Server-Subscription mit allen Symbolen im Sammel-Intervall — Standard-Protokollweg, in diesem Projekt noch nicht per WS-Mitschnitt verifiziert. Suchfeld-Placeholder lokalisierbar über L_Tbl_Search.</div>
                 </>

@@ -37,4 +37,19 @@ function fieldWidthOf(c, isArr = true) {
   return autoFieldWidth(c, isArr);
 }
 
-export { TABLE_LAYOUTS, TABLE_LAYOUT_DEFAULT, TABLE_SIZE_DEFAULT, tableLayoutOf, tableSizeOf, autoFieldWidth, fieldWidthOf };
+// ── Zeilen pro Seite: 'fixed' (pageSize, 0 = ohne Blaettern) oder 'auto' (aus verfuegbarer Hoehe) ──
+// Auto: Zeilenzahl = verfuegbare Hoehe / Mindest-Zeilenhoehe, begrenzt auf [pageMin, pageMax];
+// im Touch-Layout wird der Restplatz bis rowHMax auf die Zeilen verteilt (Tabelle fuellt die Hoehe).
+const PAGE_AUTO_MIN = 3, PAGE_AUTO_MAX = 50;
+const intIn = (v, def, lo, hi) => { const n = parseInt(v); return (isNaN(n) || n < lo) ? def : Math.min(hi, n); };
+function pageAutoOf(b) {
+  if (!b || b.pageMode !== "auto") return null;
+  const mn = intIn(b.pageMin, PAGE_AUTO_MIN, 1, 500);
+  const mx = Math.max(mn, intIn(b.pageMax, PAGE_AUTO_MAX, 1, 500));
+  const touch = tableLayoutOf(b) === "touch";
+  const S = TABLE_SIZES[tableSizeOf(b)];
+  const rhMax = touch ? Math.max(S.rh, intIn(b.rowHMax, S.rhMax, 1, 200)) : 0;
+  return { min: mn, max: mx, rhMin: touch ? S.rh : 0, rhMax };
+}
+
+export { PAGE_AUTO_MIN, PAGE_AUTO_MAX, pageAutoOf, TABLE_LAYOUTS, TABLE_LAYOUT_DEFAULT, TABLE_SIZE_DEFAULT, tableLayoutOf, tableSizeOf, autoFieldWidth, fieldWidthOf };
