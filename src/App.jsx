@@ -1,5 +1,5 @@
 import React, { useState, useRef, useMemo } from "react";
-import { Plus, Copy, Check, Code2, Monitor, Sun, Moon, Braces, Calculator } from "lucide-react";
+import { Plus, Copy, Check, Code2, Monitor, Sun, Moon, Braces, Calculator, FilePlus2, X } from "lucide-react";
 
 import { T, PAL } from "./constants/theme.js";
 import { PLOT_COLORS, MAX_AXES, ICONS } from "./constants/palette.js";
@@ -11,6 +11,7 @@ import { clampCol, groupByCol } from "./model/layout.js";
 import { generate } from "./codegen/index.js";
 import { generateNumPad, NUMPAD_FN } from "./codegen/emitNumPad.js";
 import { parseConfigComment, reidBlocks } from "./model/config.js";
+import { EMPTY_POPUP } from "./model/defaults.js";
 import { remapTplCols } from "./model/locTemplate.js";
 import { Field, TextInput, Tab, IconPicker, IconColorPicker } from "./components/primitives.jsx";
 import { AccessFields } from "./components/access.jsx";
@@ -54,6 +55,7 @@ export default function App() {
   // AC_NumPad: eigenstaendige, konfigurationsunabhaengige Funktionsdatei
   const numpadCode = useMemo(() => generateNumPad(), []);
   const [npCopied, setNpCopied] = useState(false);
+  const [resetArmed, setResetArmed] = useState(false); // zweistufige Bestätigung (touch-tauglich, kein window.confirm)
 
   const cfg = { mode, fnName, title, titleLoc, titleSource, titleField, titleFallback, titleIcon, titleIconColor, maxWidth, columns, hostSuffix, blocks, ...(access ? { access } : {}), ...(embedTarget ? { embedTarget } : {}) };
   const code = useMemo(() => generate(cfg), [mode, fnName, title, titleLoc, titleSource, titleField, titleFallback, titleIcon, titleIconColor, maxWidth, columns, hostSuffix, blocks, access, embedTarget]);
@@ -270,6 +272,32 @@ export default function App() {
     setImportErr(""); setImportText(""); setTab("preview");
   };
 
+  // ── Neues Popup: alles auf EMPTY_POPUP zurücksetzen, Modus bleibt erhalten ──
+  const doReset = () => {
+    const d = EMPTY_POPUP;
+    setFnName(d.fnName);
+    setTitle(d.title);
+    setTitleLoc(d.titleLoc);
+    setTitleSource(d.titleSource);
+    setTitleField(d.titleField);
+    setTitleFallback(d.titleFallback);
+    setTitleIcon(d.titleIcon);
+    setTitleIconColor(d.titleIconColor);
+    setMaxWidth(d.maxWidth);
+    setColumns(d.columns);
+    setHostSuffix(d.hostSuffix);
+    setEmbedTarget(d.embedTarget);
+    setAccess(d.access);
+    setBlocks([...d.blocks]);
+    setOpenId(null);
+    setAddTargetCol(0);
+    setPreviewBools({});
+    setDragId(null); setGrabbedId(null); setDropTarget(null);
+    setImportText(""); setImportErr("");
+    setTab("preview");
+    setResetArmed(false);
+  };
+
   // ── Karte (Accordion + Griff-Drag): ausgelagert nach components/editor/BlockCard.jsx ──
   const ui = { openId, setOpenId, dragId, setDragId, grabbedId, setGrabbedId, dropTarget, setDropTarget, columns, mode: childMode, sm };
   const actions = { patch, remove, moveVertical, moveFlat, moveHorizontal, patchBtn, addBtn, removeBtn, addCond, removeCond, patchCond, patchItem, addItem, removeItem, setItemKind, addItemCond, removeItemCond, patchItemCond, patchEntry, addEnumEntry, addStatusEntry, removeEntry, addAxis, removeAxis, patchAxis, addSeries, removeSeries, patchSeries, addRef, removeRef, patchRef, addMarker, removeMarker, patchMarker, addMapping, removeMapping, patchMapping, addTimeBtn, removeTimeBtn, patchTimeBtn, handleDrop, patchTblCol, addTblCol, removeTblCol, moveTblCol, addTblRow, removeTblRow, patchTblCell, addTblMap, removeTblMap, patchTblMap, addTblRule, addRowFilter, removeRowFilter, patchRowFilter, removeTblRule, patchTblRule };
@@ -297,6 +325,26 @@ export default function App() {
         <div>
           <div style={{ fontSize: 18, fontWeight: 700, letterSpacing: -0.2 }}>AC_PopUp Generator</div>
           <div style={{ fontSize: 12, color: T.muted }}>TwinCAT-HMI-Popups zusammenklicken, Code kopieren, fertig.</div>
+        </div>
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6 }}>
+          {!resetArmed ? (
+            <button onClick={() => setResetArmed(true)} title="Aktuelle Konfiguration verwerfen und mit einem leeren Popup beginnen (Modus bleibt erhalten)"
+              style={{ display: "flex", alignItems: "center", gap: 6, background: T.panel2, color: T.text, border: `1px solid ${T.border}`, borderRadius: 6, padding: "7px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+              <FilePlus2 size={14} /> Neues Popup
+            </button>
+          ) : (
+            <>
+              <span style={{ fontSize: 12, color: T.muted }}>Alle Bausteine und Einstellungen verwerfen?</span>
+              <button onClick={doReset}
+                style={{ display: "flex", alignItems: "center", gap: 6, background: T.danger, color: "#ffffff", border: "none", borderRadius: 6, padding: "7px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                <Check size={14} /> Zurücksetzen
+              </button>
+              <button onClick={() => setResetArmed(false)}
+                style={{ display: "flex", alignItems: "center", gap: 6, background: "transparent", color: T.text, border: `1px solid ${T.border}`, borderRadius: 6, padding: "7px 12px", fontSize: 12, cursor: "pointer" }}>
+                <X size={14} /> Abbrechen
+              </button>
+            </>
+          )}
         </div>
       </div>
 
