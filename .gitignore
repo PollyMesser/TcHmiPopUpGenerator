@@ -26,3 +26,6 @@ test/.cache
 
 # testdata
 analytics/test/fixtures/*.[cC][sS][vV]
+# aus echten Maschinendaten abgeleitet (lokal erzeugen, siehe analytics/README.md)
+analytics/demo/*.json
+analytics/test/reference/*.json

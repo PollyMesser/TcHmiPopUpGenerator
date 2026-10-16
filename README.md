@@ -121,7 +121,7 @@ Beide Bausteine erzeugen eigenständige Plotly-Module (eigener Lebenszyklus, Abb
 Die Rechenlogik liegt als eigenständiges Paket in `analytics/` (reine ES-Module, Browser + Node): Berechnung (`analytics/core`), Plot-Laufzeit (`analytics/plots/runtime.js`, wird abschnittsweise in den generierten Code eingebettet) und ein Server-Baustein (`analytics/server/handler.js`).
 
 - **Datenquelle Historize (Standard):** Filtrationskurven und Schrittdauern direkt aus historisierten Symbolen (Schrittnummer, Zyklusnummer, Filtrationsleistung) per `TcHmiPostgresHistorize.GetTrendLineData`; Berechnung im Panel mit dem eingebetteten Rechenkern. Filtrationskurven in der HMI-Fassung: % der Beschickungsdauer, Median + Band.
-- **Zum Testen ohne Historize:** Datenquelle „HTTP“, `analytics/demo/*.json` nach `Assets/ac-analytics-demo/` ins HMI-Projekt kopieren – die Demo-URL lädt sie per GET.
+- **Zum Testen ohne Historize:** Datenquelle „HTTP“. Demo-Dateien lokal erzeugen (`npm run gen:demo`, braucht einen Maschinen-CSV-Export, die Dateien sind wegen echter Maschinendaten per `.gitignore` ausgeschlossen) und `analytics/demo/*.json` nach `Assets/ac-analytics-demo/` ins HMI-Projekt kopieren – die Demo-URL lädt sie per GET.
 - **Nach Änderungen an `analytics/plots/runtime.js`:** `npm run gen:runtime` (der Test prüft, dass die eingebettete Fassung aktuell ist).
 - **Noch offen:** Server-Seite (DB-Abfrage gegen das HMI-Schema + `handler.js`), Ausschluss auffälliger Zyklen per Checkbox, Zyklusvergleich.
 

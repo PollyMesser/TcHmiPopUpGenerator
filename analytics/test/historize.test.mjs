@@ -1,18 +1,18 @@
 #!/usr/bin/env node
 // ── Test: Historize-Zeitreihen → Messzeilen → gleiche Ergebnisse wie die CSV ──
-// Aus der Referenz-CSV werden drei getrennte Zeitreihen gebaut, wie sie
+// Aus Messzeilen (Referenz-CSV, falls vorhanden, sonst synthetische Daten aus
+// fixtures.mjs) werden drei getrennte Zeitreihen gebaut, wie sie
 // GetTrendLineData liefert (Schrittnummer, Zyklusnummer, Leistung; ISO-UTC mit
 // Millisekunden, je Symbol leicht versetzte Zeitstempel). Nach dem Zusammenführen
-// müssen Filtrationskurven und Schrittdauern exakt den CSV-Ergebnissen entsprechen.
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import path from "node:path";
-import { parseMachineCsv, decodeCsvBuffer, computeFiltrationCurves, computeStepDurations } from "../index.js";
+// müssen Filtrationskurven und Schrittdauern exakt den direkten Ergebnissen entsprechen.
+import { computeFiltrationCurves, computeStepDurations } from "../index.js";
+import { referenceRows, syntheticRows, noteSkippedReference } from "./fixtures.mjs";
 import { mergeHistorizeSeries, looksCompressed, rawDisplayWidth } from "../adapters/historize.js";
 import { assert, assertEqual, report } from "../../test/_assert.mjs";
 
-const here = path.dirname(fileURLToPath(import.meta.url));
-const { rows } = parseMachineCsv(decodeCsvBuffer(readFileSync(path.join(here, "fixtures", "2026-06_2.CSV"))));
+const REF = referenceRows();
+if (!REF) noteSkippedReference("analytics-historize");
+const rows = REF || syntheticRows();
 
 // Historize-Format: { x: '2026-10-07T07:35:37.79Z', y }
 const iso = (s) => new Date(s * 1000).toISOString();
@@ -34,15 +34,16 @@ const near = (a, b, tol) => Math.abs(a - b) <= tol;
 
   const fCsv = computeFiltrationCurves(rows, {}).groups[0];
   const fHis = computeFiltrationCurves(merged, {}).groups[0];
-  assertEqual(fHis.n, 96, "Filtration (Historize): 96 Zyklen");
+  assertEqual(fHis.n, fCsv.n, `Filtration (Historize): ${fCsv.n} Zyklen wie direkt gerechnet`);
+  assert(fCsv.n > 0, "Filtration: Testdaten enthalten auswertbare Zyklen");
   assertEqual(fHis.median, fCsv.median, "Filtration (Historize): Median-Kurve identisch zur CSV");
   assertEqual(fHis.q1, fCsv.q1, "Filtration (Historize): 25. Perzentil identisch");
   assertEqual(fHis.q3, fCsv.q3, "Filtration (Historize): 75. Perzentil identisch");
-  assert(near(fHis.fit.y0, 16.7, 0.05) && near(fHis.fit.A, 49.7, 0.05) && near(fHis.fit.tau, 28.2, 0.05), "Filtration (Historize): Referenzwerte y0/A/τ");
+  if (REF) assert(near(fHis.fit.y0, 16.7, 0.05) && near(fHis.fit.A, 49.7, 0.05) && near(fHis.fit.tau, 28.2, 0.05), "Filtration (Historize): Referenzwerte y0/A/τ");
 
   const sCsv = computeStepDurations(rows, {});
   const sHis = computeStepDurations(merged, {});
-  assertEqual(sHis.groups.map((g) => [g.group, g.total.sum, g.total.n]), sCsv.groups.map((g) => [g.group, g.total.sum, g.total.n]), "Schrittdauern (Historize): identisch zur CSV");
+  assertEqual(sHis.groups.map((g) => [g.group, g.total.sum, g.total.n]), sCsv.groups.map((g) => [g.group, g.total.sum, g.total.n]), "Schrittdauern (Historize): identisch zur direkten Rechnung");
   assertEqual(sHis.categories.map((c) => c.total.mean), sCsv.categories.map((c) => c.total.mean), "Schrittdauern (Historize): Kategorien identisch");
 }
 

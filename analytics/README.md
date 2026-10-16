@@ -14,7 +14,7 @@ Reine ES-Module ohne Abhängigkeiten. Sie laufen im Browser und in Node, also in
 | `adapters/machineCsv.js` | Maschinen-CSV-Export → Messzeilen (Tests, Offline-Auswertung) |
 | `adapters/historize.js` | GetTrendLineData-Antwort (Schritt, Zyklus, Leistung als getrennte Zeitreihen) → Messzeilen |
 | `plots/coreEntry.js` | Einstieg für den eingebetteten Rechenkern `AC_CORE` (Berechnung im Browser) |
-| `demo/` | Fertige Ergebnis-JSONs aus der Referenz-CSV zum Testen in der HMI ohne Server |
+| `demo/` | Fertige Ergebnis-JSONs aus der Referenz-CSV zum Testen in der HMI ohne Server. Nicht im Repo, lokal mit `npm run gen:demo` erzeugen |
 | `scripts/` | `build-runtime.mjs` (Laufzeit für den Generator), `build-demo.mjs` (Demo-JSONs) |
 | `test/` | Referenztests (siehe unten) |
 
@@ -69,7 +69,7 @@ Für Filtrationskurven und Schrittdauern. Der Baustein fragt `<Domain>.GetTrendL
 
 Hier rechnet der Baustein nicht selbst. Er holt das Ergebnis-JSON und zeichnet es:
 
-- **HTTP GET:** fertige JSON-Datei, z. B. die Demo-Dateien. `demo/*.json` nach `Assets/ac-analytics-demo/` im HMI-Projekt kopieren. Das ist die Standard-URL des Bausteins und zum Testen ohne Server gedacht. Optionen und Filter aus dem Editor wirken dabei nicht.
+- **HTTP GET:** fertige JSON-Datei, z. B. die Demo-Dateien (vorher mit `npm run gen:demo [csv]` erzeugen). `demo/*.json` nach `Assets/ac-analytics-demo/` im HMI-Projekt kopieren. Das ist die Standard-URL des Bausteins und zum Testen ohne Server gedacht. Optionen und Filter aus dem Editor wirken dabei nicht.
 - **HTTP POST:** Anfrage-JSON im Body, Antwort = Ergebnis-JSON.
 - **TcHMI-Server-Symbol:** `requestEx` ReadWrite mit `writeValue` = Anfrage-JSON und `readValue` = Ergebnis (Objekt oder JSON-String).
 
@@ -86,12 +86,14 @@ Anfrage-JSON (siehe `server/handler.js`):
 
 `node analytics/test/core.test.mjs` (läuft auch in `npm test`):
 
+**Ohne Referenz-CSV:** `test/fixtures/2026-06_2.CSV` enthält echte Maschinendaten und ist per `.gitignore` ausgeschlossen. Fehlt die Datei, laufen alle Tests mit synthetischen, deterministischen Messzeilen (`test/fixtures.mjs` → `syntheticRows()`: 30 Zyklen, 60-s-Takt, Sättigungsverlauf, Pausen in der Beschickung, mehrere Tage). Die Prüfungen gegen die Referenzwerte unten werden dann übersprungen und mit einem ℹ-Hinweis gemeldet. Die SQLite-Vergleiche brauchen zusätzlich die Referenz-JSONs (`test/reference/*.json`, siehe „Referenzen neu erzeugen“). Fehlen sie, werden nur diese Vergleiche übersprungen. `test/analysis-logic.mjs` rechnet die Demo-Ergebnisse im Speicher (`scripts/demoJobs.mjs`) und braucht `demo/` nicht.
+
 - **Filtrationskurven** gegen die Referenzwerte der App: `2026-06_2.CSV` (AC1118, 96 Zyklen) ergibt y0 16,7 · A 49,7 · τ 28,2 % · R² 0,970.
 - **Schrittdauern** gegen eine unabhängige SQLite-Nachbildung des Original-SQL (`test/reference/step_durations_sqlite.py`). Geprüft wird zusätzlich mit eingestreuten Pausen (`test/reference/pauseVariant.mjs`), weil die Referenz-CSV keine Pausenschritte enthält.
 - **Historize** (`test/historize.test.mjs`): Die Referenz-CSV wird in drei getrennte Zeitreihen im GetTrendLineData-Format zerlegt (ISO-UTC mit ms, je Symbol versetzte Zeitstempel). Nach dem Zusammenführen sind Filtrationskurven und Schrittdauern identisch zur CSV.
 - **Verlauf/Balken/Streu** gegen eine unabhängige SQLite-Referenz (`test/reference/report_sqlite.py`): Tagesmittel, Tages-SD, Gruppen, Pearson-r.
 
-Referenzen neu erzeugen (Python 3):
+Referenzen erzeugen (Python 3, einmalig nach dem Klonen und nach Änderungen an der CSV):
 
 ```
 python3 analytics/test/reference/step_durations_sqlite.py analytics/test/fixtures/2026-06_2.CSV > analytics/test/reference/step_durations.json
@@ -100,7 +102,7 @@ python3 analytics/test/reference/step_durations_sqlite.py /tmp/pausen.CSV > anal
 python3 analytics/test/reference/report_sqlite.py analytics/test/fixtures/2026-06_2.CSV > analytics/test/reference/report.json
 ```
 
-> `test/fixtures/2026-06_2.CSV` enthält echte Maschinendaten (AC1118). Vor einem Push auf öffentliche Remotes (GitHub Pages) prüfen, ob die Datei ins Repo soll.
+> Nicht im Repo (`.gitignore`), weil echte Maschinendaten oder daraus abgeleitet: `test/fixtures/*.csv`, `test/reference/*.json`, `demo/*.json`. Die Erzeugungsskripte (`test/reference/*.py`, `pauseVariant.mjs`, `scripts/build-demo.mjs`) bleiben im Repo.
 
 ## Abweichungen von der App (bewusst, für die HMI)
 

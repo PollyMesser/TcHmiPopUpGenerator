@@ -17,9 +17,21 @@ import { makeElement, makeSandbox } from "./_dom-stub.mjs";
 import { bundleJsx } from "./_bundle.mjs";
 import { buildRuntimeModule } from "../analytics/scripts/build-runtime.mjs";
 import { assert, assertEqual, report } from "./_assert.mjs";
-import { parseMachineCsv, decodeCsvBuffer, computeFiltrationCurves, computeStepDurations } from "../analytics/index.js";
+import { computeFiltrationCurves, computeStepDurations } from "../analytics/index.js";
+import { computeForRequest } from "../analytics/server/handler.js";
+import { DEMO_JOBS } from "../analytics/scripts/demoJobs.mjs";
+import { referenceRows, syntheticRows, noteSkippedReference } from "../analytics/test/fixtures.mjs";
 
-const DEMO = (f) => JSON.parse(readFileSync(new URL("../analytics/demo/" + f, import.meta.url), "utf8"));
+// Testdaten: Referenz-CSV, falls vorhanden (nicht im Repo), sonst synthetische Daten.
+// Die "Demo-Dateien" werden im Speicher aus denselben Daten berechnet (wie build-demo.mjs).
+const REF_ROWS = referenceRows();
+if (!REF_ROWS) noteSkippedReference("analysis-logic");
+const csvRows = REF_ROWS || syntheticRows();
+const demoCache = {};
+const DEMO = (f) => demoCache[f] || (demoCache[f] = JSON.parse(JSON.stringify(computeForRequest(DEMO_JOBS[f], csvRows))));
+const FC_REF = computeFiltrationCurves(csvRows, { xMode: "norm", timeZone: "Europe/Berlin" });
+const N_CYC = FC_REF.info.usable;
+const END_MD = FC_REF.groups[0].endMedian.toLocaleString("de-DE", { maximumFractionDigits: 1 });
 const MODES = ["registered", "event", "usercontrol", "embed", "embedEvent", "embedUc"];
 const cfgOf = (mode, blocks) => ({ mode, fnName: "AC_Ana", hostSuffix: ".btn_PopUp", embedTarget: "Ziel", title: "Auswertung", titleLoc: "",
   titleSource: "static", titleField: "", titleFallback: "", titleIcon: "", titleIconColor: "", maxWidth: 1000, columns: 1, blocks });
@@ -38,7 +50,6 @@ const V = {
 };
 
 // Historize-Antwort aus der Referenz-CSV (Format wie am 07.10.2026 bestätigt: ISO-UTC mit ms, flags "Start")
-const csvRows = parseMachineCsv(decodeCsvBuffer(readFileSync(new URL("../analytics/test/fixtures/2026-06_2.CSV", import.meta.url)))).rows;
 const isoOf = (s) => new Date(s * 1000).toISOString();
 function hzAxes(yAxes) {
   const key = (sym) => (sym.endsWith("nStep") ? "step" : sym.endsWith("nCycle") ? "cycleNo" : "leistung");
@@ -156,9 +167,9 @@ async function main() {
     assertEqual(r.calls.react[0].layout.height, 380, "Filtration: Höhe aus dem Editor");
     assertEqual(r.calls.react[0].layout.separators, ",.", "Filtration: deutsche Trennzeichen");
     assert(countTag(r.tables, "table") >= 2, "Filtration: Kennwert-Tabelle + auffällige Zyklen");
-    assert(allText(r.tables).includes("96 Zyklen ausgewertet"), "Filtration: Info-Zeile");
+    assert(allText(r.tables).includes(N_CYC + " Zyklen ausgewertet"), `Filtration: Info-Zeile (${N_CYC} Zyklen)`);
     assert(!allText(r.tables).includes("R²"), "Filtration (vereinfacht): keine Modellspalten in der Tabelle");
-    assert(allText(r.tables).includes("50,5"), "Filtration: Ende Md = 50,5 in der Kennwert-Tabelle");
+    assert(allText(r.tables).includes(END_MD), `Filtration: Ende Md = ${END_MD} in der Kennwert-Tabelle`);
     assertEqual(r.statusText, "", "Filtration: Status nach Laden leer");
     r.close();
     assertEqual(r.calls.purge, 1, "Filtration: Plotly.purge beim Schließen");
@@ -222,7 +233,7 @@ async function main() {
     const med = r.calls.react[0].data.find((t) => t.name === "Median");
     assertEqual(med.y, ref.median, "Historize/Filtration: Median im Browser = Referenzrechnung (CSV)");
     assertEqual(r.calls.react[0].data.length, 3, "Historize/Filtration: nur Median + Band");
-    assert(allText(r.tables).includes("96 Zyklen ausgewertet"), "Historize/Filtration: 96 Zyklen");
+    assert(allText(r.tables).includes(N_CYC + " Zyklen ausgewertet"), `Historize/Filtration: ${N_CYC} Zyklen`);
   }
   // Historize: Schrittdauern im Browser gerechnet (ohne Leistungssymbol)
   {
