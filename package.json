@@ -8,8 +8,10 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "node test/run.mjs && node test/smoke-render.mjs && node test/smoke-blockcard.mjs && node test/sort-logic.mjs && node test/fn-logic.mjs && node test/bool-filter-logic.mjs && node test/embed-test.mjs && node test/access-logic.mjs && node test/plot-uc-logic.mjs && node test/tpl-logic.mjs && node test/numpad-logic.mjs && node test/rowfmt-logic.mjs && node test/hidden-logic.mjs && node test/touch-logic.mjs && node test/clamp-logic.mjs && node test/autopage-logic.mjs && node test/chart-logic.mjs",
-    "test:record": "node test/run.mjs --record"
+    "test": "node test/run.mjs && node test/smoke-render.mjs && node test/smoke-blockcard.mjs && node test/sort-logic.mjs && node test/fn-logic.mjs && node test/bool-filter-logic.mjs && node test/embed-test.mjs && node test/access-logic.mjs && node test/plot-uc-logic.mjs && node test/tpl-logic.mjs && node test/numpad-logic.mjs && node test/rowfmt-logic.mjs && node test/hidden-logic.mjs && node test/touch-logic.mjs && node test/clamp-logic.mjs && node test/autopage-logic.mjs && node test/chart-logic.mjs && node test/analysis-logic.mjs && node analytics/test/core.test.mjs && node analytics/test/historize.test.mjs",
+    "test:record": "node test/run.mjs --record",
+    "gen:runtime": "node analytics/scripts/build-runtime.mjs",
+    "gen:demo": "node analytics/scripts/build-demo.mjs"
   },
   "dependencies": {
     "lucide-react": "^1.23.0",

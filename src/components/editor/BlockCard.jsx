@@ -9,6 +9,7 @@ import { ColorSwatches, Field, HexSwatches, IconBtn, IconPicker, IconColorPicker
 import { ButtonItemFields, InputFields, ReadBoolFields, TriggerFields, WriteSymField } from "../fields.jsx";
 import { AccessFields } from "../access.jsx";
 import { BarEditor, GaugeEditor } from "./ChartEditors.jsx";
+import { AnalysisEditor } from "./AnalysisEditor.jsx";
 import { NUMPAD_FN } from "../../codegen/emitNumPad.js";
 import { parseTpl, checkTplRefs, tplPreview } from "../../model/locTemplate.js";
 import { tableColDeps } from "../../model/tableDeps.js";
@@ -150,6 +151,7 @@ function BlockCard({ b, opts, ui, actions }) {
 
             {b.type === "bar" && <BarEditor b={b} patch={patch} sm={sm} mode={mode} />}
             {b.type === "gauge" && <GaugeEditor b={b} patch={patch} sm={sm} mode={mode} />}
+            {b.type === "analysis" && <AnalysisEditor b={b} patch={patch} mode={mode} />}
 
             {b.type === "plot" && (() => {
               const axisOpts = (b.axes || []).map((a, i) => ({ value: a.id, label: (a.label || a.unit) ? `${a.label || "Achse " + (i + 1)}${a.unit ? " (" + a.unit + ")" : ""}` : "Achse " + (i + 1) }));

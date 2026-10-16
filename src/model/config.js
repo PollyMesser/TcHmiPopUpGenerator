@@ -41,6 +41,10 @@ function reidBlocks(blocks) {
 
     }
     if (nb.type === "bar") nb.bars = (nb.bars || []).map((x) => ({ ...x, id: pid("bb") }));
+    if (nb.type === "analysis") {
+      nb.trendColumns = (nb.trendColumns || []).map((x) => ({ ...x, id: pid("tk") }));
+      nb.stepLimits = (nb.stepLimits || []).map((x) => ({ ...x, id: pid("sl") }));
+    }
     if (nb.type === "gauge") nb.bands = (nb.bands || []).map((x) => ({ ...x, id: pid("gb") }));
     if (nb.type === "plot") {
       const axMap = {};

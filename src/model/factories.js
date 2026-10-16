@@ -1,5 +1,6 @@
 import { nid, eid, pid } from "./ids.js";
 import { PLOT_COLORS } from "../constants/palette.js";
+import { DEFAULT_ACTIVE_GROUPS } from "../../analytics/core/stepCatalog.js";
 
 const mkButton = () => ({ label: "OK", loc: "", icon: "", iconPos: "left", showLabel: true, symbol: "ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::xConfirm", writeMode: "pulse", pulseMs: 500, closeAfter: true, color: "blue", visSym: "", enableIf: [], fbSym: "", confirmMs: 3000, confirmAction: "pulse" });
 const mkItem = (kind) => {
@@ -48,6 +49,15 @@ const mkRowFilter = () => ({ id: eid("tf"), colIndex: 0, op: "notZero", value: "
 
 // ── Balkendiagramm / Gauge ──
 const mkBar = (label, color) => ({ id: pid("bb"), label: label || "Wert", loc: "", symbol: "ADS.AF_PLC.MAIN.…::rWert", color: color || PLOT_COLORS[0].hex });
+// ── Auswertung (Maschinendaten) ──
+// Standard-Datenquelle je Widget: Demo-JSON im HMI-Projekt (analytics/demo → Assets/ac-analytics-demo)
+const ANALYSIS_DEFAULTS = {
+  filtration: { caption: "Filtrationskurven", srcUrl: "Assets/ac-analytics-demo/filtration.json" },
+  steps: { caption: "Schrittdauern", srcUrl: "Assets/ac-analytics-demo/steps.json" },
+  trend: { caption: "Verlauf", srcUrl: "Assets/ac-analytics-demo/trend-line.json" },
+};
+const mkTrendCol = (key, agg) => ({ id: pid("tk"), key: key || "leistung", agg: agg || "avg" });
+const mkStepLimit = (group) => ({ id: pid("sl"), group: group || "Beschicken", minMin: "", maxMin: "" });
 const mkGaugeBand = (from, to, color) => ({ id: pid("gb"), from: from == null ? 0 : from, to: to == null ? 100 : to, color: color || PLOT_COLORS[1].hex });
 
 const newBlock = (type) => {
@@ -63,6 +73,13 @@ const newBlock = (type) => {
       arraySymbol: "", arrayCount: 10, startIndex: 0, member: "", countSymbol: "", labelPrefix: "Pos. ", arrayColor: PLOT_COLORS[0].hex,
       orientation: "v", unit: "%", decimals: 0, autoscale: false, min: 0, max: 100, showValues: true,
       limitLow: "", limitHigh: "", limitColor: PLOT_COLORS[3].hex, height: 260 };
+    case "analysis": return { id: nid(), type, col: 0, widget: "filtration", caption: ANALYSIS_DEFAULTS.filtration.caption, captionLoc: "",
+      srcMode: "historize", srcUrl: ANALYSIS_DEFAULTS.filtration.srcUrl, srcMethod: "GET", srcSymbol: "AC_Analytics.Compute",
+      hzDomain: "TcHmiPostgresHistorize", hzStepSymbol: "", hzCycleSymbol: "", hzLeistungSymbol: "", hzDays: 3, hzIntervalS: 10, hzMachine: "",
+      machines: "", machineSymbol: "", lastDays: 30, timeZone: "Europe/Berlin", refreshMin: 0, height: 380, decimals: 1, showTables: true,
+      xMode: "norm", groupBy: "none", showCycles: true, showMedian: true, showFit: true,
+      bucket: "day", stepSeries: ["cat:active", "cat:secondary", "cat:total"], stepStats: ["avg"], activeGroups: [...DEFAULT_ACTIVE_GROUPS], stepLimits: [], showSubsteps: false,
+      chart: "line", trendColumns: [mkTrendCol("leistung", "avg")], trendGroupBy: "material", scX: "druck_zulauf", scY: "leistung" };
     case "gauge": return { id: nid(), type, col: 0, label: "Druck", loc: "", symbol: "ADS.AF_PLC.MAIN.…::rDruck",
       min: 0, max: 16, minSymbol: "", maxSymbol: "", unit: "bar", decimals: 1, shape: "angular", barColor: PLOT_COLORS[0].hex,
       bands: [mkGaugeBand(0, 10, PLOT_COLORS[1].hex), mkGaugeBand(10, 13, PLOT_COLORS[2].hex), mkGaugeBand(13, 16, PLOT_COLORS[3].hex)],
@@ -90,5 +107,5 @@ export {
   mkButton, mkItem, mkCond, mkEnumEntry, mkStatusEntry, newBlock,
   mkAxis, mkSeries, mkRef, mkMapping, mkMarker,
   mkTimeBtn, DEFAULT_TIME_BUTTONS, defaultTimeButtons,
-  mkBar, mkGaugeBand,
+  mkBar, mkGaugeBand, mkTrendCol, mkStepLimit, ANALYSIS_DEFAULTS,
 };

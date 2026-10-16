@@ -5,6 +5,7 @@ function blockSummary(b) {
   if (b.type === "plot") return (b.series || []).map((s) => s.label).filter(Boolean).join(" · ") || "Verlauf";
   if (b.type === "divider") return (b.label || "").trim() || "Linie";
   if (b.type === "bar") return (b.caption || "").trim() || (b.source === "array" ? ((b.arraySymbol || "").trim() || "Array") : (b.bars || []).map((x) => x.label).filter(Boolean).join(" · ")) || "Balken";
+  if (b.type === "analysis") return (b.caption || "").trim() || ({ filtration: "Filtrationskurven", steps: "Schrittdauern", trend: "Verlauf" }[b.widget] || "Auswertung");
   if (b.type === "gauge") return b.label || (b.symbol || "").trim() || "Gauge";
   return b.label || "—";
 }

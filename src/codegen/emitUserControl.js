@@ -4,6 +4,7 @@ import { emitText, emitButtonItemUC, progressParams, trigActionUC } from "./emit
 import { emitPlot } from "./emitPlot.js";
 import { emitBar } from "./emitBar.js";
 import { emitGauge } from "./emitGauge.js";
+import { emitAnalysis } from "./emitAnalysis.js";
 import { emitTable } from "./emitTable.js";
 import { emitDivider } from "./shared.js";
 import { gateBlock, gateButton } from "./access.js";
@@ -178,6 +179,7 @@ function emitBlockUC(b, parent) {
   if (b.type === "plot") return emitPlot(parent, b, true);
   if (b.type === "bar") return emitBar(parent, b, true);
   if (b.type === "gauge") return emitGauge(parent, b, true);
+  if (b.type === "analysis") return emitAnalysis(parent, b, true);
   if (b.type === "table") return emitTable(parent, b);
   if (b.type === "divider") return emitDivider(parent, b);
   if (b.type === "row") return emitRowUC(parent, b);

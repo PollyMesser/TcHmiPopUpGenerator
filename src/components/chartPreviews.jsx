@@ -121,4 +121,55 @@ function GaugePreview({ b, pal }) {
   );
 }
 
-export { BarPreview, GaugePreview };
+// ── Auswertung: schematische Skizze (echte Daten erst zur Laufzeit vom Server) ──
+function AnalysisPreview({ b, pal }) {
+  const W = 600, H = 200;
+  const c1 = "#4a9eff", c2 = "#38b48b", c3 = "#f0a030";
+  const sat = (x, A, y0, tau) => A - (A - y0) * Math.exp(-x / tau);
+  const path = (fn, n = 40) => Array.from({ length: n + 1 }, (_, i) => { const x = i / n; return `${i ? "L" : "M"} ${(20 + x * (W - 40)).toFixed(1)} ${(H - 20 - fn(x) * (H - 40)).toFixed(1)}`; }).join(" ");
+  let body;
+  if (b.widget === "filtration") {
+    // vereinfachte HMI-Fassung: Band (25.–75. Perzentil) + Median
+    const up = (x) => Math.min(1, 1.25 * sat(x, 0.75, 0.15, 0.3)), dn = (x) => 0.75 * sat(x, 0.75, 0.15, 0.3);
+    const pts = (fn) => Array.from({ length: 41 }, (_, i) => { const x = i / 40; return [20 + x * (W - 40), H - 20 - fn(x) * (H - 40)]; });
+    const band = [...pts(up), ...pts(dn).reverse()].map(([x, y], i) => `${i ? "L" : "M"} ${x.toFixed(1)} ${y.toFixed(1)}`).join(" ") + " Z";
+    body = (<>
+      <path d={band} fill={c1} fillOpacity="0.16" stroke="none" />
+      <path d={path((x) => sat(x, 0.75, 0.15, 0.3))} stroke={c1} strokeWidth="3" fill="none" />
+    </>);
+  } else if (b.widget === "steps") {
+    const ys = [0.5, 0.58, 0.62, 0.45, 0.4, 0.3, 0.38, 0.66, 0.35, 0.4];
+    body = (<>
+      {ys.map((y, i) => <rect key={i} x={30 + i * 56} y={H - 20 - y * 0.5 * (H - 40)} width="18" height={y * 0.5 * (H - 40)} fill={c1} fillOpacity="0.25" stroke={c1} />)}
+      <path d={ys.map((y, i) => `${i ? "L" : "M"} ${39 + i * 56} ${H - 20 - y * (H - 40)}`).join(" ")} stroke={c1} strokeWidth="2" fill="none" />
+      <path d={ys.map((y, i) => `${i ? "L" : "M"} ${39 + i * 56} ${H - 20 - 0.15 * (H - 40)}`).join(" ")} stroke={c3} strokeWidth="2" fill="none" />
+    </>);
+  } else if (b.chart === "scatter") {
+    body = Array.from({ length: 60 }, (_, i) => <circle key={i} cx={30 + ((i * 37) % 540)} cy={H - 30 - ((i * 53) % 140)} r="3.5" fill={c1} fillOpacity="0.7" />);
+  } else if (b.chart === "bar") {
+    body = [0.5, 0.8, 0.35, 0.65, 0.9, 0.4].map((y, i) => <g key={i}><rect x={40 + i * 90} y={H - 20 - y * (H - 40)} width="26" height={y * (H - 40)} fill={c1} /><rect x={68 + i * 90} y={H - 20 - y * 0.6 * (H - 40)} width="26" height={y * 0.6 * (H - 40)} fill={c2} /></g>);
+  } else {
+    body = (<>
+      <path d={path((x) => 0.5 + 0.25 * Math.sin(x * 7), 14)} stroke={c1} strokeWidth="2" fill="none" />
+      <path d={path((x) => 0.3 + 0.1 * Math.cos(x * 5), 14)} stroke={c2} strokeWidth="2" fill="none" />
+    </>);
+  }
+  const src = b.srcMode === "historize" && b.widget !== "trend" ? `${b.hzDomain || "TcHmiPostgresHistorize"}, letzte ${b.hzDays || 3} Tage, Berechnung im Panel`
+    : b.srcMode === "server" ? `Server-Symbol ${b.srcSymbol || "?"}` : `${b.srcMethod || "GET"} ${b.srcUrl || "?"}`;
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+        <span style={{ flex: 1, fontSize: 20, fontWeight: 600, color: pal.titleColor }}>{(b.caption || "").trim() || "Auswertung"}</span>
+        <span style={{ fontSize: 14, border: `1px solid ${pal.border}`, borderRadius: 6, padding: "4px 10px", color: pal.bodyText }}>Aktualisieren</span>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", display: "block", border: `1px dashed ${pal.border}`, borderRadius: 6 }}>
+        <line x1="20" y1={H - 20} x2={W - 20} y2={H - 20} stroke={pal.border} />
+        <line x1="20" y1="20" x2="20" y2={H - 20} stroke={pal.border} />
+        {body}
+      </svg>
+      <div style={{ fontSize: 11, color: pal.bodyText, opacity: 0.6, marginTop: 6 }}>Skizze – Daten zur Laufzeit: {src}</div>
+    </div>
+  );
+}
+
+export { BarPreview, GaugePreview, AnalysisPreview };

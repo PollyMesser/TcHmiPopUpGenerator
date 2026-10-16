@@ -41,7 +41,7 @@ function buildBodyContent(blocks, cols, emit) {
   let seg = [];
   const flush = () => { if (seg.length) { parts.push({ kind: "grid", items: seg }); seg = []; } };
   blocks.forEach((b) => {
-    if (b.type === "row" || b.type === "plot" || (b.type === "divider" && !b.inCol)) { flush(); parts.push({ kind: "row", block: b }); }
+    if (b.type === "row" || b.type === "plot" || b.type === "analysis" || (b.type === "divider" && !b.inCol)) { flush(); parts.push({ kind: "row", block: b }); }
     else seg.push(b);
   });
   flush();

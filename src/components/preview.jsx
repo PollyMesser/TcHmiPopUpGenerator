@@ -2,7 +2,7 @@ import React from "react";
 import { COLORS, ICONS, TEXT_BG } from "../constants/palette.js";
 import { parseTpl, tplPreview } from "../model/locTemplate.js";
 import { tableLayoutOf } from "../model/tableLayout.js";
-import { BarPreview, GaugePreview } from "./chartPreviews.jsx";
+import { BarPreview, GaugePreview, AnalysisPreview } from "./chartPreviews.jsx";
 
 // ── Vorschau-Renderer (Editor-Vorschau, nicht der generierte Code) ──
 function ItemPreview({ cfg, pal, on, onToggle }) {
@@ -239,6 +239,7 @@ function BlockPreview({ b, pal, on, onToggle }) {
     );
   }
   if (b.type === "bar") return <BarPreview b={b} pal={pal} />;
+  if (b.type === "analysis") return <AnalysisPreview b={b} pal={pal} />;
   if (b.type === "gauge") return <GaugePreview b={b} pal={pal} />;
   if (b.type === "progress") {
     const col = COLORS[b.color] || COLORS.blue;

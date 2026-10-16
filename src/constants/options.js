@@ -1,6 +1,6 @@
 import {
   Type, Eye, CircleDot, MousePointerClick, PencilLine, ToggleLeft, Columns2,
-  Braces, Zap, Box, List, ChevronsUpDown, Tag, Gauge, LineChart, Minus, Table, ChartColumn, CircleGauge,
+  Braces, Zap, Box, List, ChevronsUpDown, Tag, Gauge, LineChart, Minus, Table, ChartColumn, CircleGauge, ChartSpline,
 } from "lucide-react";
 
 // ── Ausgabemodi (Alt-Struktur, weiter für Rückwärtskompatibilität referenziert) ──
@@ -50,6 +50,7 @@ const BLOCK_META = {
   progress:{ label: "Ladebalken",     icon: Gauge,             hint: "Prozent/Wert als Balken (z.B. Proportionalventil)" },
   plot:   { label: "Verlauf (Plot)",  icon: LineChart,         hint: "Plotly-Trend, volle Breite" },
   bar:    { label: "Balkendiagramm",  icon: ChartColumn,       hint: "Aktuelle Werte mehrerer Variablen oder eines PLC-Arrays als Balken (Plotly)" },
+  analysis: { label: "Auswertung (Maschinendaten)", icon: ChartSpline, hint: "Filtrationskurven, Schrittdauern oder Verlauf – Ergebnis vom Server, volle Breite" },
   gauge:  { label: "Gauge / Tacho",   icon: CircleGauge,       hint: "Einzelwert als Rundinstrument oder Bullet mit Farbbereichen und Sollwert (Plotly)" },
   table: { label: "Tabelle", icon: Table, hint: "Such-/blätterbare Tabelle (statisch oder aus PLC-Array)" },
   button: { label: "Buttons",         icon: MousePointerClick, hint: "1–2 Buttons, Variable schreiben" },
