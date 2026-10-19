@@ -2,16 +2,18 @@
 // Welche Teile einer Tabelle lesen den Wert einer Spalte (per Spaltenindex)?
 //   Farbregeln (rules.colIndex), Zeilenfilter (rowFilters.colIndex),
 //   Standardsortierung (defaultSortCol), Funktions-Buttons mit Parameter
-//   aus Spalte (paramSource 'col' / paramCol) und Text-Vorlagen mit {N}.
+//   aus Spalte (paramSource 'col' / paramCol), Zeilenklick mit Parameter aus
+//   Spalte (rowParamSource 'col' / rowParamCol) und Text-Vorlagen mit {N}.
 // Genutzt vom Editor (Hinweis „Verwendet von …“, Warnung vor dem Loeschen)
 // und vom Codegen (observe-gesperrte Spalte trotzdem lesen, wenn etwas
 // von ihr abhaengt). Normalisierung identisch zu tableBlockConfig().
 import { parseTpl } from "./locTemplate.js";
+import { rowClickOf } from "./rowClick.js";
 
 const idxOf = (v) => Math.max(0, parseInt(v) || 0);
 
 // Liefert je Spalte ein Array von Abhaengigkeiten: { kind, label }.
-//   kind: 'rule' | 'filter' | 'sort' | 'param' | 'tpl'
+//   kind: 'rule' | 'filter' | 'sort' | 'param' | 'rowclick' | 'tpl'
 function tableColDeps(b) {
   const cols = (b && b.columns) || [];
   const out = cols.map(() => []);
@@ -22,6 +24,8 @@ function tableColDeps(b) {
   (b.rowFilters || []).forEach((f, i) => add(idxOf(f.colIndex), "filter", `Zeilenfilter ${i + 1}`));
   const ds = parseInt(b.defaultSortCol);
   if (!isNaN(ds) && ds >= 0) add(ds, "sort", "Standardsortierung");
+  const rc = rowClickOf(b);
+  if (rc && rc.psrc === "col" && rc.pcol >= 0) add(rc.pcol, "rowclick", "Zeilenklick (Parameter)");
   cols.forEach((c, i) => {
     if (c.kind === "button" && c.action === "fn" && c.paramSource === "col") {
       const pc = parseInt(c.paramCol);

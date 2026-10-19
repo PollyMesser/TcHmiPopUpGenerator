@@ -125,6 +125,29 @@ async function main() {
     }
   }
 
+  // Zeilenklick + Anzeigeformate: Editor-Felder und Vorschau-Hinweis, Array & statisch, alle Parameterquellen
+  for (const ds of ["static", "array"]) {
+    for (const src of ["member", "col", "index", "none"]) {
+      count++;
+      const cols = [{ ...mkTableCol("read"), header: "Zyklus", member: "nCycleNumber" }, { ...mkTableCol("read"), header: "Dauer", member: "tCycleDuration", format: "dur" }, { ...mkTableCol("read"), header: "Ende", member: "dtTimestamp", format: "dt" }];
+      const b = { ...newBlock("table"), dataSource: ds, columns: cols, rows: [], rowClick: true, rowFnName: "AC_CycleDetail", rowParamSource: src, rowParamCol: 0, rowParamMember: "nCycleNumber" };
+      const ui = { openId: b.id, setOpenId: () => {}, dragId: null, setDragId: () => {}, grabbedId: null, setGrabbedId: () => {}, dropTarget: null, setDropTarget: () => {}, columns: 1, mode: "registered", sm: symMeta("registered") };
+      try {
+        const html = renderToString(React.createElement(BlockCard, { b, opts: optsFor(b), ui, actions: noopActions }));
+        ["ZEILENKLICK", "FUNKTIONSNAME", "PARAMETER AUS", "FORMAT", "Angetippte Zeile markieren"].forEach((t) => { if (html.indexOf(t) < 0) failures.push(`table-rowclick ${ds}/${src}: '${t}' fehlt`); });
+        const effSrc = (ds === "static" && src === "member") ? "col" : src;
+        if (effSrc === "col" && html.indexOf("PARAMETER-SPALTE") < 0) failures.push(`table-rowclick ${ds}/${src}: Parameter-Spalte fehlt`);
+        if (effSrc === "member" && html.indexOf("PARAMETER-MEMBER") < 0) failures.push(`table-rowclick ${ds}/${src}: Parameter-Member fehlt`);
+        if (effSrc === "col" && html.indexOf("Zeilenklick (Parameter)") < 0) failures.push(`table-rowclick ${ds}/${src}: Abhaengigkeit an Spalte 1 fehlt`);
+        const ph = renderToString(React.createElement(prevMod.BlockPreview, { b, pal: pal0, on: {}, onToggle: () => {} }));
+        if (ph.indexOf("Zeilenklick") < 0) failures.push(`table-rowclick ${ds}/${src}: Vorschau ohne Zeilenklick-Hinweis`);
+        if (ph.indexOf("00:00:00") < 0 || ph.indexOf("TT.MM.JJJJ") < 0) failures.push(`table-rowclick ${ds}/${src}: Vorschau ohne Formatbeispiel`);
+      } catch (e) {
+        failures.push(`table-rowclick ${ds}/${src}: ${e.message}`);
+      }
+    }
+  }
+
   if (failures.length) {
     console.error(`✗ smoke-blockcard: ${failures.length}/${count} Kombinationen fehlgeschlagen:`);
     failures.forEach((f) => console.error(`  - ${f}`));

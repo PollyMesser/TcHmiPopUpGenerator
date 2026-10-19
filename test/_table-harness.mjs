@@ -23,7 +23,8 @@ const REF_NAMES = [
 // (byte-neutrale Codegen-Varianten), daher per typeof abgesichert.
 const OPT_NAMES = ["tplVal", "tplStr", "tplText", "tplVals", "buildCellEl", "palT", "siblingSym", "kpLimit", "kpTitle", "openPadT",
   "fmtRead", "fmtParts", "xVals", "setX", "rowHas", "rowUnit", "rowDec", "putVal",
-  "PAGE_AUTO", "autoFit", "autoArea", "queueAutoFit", "expanded"];
+  "PAGE_AUTO", "autoFit", "autoArea", "queueAutoFit", "expanded",
+  "symbols", "ROW_CLICK", "rowKey", "rowClicked", "bindRowClick", "durSec", "fmtDur", "fmtDT", "fmtSpecial"];
 
 // prepare(context): optional, laeuft vor dem Ausfuehren (z. B. TcHmi.Server.requestEx abfangen).
 function buildTableHooks(block, parentVarName = "parent", prepare) {
@@ -40,6 +41,8 @@ function buildTableHooks(block, parentVarName = "parent", prepare) {
       getQuery: function () { return query; }, setQuery: function (v) { query = v; },
       getDynCount: function () { return dynCount; },
       getPageSize: function () { return PAGE_SIZE; },
+      getRowSel: function () { return typeof rowSel !== 'undefined' ? rowSel : undefined; },
+      getPress: function () { return typeof press !== 'undefined' ? press : undefined; },
     };
 `;
   const injected = raw.slice(0, marker) + hookAssign + raw.slice(marker);

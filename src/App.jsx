@@ -156,6 +156,8 @@ export default function App() {
         const ns = shiftIdx(n);
         return ns == null ? -1 : ns;           // sortierte Spalte geloescht -> keine Sortierung
       })(),
+      // Zeilenklick-Parameterspalte mitziehen (nur wenn gesetzt -> Bestands-Bloecke unveraendert)
+      ...(typeof b.rowParamCol === "number" && b.rowParamCol >= 0 ? { rowParamCol: (function () { const np = shiftIdx(b.rowParamCol); return np == null ? -1 : np; })() } : {}),
     };
   }));
   // Spalte verschieben (dir -1 = nach links, +1 = nach rechts). Zieht ALLE
@@ -183,6 +185,7 @@ export default function App() {
       rules: (b.rules || []).map((u) => ({ ...u, colIndex: remap(u.colIndex) })),
       rowFilters: (b.rowFilters || []).map((f) => ({ ...f, colIndex: remap(f.colIndex) })),
       defaultSortCol: (b.defaultSortCol == null || b.defaultSortCol < 0) ? b.defaultSortCol : remap(b.defaultSortCol),
+      ...(typeof b.rowParamCol === "number" && b.rowParamCol >= 0 ? { rowParamCol: remap(b.rowParamCol) } : {}),
     };
   }));
   const addTblRow = (id) => setBlocks((bs) => bs.map((b) => b.id === id ? { ...b, rows: [...(b.rows || []), mkTableRow(b.columns.length)] } : b));

@@ -872,6 +872,32 @@ add("table_auto_pages", {
   })(),
 });
 
+// ── Zeilenklick -> Funktion + Anzeigeformate Dauer/Datum-Zeit (Zyklushistorie) ──
+// Haupttabelle aus GVL_CycleMetrics.arDisplayHistory (Index 0 = neuester Zyklus); Tippen auf eine
+// Zeile ruft AC_CycleDetail(Zyklusnummer) – Parameter aus Spalte 1, nicht der Zeilenindex.
+add("table_row_click_cycles", {
+  mode: "embed",
+  fnName: "AC_ZyklusTabelle",
+  blocks: (() => {
+    const cNr = { ...mkTableCol("read"), header: "Zyklus", headerLoc: "L_Cyc_Number", member: "nCycleNumber", decimals: "0" };
+    const cTs = { ...mkTableCol("read"), header: "Ende", headerLoc: "L_Cyc_End", member: "dtTimestamp", format: "dt" };
+    const cDur = { ...mkTableCol("read"), header: "Dauer", headerLoc: "L_Cyc_Duration", member: "tCycleDuration", format: "dur", sortable: true };
+    const cFlow = { ...mkTableCol("read"), header: "Durchfluss", headerLoc: "L_Cyc_Flow", member: "fFlowTotal", unit: "L", decimals: "0" };
+    const cAir = { ...mkTableCol("read"), header: "Luft", headerLoc: "L_Cyc_Air", member: "fAirTotal", unit: "L", decimals: "0" };
+    const cPerf = { ...mkTableCol("read"), header: "Filterleistung", headerLoc: "L_Cyc_Perf", member: "fFilterPerformance", unit: "L/m²", decimals: "1" };
+    const cPress = { ...mkTableCol("read"), header: "Druckindex", headerLoc: "L_Cyc_Press", member: "fPressureIndex", unit: "bar", decimals: "2" };
+    return [{
+      ...newBlock("table"), layout: "touch", dataSource: "array",
+      arraySymbol: "ADS.AF_PLC.GVL_CycleMetrics.arDisplayHistory", arrayCount: 50, startIndex: 0,
+      countSymbol: "ADS.AF_PLC.GVL_CycleMetrics.nHistoryCount",
+      columns: [cNr, cTs, cDur, cFlow, cAir, cPerf, cPress], rows: [], search: false,
+      pageMode: "auto", pageMin: "5", pageMax: "25",
+      rowFilters: [{ ...mkRowFilter(), colIndex: 0, op: "notZero", value: "" }],
+      rowClick: true, rowFnName: "AC_CycleDetail", rowParamSource: "col", rowParamCol: 0,
+    }];
+  })(),
+});
+
 // ── Kompakt-Layout explizit (seit Touch Standard ist): Kopien bestehender Configs mit layout 'compact' ──
 // Der erzeugte Code muss dem Stand vor der Standard-Umstellung entsprechen (nur die Config-Zeile
 // AC_POPUP_CONFIG_V1 enthaelt zusaetzlich "layout":"compact").

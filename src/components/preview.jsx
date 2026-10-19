@@ -199,6 +199,8 @@ function BlockPreview({ b, pal, on, onToggle }) {
         if (cl.enumDisplay === "dot") return <span><span style={{ display: "inline-block", width: 9, height: 9, borderRadius: "50%", marginRight: 6, background: col.bg }} />{e?.label || "?"}</span>;
         return <span style={{ display: "inline-block", padding: "1px 8px", borderRadius: 9, fontSize: 11, fontWeight: 600, background: col.bg, color: col.text }}>{e?.label || "?"}</span>; }
       if (cl.kind === "icon") { const e = (cl.map || [])[ri % Math.max(1, (cl.map || []).length)]; const col = COLORS[e?.color] || COLORS.grey; const ic = ICONS[e?.icon] || ICONS.info; return <span style={{ display: "inline-flex", color: col.bg, verticalAlign: "middle" }} dangerouslySetInnerHTML={{ __html: ic.svg }} />; }
+      if (cl.kind === "read" && cl.format === "dur") return <span style={{ opacity: 0.6, fontVariantNumeric: "tabular-nums" }}>00:00:00</span>;
+      if (cl.kind === "read" && (cl.format === "dt" || cl.format === "dtl")) return <span style={{ opacity: 0.6, fontVariantNumeric: "tabular-nums" }}>TT.MM.JJJJ hh:mm:ss</span>;
       return <span style={{ opacity: 0.6, fontVariantNumeric: "tabular-nums" }}>–</span>;
     };
     return (
@@ -221,7 +223,7 @@ function BlockPreview({ b, pal, on, onToggle }) {
             )}
             <tbody>
               {Array.from({ length: nRows }, (_, ri) => (
-                <tr key={ri} style={{ background: b.striped !== false && ri % 2 === 1 ? "rgba(127,127,127,0.06)" : "transparent" }}>
+                <tr key={ri} style={{ background: b.striped !== false && ri % 2 === 1 ? "rgba(127,127,127,0.06)" : "transparent", ...(b.rowClick ? { cursor: "pointer" } : {}), ...(b.rowClick && b.rowMark !== false && ri === 0 ? { boxShadow: `inset 4px 0 0 ${pal.active || "#22c55e"}` } : {}) }}>
                   {!!b.showIndex && <td style={{ padding: "5px 10px", borderTop: `1px solid ${pal.border}`, fontSize: 11, opacity: 0.6, textAlign: "right" }}>{(parseInt(b.startIndex) || 0) + ri}</td>}
                   {(b.columns || []).map((cl) => (
                     <td key={cl.id} style={{ padding: "5px 10px", borderTop: `1px solid ${pal.border}`, textAlign: cl.kind === "read" || cl.kind === "input" ? "right" : (cl.kind === "text" || (cl.kind === "enum" && cl.enumDisplay && cl.enumDisplay !== "badge")) ? "left" : "center", whiteSpace: "nowrap", ...(cl.hidden ? { opacity: 0.25 } : {}), ...(cl.kind === "text" && cl.clamp ? { maxWidth: (parseInt(cl.clampWidth) > 0 ? parseInt(cl.clampWidth) + "ch" : 140), minWidth: (parseInt(cl.clampMin) > 0 ? parseInt(cl.clampMin) : 4) + "ch", overflow: "hidden", textOverflow: "ellipsis" } : {}) }}>{cellPrev(cl, ri)}</td>
@@ -232,7 +234,7 @@ function BlockPreview({ b, pal, on, onToggle }) {
           </table>
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: pal.bodyText, opacity: 0.55, marginTop: 4 }}>
-          <span>{tableLayoutOf(b) === "touch" ? "Touch · " : ""}{b.dataSource === "array" ? `PLC-Array (max. ${b.arrayCount})` : `${(b.rows || []).length} feste Zeile(n)`}{(b.rules || []).length ? ` · ${b.rules.length} Regel(n)` : ""}</span>
+          <span>{tableLayoutOf(b) === "touch" ? "Touch · " : ""}{b.dataSource === "array" ? `PLC-Array (max. ${b.arrayCount})` : `${(b.rows || []).length} feste Zeile(n)`}{(b.rules || []).length ? ` · ${b.rules.length} Regel(n)` : ""}{b.rowClick && (b.rowFnName || "").trim() ? ` · Zeilenklick → ${b.rowFnName.trim()}()` : ""}</span>
           {(Number(b.pageSize) > 0 || b.pageMode === "auto") && <span>{b.pageMode === "auto" ? "Zeilen/Seite: auto · " : ""}{tableLayoutOf(b) === "touch" ? "« ‹ 1 / n › »" : "‹ 1 / n ›"}</span>}
         </div>
       </div>

@@ -13,6 +13,7 @@ import { AnalysisEditor } from "./AnalysisEditor.jsx";
 import { NUMPAD_FN } from "../../codegen/emitNumPad.js";
 import { parseTpl, checkTplRefs, tplPreview } from "../../model/locTemplate.js";
 import { tableColDeps } from "../../model/tableDeps.js";
+import { rowParamSourceOf } from "../../model/rowClick.js";
 import { TABLE_LAYOUTS, TABLE_LAYOUT_DEFAULT, tableLayoutOf, tableSizeOf, autoFieldWidth, PAGE_AUTO_MIN, PAGE_AUTO_MAX } from "../../model/tableLayout.js";
 
 // ── Baustein-Karte des Editors (Accordion + Griff-Drag), auch für volle-Breite-Zeilen ──
@@ -568,6 +569,7 @@ function BlockCard({ b, opts, ui, actions }) {
                         {isArr && cl.kind !== "text" && <div style={{ flex: 2 }}><Field label="MEMBER"><TextInput value={cl.member || ""} onChange={(e) => patchTblCol(b.id, cl.id, { member: e.target.value })} placeholder="bAck" /></Field></div>}
                         {(cl.kind === "read" || cl.kind === "input") && <div style={{ flex: 1 }}><Field label="EINHEIT"><TextInput value={cl.unit || ""} onChange={(e) => patchTblCol(b.id, cl.id, { unit: e.target.value })} /></Field></div>}
                         {(cl.kind === "read" || (cl.kind === "input" && cl.keypad && cl.inputType !== "text" && cl.inputType !== "time")) && <div style={{ flex: 1 }}><Field label="DEZIMALEN"><TextInput value={cl.decimals} onChange={(e) => patchTblCol(b.id, cl.id, { decimals: e.target.value })} placeholder="auto" /></Field></div>}
+                        {cl.kind === "read" && <div style={{ flex: 2 }}><Field label="FORMAT"><Select value={cl.format || "auto"} onChange={(e) => patchTblCol(b.id, cl.id, { format: e.target.value === "auto" ? "" : e.target.value })} options={[{ value: "auto", label: "Zahl / Text" }, { value: "dur", label: "Dauer" }, { value: "dt", label: "Datum/Zeit" }, { value: "dtl", label: "Datum/Zeit UTC" }]} /></Field></div>}
                         {cl.kind === "input" && <div style={{ flex: 2 }}><Field label="EINGABE-TYP"><Select value={cl.inputType || "auto"} onChange={(e) => patchTblCol(b.id, cl.id, { inputType: e.target.value })} options={[{ value: "auto", label: "Auto (Zahl/Text)" }, { value: "number", label: "Zahl" }, { value: "text", label: "Text" }, { value: "time", label: "Zeit (HH:MM:SS)" }]} /></Field></div>}
                         <IconBtn disabled={ci === 0} title="Spalte nach links" onClick={() => moveTblCol(b.id, ci, -1)}><ChevronLeft size={13} /></IconBtn>
                         <IconBtn disabled={ci === b.columns.length - 1} title="Spalte nach rechts" onClick={() => moveTblCol(b.id, ci, 1)}><ChevronRight size={13} /></IconBtn>
@@ -584,6 +586,15 @@ function BlockCard({ b, opts, ui, actions }) {
                       <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: T.muted, cursor: "pointer", marginTop: 6 }}>
                         <input type="checkbox" checked={!!cl.hidden} onChange={(e) => patchTblCol(b.id, cl.id, { hidden: e.target.checked })} /> <EyeOff size={12} /> Spalte ausblenden (Werte werden weiter gelesen und durchsucht)
                       </label>
+                      {cl.kind === "read" && ["dur", "dt", "dtl"].includes(cl.format) && (
+                        <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5, marginTop: 4 }}>
+                          {cl.format === "dur"
+                            ? "Format Dauer: TIME (ISO-Dauer, z. B. PT1H2M3S; Zahl = ms) → HH:MM:SS. DEZIMALEN = Sekundenbruchteile. Einheit entfällt, Sortierung numerisch."
+                            : cl.format === "dt"
+                              ? "Format Datum/Zeit: DATE_AND_TIME → TT.MM.JJJJ hh:mm:ss, Ziffern wie von der SPS geliefert (keine Zeitzonen-Umrechnung)."
+                              : "Format Datum/Zeit UTC: DATE_AND_TIME als UTC gelesen und in Ortszeit des Panels angezeigt (nur wenn die SPS UTC schreibt)."}
+                        </div>
+                      )}
                       {(colDeps[ci] || []).length > 0 && (
                         <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5, marginTop: 4 }}>
                           Verwendet von: {colDeps[ci].map((x) => x.label).join(" · ")}
@@ -818,6 +829,52 @@ function BlockCard({ b, opts, ui, actions }) {
                   ))}
                   <div style={{ marginBottom: 6 }}><IconBtn title="Filter hinzufügen" onClick={() => addRowFilter(b.id)}><Plus size={14} /></IconBtn></div>
                   <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5, marginBottom: 10 }}>Blendet Zeilen dauerhaft aus, deren Wert die Bedingung nicht erfüllt — z. B. „Spalte 1 ≠ 0 / nicht leer", um leere Struct-Einträge auszublenden. Die Prüfung läuft zur Laufzeit bei jedem Datenupdate (kein Cache, aber ressourcenschonend, da nur ein Vergleich pro Zeile).</div>
+
+                  <div style={{ fontSize: 11, color: T.muted, fontWeight: 600, margin: "4px 0 6px" }}>ZEILENKLICK</div>
+                  <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: T.muted, cursor: "pointer", marginBottom: 6 }}>
+                    <input type="checkbox" checked={!!b.rowClick} onChange={(e) => patch(b.id, { rowClick: e.target.checked })} /> Tippen auf eine Zeile ruft eine Funktion auf (z. B. Detail-Popup)
+                  </label>
+                  {!!b.rowClick && (() => {
+                    const rps = rowParamSourceOf(b);
+                    return (
+                      <>
+                        <div style={{ display: "flex", gap: 8 }}>
+                          <div style={{ flex: 3 }}><Field label="FUNKTIONSNAME (TcHmi.Functions.AC_HMI.…)"><TextInput value={b.rowFnName || ""} onChange={(e) => patch(b.id, { rowFnName: e.target.value })} placeholder="AC_CycleDetail" /></Field></div>
+                          <div style={{ flex: 2 }}>
+                            <Field label="PARAMETER AUS">
+                              <Select value={rps} onChange={(e) => patch(b.id, { rowParamSource: e.target.value })}
+                                options={(isArr ? [{ value: "member", label: "PLC-Member (versteckt)" }] : []).concat([
+                                  { value: "col", label: "Spaltenwert" },
+                                  { value: "index", label: "Zeilenindex" },
+                                  { value: "none", label: "Kein Parameter" },
+                                ])} />
+                            </Field>
+                          </div>
+                        </div>
+                        {rps === "member" && (
+                          <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+                            <div style={{ flex: 1 }}><Field label="PARAMETER-MEMBER (muss keine Spalte sein)"><TextInput value={b.rowParamMember || ""} onChange={(e) => patch(b.id, { rowParamMember: e.target.value })} placeholder="nCycleNumber" /></Field></div>
+                          </div>
+                        )}
+                        {rps === "col" && (
+                          <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+                            <div style={{ flex: 1 }}>
+                              <Field label="PARAMETER-SPALTE">
+                                <Select value={b.rowParamCol == null ? -1 : b.rowParamCol} onChange={(e) => patch(b.id, { rowParamCol: parseInt(e.target.value) })}
+                                  options={[{ value: -1, label: "— wählen —" }].concat((b.columns || []).map((c2, ci2) => ({ value: ci2, label: `Spalte ${ci2 + 1}${c2.header ? " – " + c2.header : ""}` })))} />
+                              </Field>
+                            </div>
+                          </div>
+                        )}
+                        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: T.muted, cursor: "pointer", marginTop: 6 }}>
+                          <input type="checkbox" checked={b.rowMark !== false} onChange={(e) => patch(b.id, { rowMark: e.target.checked })} /> Angetippte Zeile markieren
+                        </label>
+                        {!(b.rowFnName || "").trim() && <div style={{ fontSize: 11, color: "#f59e0b", lineHeight: 1.5, marginTop: 4 }}>Funktionsname fehlt – ohne Namen wird kein Zeilenklick erzeugt.</div>}
+                        {rps === "col" && !((b.rowParamCol ?? -1) >= 0) && <div style={{ fontSize: 11, color: "#f59e0b", lineHeight: 1.5, marginTop: 4 }}>Parameter-Spalte wählen.</div>}
+                        <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5, margin: "6px 0 10px" }}>Ruft beim Antippen <code style={{ color: T.text }}>TcHmi.Functions.AC_HMI.{(b.rowFnName || "").trim() || "…"}(Parameter)</code> auf. Der Parameter wird beim Antippen festgehalten und automatisch typisiert. Für wechselnde Arrays (Ringpuffer, neuester Eintrag oben) einen eindeutigen Schlüssel wie die Zyklusnummer nehmen, nicht den Zeilenindex – die Markierung folgt dann ebenfalls dem Datensatz. Bedienzellen (Button, Eingabe, Checkbox, Keypad) und gekürzte Textzellen lösen keinen Zeilenklick aus. „Spaltenwert“ braucht keine zusätzlichen Abonnements, „PLC-Member (versteckt)“ liest den Member je Zeile separat.</div>
+                      </>
+                    );
+                  })()}
 
                   <div style={{ fontSize: 11, color: T.muted, fontWeight: 600, margin: "4px 0 6px" }}>STANDARDSORTIERUNG (beim Öffnen)</div>
                   <div style={{ display: "flex", gap: 10, marginBottom: 8 }}>

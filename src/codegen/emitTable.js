@@ -5,9 +5,14 @@ import { parseTpl } from "../model/locTemplate.js";
 import { isNumStr, NUMPAD_FN } from "./emitNumPad.js";
 import { tableColDeps } from "../model/tableDeps.js";
 import { tableLayoutOf, tableSizeOf, fieldWidthOf, pageAutoOf } from "../model/tableLayout.js";
+import { rowClickOf } from "../model/rowClick.js";
 
 const TPL_BOUND_KINDS = ["read", "bool", "check", "input", "enum", "icon"];
 const ENUM_DISPLAYS = ["text", "ctext", "dot"];
+// Anzeigeformate fuer Lesespalten: 'dur' = TIME (ISO-8601-Dauer) -> HH:MM:SS,
+// 'dt' = DATE_AND_TIME wie von der SPS geliefert -> TT.MM.JJJJ hh:mm:ss (ohne Zeitzonen-Umrechnung),
+// 'dtl' = DATE_AND_TIME als UTC interpretiert und in Ortszeit des Panels angezeigt.
+const READ_FORMATS = ["dur", "dt", "dtl"];
 
 // ── Tabellen-Baustein: eigenständiges Modul (modus-unabhängig, eigene Watches/Subscription) ──
 // Datenquellen:
@@ -104,6 +109,8 @@ function tableBlockConfig(b) {
     // Ausgeblendete Spalte: wird gelesen (Filter/Regeln/Sortierung/Parameter/Suche), aber nicht
     // angezeigt. Nur setzen, wenn aktiv -> Bestands-JSON byte-identisch.
     ...(c.hidden ? { hide: true } : {}),
+    // Anzeigeformat Dauer/Datum-Zeit (nur Lesespalten). Nur setzen, wenn gewaehlt -> Bestands-JSON byte-identisch.
+    ...((c.kind === "read" && READ_FORMATS.includes(c.format)) ? { fmt: c.format } : {}),
     // Touch-Layout: einheitliche Feldbreite (ch) fuer Eingabe UND Keypad-Button einer Spalte.
     // Nur im Touch-Layout gesetzt -> kompakte Bestandstabellen byte-identisch.
     ...((touch && c.kind === "input") ? { fw: fieldWidthOf(c, isArr) } : {}),
@@ -178,6 +185,8 @@ function tableBlockConfig(b) {
       return n;
     })(),
     defaultSortDir: b.defaultSortDir === "desc" ? "desc" : "asc",
+    // Zeilenklick -> Funktion (null = aus)
+    rowClick: rowClickOf(b),
   };
 }
 
@@ -312,6 +321,139 @@ function emitTable(parent, b) {
         clampEls = [];
     }
 ` : "";
+  // Zeilenklick -> Funktion: Zusatzlogik nur erzeugen, wenn aktiv (Golden-neutral).
+  const rowClick = c.rowClick;
+  const hasRowClick = !!rowClick;
+  const rowClickDecl = hasRowClick ? `\n    var ROW_CLICK = ${JSON.stringify(rowClick)}; // Zeilenklick: AC_HMI[fn](Parameter); psrc member/col/index/none; mark = angetippte Zeile markieren\n    var rowSel = null;    // Schluessel (Parameterwert) der markierten Zeile – haengt am Datensatz, nicht an der Position\n    var press = null;     // laufender Tipp auf eine Zeile: { key, p, x, y, tr }` : "";
+  const rowClickHelpers = hasRowClick ? `    // ── Zeilenklick: Tippen auf eine Datenzeile ruft TcHmi.Functions.AC_HMI[ROW_CLICK.fn](Parameter) ──
+    // Der Parameter wird beim Antippen (pointerdown) festgehalten: baut die Tabelle bis zum Loslassen neu auf
+    // (Wertaenderung, verschobenes Array), gilt trotzdem der Datensatz, den der Bediener gesehen hat.
+    // Bedienzellen (Button, Eingabe, Checkbox, Keypad) und gekuerzte Textzellen loesen keinen Zeilenklick aus.
+    function rowKey(r) {
+        if (ROW_CLICK.psrc === 'none') return 'r' + r;
+        var p = resolveParam(r, ROW_CLICK);
+        return (p === undefined || p === null || p === '') ? null : String(p);
+    }
+    function rowOfT(el) {
+        for (var n = el; n && n !== tbody; n = n.parentNode) { if (String(n.tagName || '').toUpperCase() === 'TR') return n; }
+        return null;
+    }
+    function isCtlTarget(el, tr) {
+        for (var n = el; n && n !== tr; n = n.parentNode) {
+            var t = String(n.tagName || '').toUpperCase();
+            if (t === 'BUTTON' || t === 'INPUT' || t === 'SELECT' || t === 'TEXTAREA' || t === 'A') return true;
+            if (t === 'TD' && n.querySelectorAll && n.querySelectorAll('button, input, select, textarea').length) return true; // Bedienzelle: auch das Tippen neben das Element
+        }
+        return false;
+    }
+    function rowClicked(pr) {
+        var fns = (typeof TcHmi !== 'undefined' && TcHmi.Functions && TcHmi.Functions.AC_HMI) ? TcHmi.Functions.AC_HMI : null;
+        var fn = fns ? fns[ROW_CLICK.fn] : null;
+        if (typeof fn !== 'function') { if (window.console) console.warn('Tabelle: Zeilenklick-Funktion AC_HMI.' + ROW_CLICK.fn + ' nicht geladen.'); return; }
+        if (ROW_CLICK.mark) { rowSel = pr.key; renderBody(); }
+        try { if (ROW_CLICK.psrc === 'none') fn(); else fn(pr.p); } catch (e) {}
+    }
+    function endPress() { if (press && press.tr) press.tr.style.opacity = ''; press = null; }
+    function bindRowClick(tr, r, pp) {
+        tr.style.cursor = 'pointer';
+        tr.style.touchAction = 'manipulation';
+        var key = (ROW_CLICK.mark || press) ? rowKey(r) : null;
+        if (ROW_CLICK.mark && rowSel !== null && key === rowSel) {
+            tr.style.background = pp.active + '24';
+            tr.style.boxShadow = 'inset 4px 0 0 ' + pp.active;
+        }
+        if (press && key !== null && press.key === key) { tr.style.opacity = '.6'; press.tr = tr; }
+    }
+` : "";
+  const rowClickBind = hasRowClick ? `
+    // Zeilenklick: Ereignisse am (bleibenden) tbody, nicht an den bei jedem Update neu gebauten Zeilen
+    tbody.addEventListener('pointerdown', function (e) {
+        endPress();
+        var tr = rowOfT(e.target);
+        if (!tr || tr._acRow === undefined || isCtlTarget(e.target, tr)) return;
+        var key = rowKey(tr._acRow);
+        if (key === null) return; // Parameter (noch) ohne Wert
+        press = { key: key, p: ROW_CLICK.psrc === 'none' ? undefined : resolveParam(tr._acRow, ROW_CLICK), x: e.clientX, y: e.clientY, tr: tr };
+        tr.style.opacity = '.6';
+    });
+    tbody.addEventListener('pointerup', function (e) {
+        var pr = press;
+        endPress();
+        if (!pr) return;
+        if (Math.abs((e.clientX || 0) - (pr.x || 0)) > 12 || Math.abs((e.clientY || 0) - (pr.y || 0)) > 12) return; // gewischt/gezogen
+        rowClicked(pr);
+    });
+    tbody.addEventListener('pointercancel', endPress); // z. B. Scrollen per Touch
+    tbody.addEventListener('pointerleave', endPress);` : "";
+  // Anzeigeformate Dauer/Datum-Zeit fuer Lesespalten (Golden-neutral).
+  const hasFmt = c.colsArr.some((cc) => cc.fmt);
+  const hasDurFmt = c.colsArr.some((cc) => cc.fmt === "dur");
+  const fmtHelpers = hasFmt ? `    // ── Anzeigeformate Lesespalten: Dauer (TIME) und Datum/Zeit (DATE_AND_TIME) ──
+    // TIME kommt als ISO-8601-Dauer ('PT1H2M3.5S'), DATE_AND_TIME als ISO-Zeitstempel ('2026-10-19T08:12:00').
+    // Zahlen: TIME = Millisekunden, DATE_AND_TIME = Sekunden seit 1970.
+    //   'dur' -> HH:MM:SS (DEZIMALEN = Sekundenbruchteile, Standard ganze Sekunden)
+    //   'dt'  -> TT.MM.JJJJ hh:mm:ss wie geliefert (keine Zeitzonen-Umrechnung)
+    //   'dtl' -> als UTC gelesen, in Ortszeit des Panels angezeigt
+    function durSec(v) {
+        if (v === undefined || v === null || v === '') return null;
+        if (typeof v === 'number') return isFinite(v) ? v / 1000 : null;
+        var s = String(v).trim().toUpperCase();
+        if (s.charAt(0) !== 'P') { var n0 = Number(s); return (s !== '' && isFinite(n0)) ? n0 / 1000 : null; }
+        var tot = 0, num = '', inTime = false;
+        for (var k = 1; k < s.length; k++) {
+            var ch = s.charAt(k);
+            if (ch === 'T') { inTime = true; num = ''; continue; }
+            if (ch === '.' || ch === ',') { num += '.'; continue; }
+            if (ch >= '0' && ch <= '9') { num += ch; continue; }
+            var val = parseFloat(num || '0'); num = '';
+            if (ch === 'W') tot += val * 604800;
+            else if (ch === 'D') tot += val * 86400;
+            else if (ch === 'H') tot += val * 3600;
+            else if (ch === 'M') { if (inTime) tot += val * 60; }
+            else if (ch === 'S') tot += val;
+        }
+        return tot;
+    }
+    function p2T(n) { return (n < 10 ? '0' : '') + n; }
+    function fmtDur(v, dec) {
+        var sec = durSec(v);
+        if (sec === null) return (v === undefined || v === null || v === '') ? '–' : String(v);
+        var neg = sec < 0;
+        var d = dec > 0 ? Math.min(3, dec) : 0, f = Math.pow(10, d);
+        var tot = Math.round((neg ? -sec : sec) * f);  // ganze Einheiten von 1/f Sekunden
+        var h = Math.floor(tot / (3600 * f)), m = Math.floor((tot % (3600 * f)) / (60 * f)), sf = tot % (60 * f);
+        var ss = d ? (sf / f).toFixed(d) : String(sf);
+        if (sf < 10 * f) ss = '0' + ss;
+        return (neg ? '-' : '') + p2T(h) + ':' + p2T(m) + ':' + ss;
+    }
+    function fmtDT(v, local) {
+        if (v === undefined || v === null || v === '') return '–';
+        var dt, utc = false;
+        if (typeof v === 'number') { dt = new Date(v * 1000); utc = !local; }
+        else {
+            var s = String(v).trim();
+            if (!local) {
+                var y = s.slice(0, 4), mo = s.slice(5, 7), dd = s.slice(8, 10);
+                if (s.charAt(4) !== '-' || s.charAt(7) !== '-' || isNaN(Number(y + mo + dd))) return s;
+                var out = dd + '.' + mo + '.' + y;
+                if (s.length >= 16 && (s.charAt(10) === 'T' || s.charAt(10) === ' ')) out += ' ' + s.slice(11, 16) + (s.charAt(16) === ':' ? s.slice(16, 19) : '');
+                return out;
+            }
+            var last = s.charAt(s.length - 1);
+            var zoned = last === 'Z' || last === 'z' || s.lastIndexOf('+') > 10 || s.lastIndexOf('-') > 10;
+            dt = new Date(zoned ? s : s + 'Z');
+        }
+        if (isNaN(dt.getTime())) return String(v);
+        var a = utc ? [dt.getUTCDate(), dt.getUTCMonth() + 1, dt.getUTCFullYear(), dt.getUTCHours(), dt.getUTCMinutes(), dt.getUTCSeconds()]
+                    : [dt.getDate(), dt.getMonth() + 1, dt.getFullYear(), dt.getHours(), dt.getMinutes(), dt.getSeconds()];
+        return p2T(a[0]) + '.' + p2T(a[1]) + '.' + a[2] + ' ' + p2T(a[3]) + ':' + p2T(a[4]) + ':' + p2T(a[5]);
+    }
+    function fmtSpecial(col, v) { return col.fmt === 'dur' ? fmtDur(v, col.dec) : fmtDT(v, col.fmt === 'dtl'); }
+` : "";
+  const fmtHookRead = hasFmt ? `\n        if (col.fmt) return fmtSpecial(col, v);` : "";
+  const fmtHookParts = hasFmt ? `\n        if (col.fmt) return { n: fmtSpecial(col, v), u: '' };` : "";
+  const sortFmtSrc = hasDurFmt ? `\n        if (col.fmt === 'dur') { var dsec = durSec(vals[r] ? vals[r][ci] : undefined); return dsec === null ? undefined : dsec; }` : "";
+  const pmemberRowSrc = hasRowClick ? `\n        if (ROW_CLICK.psrc === 'member' && ROW_CLICK.pmember) pmembers[ROW_CLICK.pmember] = true; // Zeilenklick-Parameter` : "";
   const tplHelpers = hasTpl ? `    // ── Text-Vorlagen: Loc-Key je Zeile aus Literalen + Zellwerten zusammensetzen ──
     // Teil: 'Text' | { c: Spalte } | { m: Member } | { x: 1 } (Zeilenindex), optional p = Stellen (fuehrende Nullen).
     // Fehlt ein referenzierter Wert noch (PLC liefert nach), wird '–' angezeigt.
@@ -442,7 +584,7 @@ function emitTable(parent, b) {
     function fmtParts(ci, v, r) {
         var col = TCOLS[ci];
         if (r !== undefined && !rowHas(r, col)) return { n: '–', u: '' };
-        if (v === undefined || v === null) return { n: '–', u: '' };
+        if (v === undefined || v === null) return { n: '–', u: '' };${fmtHookParts}
         var unit = r !== undefined ? rowUnit(r, col) : col.unit;
         var dec = rowDec(col, unit);
         var num = Number(v);
@@ -456,7 +598,7 @@ function emitTable(parent, b) {
     }`
     : `    function fmtRead(ci, v) {
         var col = TCOLS[ci];
-        if (v === undefined || v === null) return '–';
+        if (v === undefined || v === null) return '–';${fmtHookRead}
         var out;
         var num = Number(v);
         if (typeof v !== 'boolean' && v !== '' && !isNaN(num) && isFinite(num)) out = col.dec >= 0 ? num.toFixed(col.dec) : String(v);
@@ -686,7 +828,7 @@ function emitTable(parent, b) {
     var page = 0, query = '';
     var sortCol = DEFAULT_SORT_COL, sortDir = DEFAULT_SORT_DIR; // aktive Sortierung
     var tbody = null, pageInfo = null, prevBtn = null, nextBtn = null, wrap = null;${pagerVarsSrc}
-    var sortThs = []; // { el: <span Pfeil>, col: <Spaltenindex> } je sortierbarer Kopfzelle${colVisDecl}${tplValsDecl}${xValsDecl}${clampDecl}${autoDecl}
+    var sortThs = []; // { el: <span Pfeil>, col: <Spaltenindex> } je sortierbarer Kopfzelle${colVisDecl}${tplValsDecl}${xValsDecl}${clampDecl}${autoDecl}${rowClickDecl}
 
     function locT(key, fallback) {
         try { var f = TcHmi.Functions.getFunction('GetLocalizedText'); if (f) { var t = f(key); if (t !== null && t !== undefined && t !== '') return t; } } catch (e) {}
@@ -836,7 +978,7 @@ ${fmtReadSrc}
         if (DATA_SOURCE === 'array') { if (dynCount >= 0 && dynCount < n) n = dynCount; if (n > ARRAY_COUNT) n = ARRAY_COUNT; }
         return n;
     }
-${tplHelpers}${timeHelpers}${rowFmtHelpers}${kpHelpers}${clampHelpers}${autoHelpers}    function buildCellEl(r, ci, pp) {
+${tplHelpers}${timeHelpers}${rowFmtHelpers}${fmtHelpers}${kpHelpers}${clampHelpers}${autoHelpers}${rowClickHelpers}    function buildCellEl(r, ci, pp) {
         var col = TCOLS[ci];
         var td = document.createElement('td');
         td.style.cssText = '${tv("padding:6px 10px;", "padding:4px 10px;height:var(--ac-rh);box-sizing:border-box;vertical-align:middle;")}border-top:1px solid ' + pp.border + ';${tv("font-size:18px;", "font-size:var(--ac-fs);")}color:' + pp.bodyText + ';white-space:nowrap;'
@@ -894,7 +1036,7 @@ ${enumCellSrc}
     // Sortierschluessel je Zeile fuer die aktive Spalte: text -> lokalisierter Text,
     // sonst der Rohwert. Wird typrichtig verglichen (Zahl/Bool/String).
     function sortValue(r, ci) {
-        var col = TCOLS[ci];${sortNaSrc}
+        var col = TCOLS[ci];${sortNaSrc}${sortFmtSrc}
         if (col.kind === 'text') return cellSearchText(r, ci);
         return vals[r] ? vals[r][ci] : undefined;
     }
@@ -961,7 +1103,7 @@ ${enumCellSrc}
         while (tbody.firstChild) tbody.removeChild(tbody.firstChild);${hasClamp ? "\n        clampEls = [];" : ""}
         slice.forEach(function (r, vi) {
             var tr = document.createElement('tr');
-            if (STRIPED && vi % 2 === 1) tr.style.background = pp.stripe;
+            if (STRIPED && vi % 2 === 1) tr.style.background = pp.stripe;${hasRowClick ? "\n            tr._acRow = r; bindRowClick(tr, r, pp);" : ""}
             if (SHOW_INDEX) {
                 var tdIdx = document.createElement('td');
                 tdIdx.textContent = String(START_INDEX + r);
@@ -1069,7 +1211,7 @@ ${pagerUpdSrc}        }
         tbl.appendChild(thead);
     }
     updateSortIndicators();
-    tbody = document.createElement('tbody');
+    tbody = document.createElement('tbody');${rowClickBind}
     tbl.appendChild(tbody);
     scroller.appendChild(tbl);
     wrap.appendChild(scroller);
@@ -1144,7 +1286,7 @@ ${pagerSrc}        wrap.appendChild(pager);
         for (var pc0 = 0; pc0 < TCOLS.length; pc0++) {
             var pcol = TCOLS[pc0];
             if (pcol.kind === 'button' && pcol.action === 'fn' && pcol.psrc === 'member' && pcol.pmember) pmembers[pcol.pmember] = true;
-        }
+        }${pmemberRowSrc}
         Object.keys(pmembers).forEach(function (member) {
             if (!paramVals[member]) paramVals[member] = [];
             for (var pr = 0; pr < ARRAY_COUNT; pr++) {
