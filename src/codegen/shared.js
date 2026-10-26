@@ -1,6 +1,7 @@
 import { jsStr, wrapSym, locExpr, attrName, I } from "./helpers.js";
 import { groupByCol } from "../model/layout.js";
 import { ICONS } from "../constants/palette.js";
+import { blockVisSupported } from "../model/blockVis.js";
 
 // ── Trennlinie: horizontale Linie, optional mittig beschriftet (volle Breite) ──
 function emitDivider(parent, b) {
@@ -10,6 +11,30 @@ function emitDivider(parent, b) {
     return `${I}// Trennlinie\n${I}(function () {\n${I}    var hr = document.createElement('div');\n${I}    hr.style.cssText = 'height:1px;background:' + p.border + ';margin:6px 0 18px;';\n${I}    ${parent}.appendChild(hr);\n${I}})();`;
   }
   return `${I}// Trennlinie mit Beschriftung\n${I}(function () {\n${I}    var wrap = document.createElement('div');\n${I}    wrap.style.cssText = 'display:flex;align-items:center;gap:12px;margin:6px 0 18px;';\n${I}    var l1 = document.createElement('div'); l1.style.cssText = 'flex:1;height:1px;background:' + p.border + ';';\n${I}    var cap = document.createElement('span'); cap.style.cssText = 'flex:0 0 auto;font-size:12px;font-weight:600;letter-spacing:0.3px;color:' + p.closeColor + ';';\n${I}    cap.textContent = ${locExpr(b.loc, b.label)};\n${I}    var l2 = document.createElement('div'); l2.style.cssText = 'flex:1;height:1px;background:' + p.border + ';';\n${I}    wrap.appendChild(l1); wrap.appendChild(cap); wrap.appendChild(l2);\n${I}    ${parent}.appendChild(wrap);\n${I}})();`;
+}
+
+// ── Baustein-Sichtbarkeit (optional): b.visSym ──
+// Ohne visSym (oder bei nicht unterstütztem Bausteintyp) wird emit(parent)
+// unverändert zurückgegeben (Byte-Identität zu Bestands-Popups). Sonst wird
+// der Baustein in einen Wrapper gebaut, der nur bei TRUE sichtbar ist:
+// UserControl-Modus per Polling (gv), Symbol-Modi per subscribe().
+// Start unsichtbar – erst der erste Wert blendet ein (wie bei Button-visSym).
+function gateVisible(b, parent, emit, uc) {
+  const vs = (b.visSym || "").trim();
+  if (!vs || !blockVisSupported(b.type)) return emit(parent);
+  const watch = uc
+    ? `${I}    updaters.push(function () { visW.style.display = gv(${jsStr(attrName(vs))}, false) ? '' : 'none'; });`
+    : `${I}    subscribe(${jsStr(wrapSym(vs))}, function (vis) { visW.style.display = vis ? '' : 'none'; });`;
+  return [
+    `${I}// Baustein nur sichtbar, wenn ${uc ? "Attribut" : "Symbol"} ${uc ? attrName(vs) : vs} = TRUE`,
+    `${I}(function () {`,
+    `${I}    var visW = document.createElement('div');`,
+    `${I}    visW.style.cssText = 'min-width:0;display:none;';`,
+    emit("visW"),
+    `${I}    ${parent}.appendChild(visW);`,
+    watch,
+    `${I}})();`,
+  ].join("\n");
 }
 
 // ── Ein Spalten-Grid-Segment (nur Nicht-Zeilen-Bausteine), Basis 20 ──
@@ -83,4 +108,4 @@ function buildTitleStmt(mode, source, field, fallback, titleExpr, icon, iconColo
     `${pad}title.appendChild(titleText);`;
 }
 
-export { emitDivider, gridSegment, buildBodyContent, buildTitleStmt };
+export { emitDivider, gridSegment, buildBodyContent, buildTitleStmt, gateVisible };

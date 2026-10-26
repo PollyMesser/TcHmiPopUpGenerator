@@ -179,11 +179,14 @@
             btn1.style.cssText = 'flex:1;padding:12px 0;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;background:#3b82f6;color:#ffffff;';
             btn1.textContent = "Hold";
             btn1.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
-            btn1.addEventListener('pointerdown', function () { if (btn1.disabled) return; sv("Hold", true); });
-            var release_btn1 = function () { if (btn1.disabled) return; sv("Hold", false);
+            var held_btn1 = false; // hold: Loslassen schreibt immer FALSE, auch wenn der Button inzwischen gesperrt ist
+            btn1.addEventListener('pointerdown', function () { if (btn1.disabled) return; held_btn1 = true; sv("Hold", true); });
+            var release_btn1 = function () { if (!held_btn1) return; held_btn1 = false; sv("Hold", false);
                 hideDialog(); };
             btn1.addEventListener('pointerup', release_btn1);
             btn1.addEventListener('pointerleave', release_btn1);
+            btn1.addEventListener('pointercancel', release_btn1);
+            teardowns.push(release_btn1); // Popup schließt während gedrückt -> FALSE
             updaters.push(function () { btn1.style.boxShadow = gv("HoldConfirmed", false) ? '0 0 0 3px #22c55e' : 'none'; });
             btn1.style.transition = 'transform .08s ease, filter .08s ease';
             btn1.addEventListener('pointerdown', function () { btn1.style.transform = 'scale(0.96)'; btn1.style.filter = 'brightness(0.88)'; });

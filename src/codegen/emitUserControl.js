@@ -6,7 +6,7 @@ import { emitBar } from "./emitBar.js";
 import { emitGauge } from "./emitGauge.js";
 import { emitAnalysis } from "./emitAnalysis.js";
 import { emitTable } from "./emitTable.js";
-import { emitDivider } from "./shared.js";
+import { emitDivider, gateVisible } from "./shared.js";
 import { gateBlock, gateButton } from "./access.js";
 import { usesKeypad, emitInputKeypad } from "./emitNumPad.js";
 
@@ -88,7 +88,7 @@ function emitButtonsUC(parent, b, mb) {
     }
     let clickHandler;
     if (isHold) {
-      clickHandler = `\n${I}    ${v}.addEventListener('pointerdown', function () { if (${v}.disabled) return; sv(${a}, true); });\n${I}    var release_${v} = function () { if (${v}.disabled) return; sv(${a}, false);${close} };\n${I}    ${v}.addEventListener('pointerup', release_${v});\n${I}    ${v}.addEventListener('pointerleave', release_${v});`;
+      clickHandler = `\n${I}    var held_${v} = false; // hold: Loslassen schreibt immer FALSE, auch wenn der Button inzwischen gesperrt ist\n${I}    ${v}.addEventListener('pointerdown', function () { if (${v}.disabled) return; held_${v} = true; sv(${a}, true); });\n${I}    var release_${v} = function () { if (!held_${v}) return; held_${v} = false; sv(${a}, false);${close} };\n${I}    ${v}.addEventListener('pointerup', release_${v});\n${I}    ${v}.addEventListener('pointerleave', release_${v});\n${I}    ${v}.addEventListener('pointercancel', release_${v});\n${I}    teardowns.push(release_${v}); // Popup schließt während gedrückt -> FALSE`;
     } else if (isConfirm) {
       const ms = parseInt(btn.confirmMs) || 3000;
       clickHandler = `\n${I}    ${v}.style.position = 'relative';\n${I}    ${v}.style.overflow = 'hidden';\n${I}    var fill_${v} = document.createElement('div');\n${I}    fill_${v}.style.cssText = 'position:absolute;left:0;top:0;bottom:0;width:0%;background:rgba(255,255,255,0.35);pointer-events:none;';\n${I}    ${v}.appendChild(fill_${v});\n${I}    var timer_${v} = null;\n${I}    function cancel_${v}() {\n${I}        if (timer_${v}) { clearTimeout(timer_${v}); timer_${v} = null; }\n${I}        fill_${v}.style.transition = 'none';\n${I}        fill_${v}.style.width = '0%';\n${I}    }\n${I}    ${v}.addEventListener('pointerdown', function () {\n${I}        if (${v}.disabled) return;\n${I}        cancel_${v}();\n${I}        void fill_${v}.offsetWidth;\n${I}        requestAnimationFrame(function () {\n${I}            fill_${v}.style.transition = 'width ${ms}ms linear';\n${I}            fill_${v}.style.width = '100%';\n${I}        });\n${I}        timer_${v} = setTimeout(function () {\n${I}            timer_${v} = null;\n${I}            if (${v}.disabled) return;\n${I}            ${confirmAction};${close}\n${I}            fill_${v}.style.transition = 'none';\n${I}            fill_${v}.style.width = '0%';\n${I}        }, ${ms});\n${I}    });\n${I}    ${v}.addEventListener('pointerup', cancel_${v});\n${I}    ${v}.addEventListener('pointerleave', cancel_${v});`;
@@ -167,7 +167,7 @@ function emitStatusUC(parent, b, mb) {
   return `${I}// Statusanzeige (${isBadge ? "Badge" : "Text"}) aus ${entries.length} Attribut-Bools\n${I}(function () {\n${I}    var row = document.createElement('div');\n${I}    row.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:${mb};';\n${labelCode}${I}    var badge = document.createElement('span');\n${I}    row.appendChild(badge);\n${I}    ${parent}.appendChild(row);\n${I}    function paint(text, bg, fg) {\n${I}        badge.textContent = text;\n${paintBody}\n${I}    }\n${I}    function apply() {\n${chain}\n${I}        paint(${locExpr(b.fbLoc, b.fbText)}, ${jsStr(fbCol.bg)}, ${jsStr(fbCol.text)});\n${I}    }\n${I}    updaters.push(apply);\n${I}    apply();\n${I}})();`;
 }
 function blockCodeUC(b, parent) {
-  return gateBlock(b, parent, (p) => emitBlockUC(b, p));
+  return gateVisible(b, parent, (pv) => gateBlock(b, pv, (p) => emitBlockUC(b, p)), true);
 }
 function emitBlockUC(b, parent) {
   if (b.type === "text") return emitText(parent, b, "16px");

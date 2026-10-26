@@ -9,6 +9,7 @@ Kein Zeichnen von Popups in der HMI-Oberfläche mehr, keine handgeschriebenen `T
 - **Funktionsart × Darstellung** – frei kombinierbar: **Funktionsart** (registrierte Funktion, reines Event-JavaScript oder an ein UserControl gebundenes Skript) und **Darstellung** (verschiebbares Popup-Overlay oder direkt **eingebettet** in einen Zielcontainer). Alle sechs Kombinationen werden erzeugt (siehe unten).
 - **Baukastenprinzip** – Popups aus wiederverwendbaren Bausteinen zusammensetzen, inklusive Statusanzeigen, Enums, Ladebalken, Tabellen, Trendkurven (Plot) und bedingt sichtbaren/aktiven Buttons.
 - **Gruppen-Berechtigungen** – popup-weit, pro Baustein, pro Button und **pro Tabellenspalte**: „Sehen" (observe) blendet aus, „Bedienen" (operate) sperrt die Bedienung. Auflösung zur Laufzeit über `getCurrentUserConfig().userIsInGroups`.
+- **Baustein-Sichtbarkeit** – jeder Baustein (außer Verlauf, Balken, Gauge, Auswertung, Tabelle) kann optional an ein Bool gebunden werden und ist nur sichtbar, solange es TRUE ist. So bleibt ein Popup für mehrere Geräte-/Maschinenvarianten gleich, und die SPS meldet, was vorhanden ist (siehe „Baustein-Sichtbarkeit“).
 - **Getrenntes Schreib-Ziel** – bei *Enum setzen*, *Eingabefeld* und *Boolean setzen* optional aus einem Symbol/Attribut **lesen** und in ein **anderes** schreiben (z. B. Command-Muster `Mode` lesen / `CmdMode` schreiben, per Trigger `CmdSetMode` in die SPS übernehmen).
 - **Spalten-Layout** – 1 bis 3 Spalten, Bausteine per Drag & Drop oder Pfeil-Buttons frei verschieben.
 - **Live-Vorschau** mit Umschalter zwischen Dark- und Light-Theme.
@@ -81,6 +82,7 @@ Der Titel kann **statisch** (Text + optionaler Loc-Key) oder **dynamisch** aus e
 
 - **Aktionen:** Impuls (`true → false`), Auf true setzen, Auf false setzen, Umschalten (toggle) – optional mit automatischem Schließen des Popups nach dem Klick.
 - **Farbe:** je Button frei wählbar (Blau/Grün/Gelb/Rot/Grau).
+- **Halten (hold, z. B. Tippbetrieb):** Drücken schreibt TRUE, Loslassen FALSE. Nach einem Druck wird FALSE **immer** geschrieben – auch wenn der Button inzwischen über „Aktiv wenn“ gesperrt wurde, bei `pointercancel` (Touch-Abbruch) und wenn das Popup schließt, während noch gedrückt ist. Ein gesperrter Button schreibt beim Drücken nichts. Die SPS sollte trotzdem selbst begrenzen (z. B. max. Tippdauer, neue Flanke nötig).
 - **Sichtbarkeit („Nur sichtbar wenn"):** optionales Bool-Symbol/-Attribut; ist die Bedingung falsch, wird der Button ausgeblendet (`display:none`), nicht nur deaktiviert.
 - **Aktiv-Bedingungen („Aktiv wenn"):** beliebig viele UND-verknüpfte Bedingungen mit Operator (`=`, `≠`, `<`, `≤`, `>`, `≥`) und Wert (bool, Zahl oder Enum-Wert) – z. B. „Modus ≠ 1 UND Geschlossen = true". Bei Nichterfüllung wird der Button deaktiviert (`disabled`, reduzierte Opazität, `not-allowed`-Cursor), nicht ausgeblendet.
 - **Klick-Feedback:** jeder Button drückt sich beim Antippen leicht zusammen und dunkelt kurz ab, unabhängig vom Modus.
@@ -180,6 +182,14 @@ Weitere Optionen: `writeSymbol` (abweichendes Schreibziel), `value` + `write(v)`
 ## Popup-Breite
 
 Im Feld **BREITE (px)** legst du die Fensterbreite fest. Das Popup bekommt diese feste Breite, wird aber nie breiter als der sichtbare Bereich (`max-width: calc(100vw - 32px)`), damit es auf keiner Auflösung über den Rand läuft. Untergrenze ist 320 px, Standard 400 px, nach oben gibt es keine harte Grenze außer dem Viewport. Für 2–3 Spalten empfiehlt sich mehr Breite (Faustregel ab ca. 560 px, für breite Layouts 700–900 px).
+
+## Baustein-Sichtbarkeit
+
+Im Feld **BAUSTEIN NUR SICHTBAR WENN** (unten in jeder Baustein-Karte) trägst du ein Bool ein: im UserControl-Modus ein Attribut (z. B. `DirectionAvailable`), in den Symbol-Modi ein Symbol (z. B. `ADS.AF_PLC.MAIN.IFC_Pump_1.HMI::bDirectionAvailable`). Der Baustein ist nur sichtbar, solange der Wert TRUE ist; beim Öffnen ist er zunächst versteckt, bis der erste Wert da ist (UserControl: Polling 1 s, Symbol: `watch`). Fehlt das Attribut am Host, bleibt der Baustein versteckt.
+
+Typisch: Die SPS meldet Fähigkeiten des Geräts (z. B. „Pumpentyp hat umschaltbare Laufrichtung“), das Popup blendet die zugehörigen Anzeigen und Buttons aus. Für einzelne Buttons gibt es zusätzlich das Button-Feld **NUR SICHTBAR WENN**.
+
+Nicht verfügbar für Verlauf, Balken, Gauge, Auswertung und Tabelle: Diese messen beim Aufbau ihre Größe und würden versteckt mit Größe 0 gezeichnet. Ein leeres Feld erzeugt keinen zusätzlichen Code (bestehende Popups bleiben byte-identisch).
 
 ## Gruppen-Berechtigungen
 

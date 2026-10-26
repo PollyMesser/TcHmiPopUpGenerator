@@ -14,6 +14,7 @@ import { NUMPAD_FN } from "../../codegen/emitNumPad.js";
 import { parseTpl, checkTplRefs, tplPreview } from "../../model/locTemplate.js";
 import { tableColDeps } from "../../model/tableDeps.js";
 import { rowParamSourceOf } from "../../model/rowClick.js";
+import { blockVisSupported } from "../../model/blockVis.js";
 import { TABLE_LAYOUTS, TABLE_LAYOUT_DEFAULT, tableLayoutOf, tableSizeOf, autoFieldWidth, PAGE_AUTO_MIN, PAGE_AUTO_MAX } from "../../model/tableLayout.js";
 
 // ── Baustein-Karte des Editors (Accordion + Griff-Drag), auch für volle-Breite-Zeilen ──
@@ -1093,6 +1094,11 @@ function BlockCard({ b, opts, ui, actions }) {
               </>
             )}
 
+            {blockVisSupported(b.type) && (
+              <Field label={`BAUSTEIN NUR SICHTBAR WENN ${mode === "usercontrol" ? "(Attribut-Bool)" : "(Symbol-Bool)"} – optional`}>
+                <TextInput value={b.visSym || ""} onChange={(e) => patch(b.id, { visSym: e.target.value })} placeholder={mode === "usercontrol" ? "z.B. DirectionAvailable (leer = immer sichtbar)" : "ADS.…::bDirectionAvailable (leer = immer sichtbar)"} />
+              </Field>
+            )}
             <AccessFields access={b.access} onChange={(a) => patch(b.id, { access: a })} title="GRUPPEN-BERECHTIGUNG (dieser Baustein)" />
           </div>
         )}

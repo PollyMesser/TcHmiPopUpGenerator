@@ -290,11 +290,14 @@
             btn0.style.cssText = 'flex:1;padding:12px 0;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;background:#f59e0b;color:#1a1a1a;';
             btn0.textContent = "Halten";
             btn0.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
-            btn0.addEventListener('pointerdown', function () { if (btn0.disabled) return; writeSymbol("%s%ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::xHold%/s%", true); });
-            var release_btn0 = function () { if (btn0.disabled) return; writeSymbol("%s%ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::xHold%/s%", false);
+            var held_btn0 = false; // hold: Loslassen schreibt immer FALSE, auch wenn der Button inzwischen gesperrt ist
+            btn0.addEventListener('pointerdown', function () { if (btn0.disabled) return; held_btn0 = true; writeSymbol("%s%ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::xHold%/s%", true); });
+            var release_btn0 = function () { if (!held_btn0) return; held_btn0 = false; writeSymbol("%s%ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::xHold%/s%", false);
                 hideDialog(); };
             btn0.addEventListener('pointerup', release_btn0);
             btn0.addEventListener('pointerleave', release_btn0);
+            btn0.addEventListener('pointercancel', release_btn0);
+            teardowns.push(release_btn0); // Popup schließt während gedrückt -> FALSE
             subscribe("%s%ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::xHoldConfirmed%/s%", function (fbv) { btn0.style.boxShadow = fbv ? '0 0 0 3px #22c55e' : 'none'; });
             btn0.style.transition = 'transform .08s ease, filter .08s ease';
             btn0.addEventListener('pointerdown', function () { btn0.style.transform = 'scale(0.96)'; btn0.style.filter = 'brightness(0.88)'; });
