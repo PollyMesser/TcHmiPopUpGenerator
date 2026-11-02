@@ -93,7 +93,7 @@ const newBlock = (type) => {
       defaultSortCol: -1, defaultSortDir: "asc" };
     case "button": return { id: nid(), type, col: 0, buttons: [mkButton()] };
     case "row":    return { id: nid(), type, col: 0, items: [mkItem("read"), mkItem("input")] };
-    case "enum":    return { id: nid(), type, col: 0, label: "Status", loc: "", symbol: "ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::eState", numeric: true, display: "text", map: [mkEnumEntry(0, "Aus", "grey"), mkEnumEntry(1, "Ein", "green")], fbLoc: "", fbText: "", fbColor: "grey" };
+    case "enum":    return { id: nid(), type, col: 0, label: "Status", loc: "", symbol: "ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::eState", numeric: true, display: "text", map: [mkEnumEntry(0, "Aus", "grey"), mkEnumEntry(1, "Ein", "green")], fbLoc: "", fbText: "", fbColor: "grey", fbPrefixAttr: "" };
     case "enumset": return { id: nid(), type, col: 0, label: "Modus", loc: "", symbol: "ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::eMode", numeric: true, map: [mkEnumEntry(0, "Hand"), mkEnumEntry(1, "Automatik")], sendButton: false, sendLabel: "Setzen", sendLoc: "", sendColor: "blue", trigSym: "", trigMode: "pulse", trigMs: 500 };
     case "status":  return { id: nid(), type, col: 0, label: "Status", loc: "", display: "badge",
       map: [mkStatusEntry("ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::xRunning", "Läuft", "green"), mkStatusEntry("ADS.AF_PLC.MAIN.IFC_Sequencer.HMI::xFault", "Störung", "red")],

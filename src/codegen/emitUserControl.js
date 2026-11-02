@@ -131,8 +131,18 @@ function emitEnumUC(parent, b, mb) {
     return `${I}        if (String(v) === ${jsStr(String(e.value))}) { paint(${locExpr(e.loc, e.text)}, ${jsStr(col.bg)}, ${jsStr(col.text)}); return; }`;
   }).join("\n");
   const fbCol = COLORS[b.fbColor] || COLORS.grey;
-  const fbText = (b.fbLoc || b.fbText) ? locExpr(b.fbLoc, b.fbText) : "String(v)";
-  return `${I}// Enum-Anzeige (${isBadge ? "Badge" : "Text"}, Attribut): ${attrName(b.symbol)}\n${I}(function () {\n${I}    var row = document.createElement('div');\n${I}    row.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:${mb};';\n${labelCode}${I}    var badge = document.createElement('span');\n${I}    row.appendChild(badge);\n${I}    ${parent}.appendChild(row);\n${I}    function paint(text, bg, fg) {\n${I}        badge.textContent = text;\n${paintBody}\n${I}    }\n${I}    function apply(v) {\n${chain}\n${I}        paint(${fbText}, ${jsStr(fbCol.bg)}, ${jsStr(fbCol.text)});\n${I}    }\n${I}    updaters.push(function () { apply(gv(${a}, null)); });\n${I}})();`;
+  // Fallback: optional Text aus Localization-Key <Präfix><Wert>; Präfix je Instanz aus einem Attribut
+  // (z. B. SourcePrefix = "L_SrcAW404_" → Wert 5 → L_SrcAW404_5). Fehlt der Key: statischer
+  // Fallback-Text + Wert, ohne statischen Text der Rohwert.
+  const pa = (b.fbPrefixAttr || "").trim();
+  const fbStatic = (b.fbLoc || b.fbText) ? locExpr(b.fbLoc, b.fbText) : "";
+  const fbText = pa
+    ? `fbPrefix(v, ${fbStatic ? fbStatic + " + ' ' + String(v)" : "String(v)"})`
+    : (fbStatic || "String(v)");
+  const fbHelper = pa
+    ? `${I}    function fbPrefix(v, def) {\n${I}        var pre = String(gv(${jsStr(attrName(pa))}, ''));\n${I}        if (!pre) return def;\n${I}        var k = pre + String(v);\n${I}        var t = loc(k, '');\n${I}        return (t && t !== k) ? t : def;\n${I}    }\n`
+    : "";
+  return `${I}// Enum-Anzeige (${isBadge ? "Badge" : "Text"}, Attribut): ${attrName(b.symbol)}\n${I}(function () {\n${I}    var row = document.createElement('div');\n${I}    row.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:${mb};';\n${labelCode}${I}    var badge = document.createElement('span');\n${I}    row.appendChild(badge);\n${I}    ${parent}.appendChild(row);\n${I}    function paint(text, bg, fg) {\n${I}        badge.textContent = text;\n${paintBody}\n${I}    }\n${fbHelper}${I}    function apply(v) {\n${chain}\n${I}        paint(${fbText}, ${jsStr(fbCol.bg)}, ${jsStr(fbCol.text)});\n${I}    }\n${I}    updaters.push(function () { apply(gv(${a}, null)); });\n${I}})();`;
 }
 function emitEnumSetUC(parent, b, mb) {
   const a = jsStr(attrName(b.symbol));

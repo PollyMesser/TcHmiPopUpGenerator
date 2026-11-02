@@ -1045,6 +1045,12 @@ function BlockCard({ b, opts, ui, actions }) {
                     </div>
                     <Field label="FARBE"><ColorSwatches value={b.fbColor} onChange={(cc) => patch(b.id, { fbColor: cc })} /></Field>
                     <div style={{ fontSize: 11, color: T.muted }}>Text leer lassen → Rohwert anzeigen.</div>
+                    {mode === "usercontrol" && (
+                      <>
+                        <Field label="LOC-PRÄFIX AUS ATTRIBUT (optional)"><TextInput value={b.fbPrefixAttr || ""} onChange={(e) => patch(b.id, { fbPrefixAttr: e.target.value })} placeholder="z.B. SourcePrefix" /></Field>
+                        <div style={{ fontSize: 11, color: T.muted }}>Unbekannter Wert v → Text aus Key &lt;Präfix&gt;v; Präfix je Instanz aus dem Attribut (z.B. „L_SrcAW404_“ → L_SrcAW404_5). Fehlt der Key: Fallback-Text + Wert.</div>
+                      </>
+                    )}
                   </>
                 )}
               </>
