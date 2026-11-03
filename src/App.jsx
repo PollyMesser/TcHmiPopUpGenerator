@@ -1,5 +1,5 @@
 import React, { useState, useRef, useMemo } from "react";
-import { Plus, Copy, Check, Code2, Monitor, Sun, Moon, Braces, Calculator, FilePlus2, X } from "lucide-react";
+import { Plus, Copy, Check, Code2, Monitor, Sun, Moon, Braces, Calculator, Keyboard, FilePlus2, X } from "lucide-react";
 
 import { T, PAL } from "./constants/theme.js";
 import { PLOT_COLORS, MAX_AXES, ICONS } from "./constants/palette.js";
@@ -10,6 +10,7 @@ import { clampCol, groupByCol } from "./model/layout.js";
 
 import { generate } from "./codegen/index.js";
 import { generateNumPad, NUMPAD_FN } from "./codegen/emitNumPad.js";
+import { generateKeyboard, KEYBOARD_FN } from "./codegen/emitKeyboard.js";
 import { parseConfigComment, reidBlocks } from "./model/config.js";
 import { EMPTY_POPUP } from "./model/defaults.js";
 import { remapTplCols } from "./model/locTemplate.js";
@@ -54,7 +55,10 @@ export default function App() {
   const codeRef = useRef(null);
   // AC_NumPad: eigenstaendige, konfigurationsunabhaengige Funktionsdatei
   const numpadCode = useMemo(() => generateNumPad(), []);
+  // AC_Keyboard: eigenstaendige, konfigurationsunabhaengige Funktionsdatei (Texteingabe)
+  const keyboardCode = useMemo(() => generateKeyboard(), []);
   const [npCopied, setNpCopied] = useState(false);
+  const [kbCopied, setKbCopied] = useState(false);
   const [resetArmed, setResetArmed] = useState(false); // zweistufige Bestätigung (touch-tauglich, kein window.confirm)
 
   const cfg = { mode, fnName, title, titleLoc, titleSource, titleField, titleFallback, titleIcon, titleIconColor, maxWidth, columns, hostSuffix, blocks, ...(access ? { access } : {}), ...(embedTarget ? { embedTarget } : {}) };
@@ -249,6 +253,10 @@ export default function App() {
   };
   const doCopyNumPad = async () => {
     try { await navigator.clipboard.writeText(numpadCode); setNpCopied(true); setTimeout(() => setNpCopied(false), 1600); }
+    catch { /* Clipboard nicht verfuegbar: Code ist im Tab markierbar */ }
+  };
+  const doCopyKeyboard = async () => {
+    try { await navigator.clipboard.writeText(keyboardCode); setKbCopied(true); setTimeout(() => setKbCopied(false), 1600); }
     catch { /* Clipboard nicht verfuegbar: Code ist im Tab markierbar */ }
   };
   const doImport = () => {
@@ -531,6 +539,12 @@ export default function App() {
             <Tab active={tab === "code"} onClick={() => setTab("code")}><Code2 size={14} /> Code</Tab>
             <Tab active={tab === "import"} onClick={() => setTab("import")}><Braces size={14} /> Import</Tab>
             <Tab active={tab === "numpad"} onClick={() => setTab("numpad")}><Calculator size={14} /> NumPad</Tab>
+            <Tab active={tab === "keyboard"} onClick={() => setTab("keyboard")}><Keyboard size={14} /> Keyboard</Tab>
+            {tab === "keyboard" && (
+              <button onClick={doCopyKeyboard} style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6, background: kbCopied ? T.accentDim : T.accent, color: "#062611", border: "none", borderRadius: 6, padding: "7px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                {kbCopied ? <Check size={14} /> : <Copy size={14} />} {kbCopied ? "Kopiert" : "Kopieren"}
+              </button>
+            )}
             {tab === "numpad" && (
               <button onClick={doCopyNumPad} style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6, background: npCopied ? T.accentDim : T.accent, color: "#062611", border: "none", borderRadius: 6, padding: "7px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
                 {npCopied ? <Check size={14} /> : <Copy size={14} />} {npCopied ? "Kopiert" : "Kopieren"}
@@ -584,6 +598,23 @@ export default function App() {
               </div>
               <pre style={{ background: T.code, border: `1px solid ${T.border}`, borderRadius: 10, padding: 16, margin: 0, fontSize: 11.5, lineHeight: 1.5, color: "#c8d0e0", overflow: "auto", maxHeight: 560, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>
                 {numpadCode}
+              </pre>
+            </div>
+          )}
+          {tab === "keyboard" && (
+            <div>
+              <div style={{ background: T.panel, border: `1px solid ${T.border}`, borderRadius: 10, padding: 14, marginBottom: 10, fontSize: 12, color: T.muted, lineHeight: 1.6 }}>
+                <div style={{ color: T.text, fontWeight: 600, marginBottom: 4 }}>{KEYBOARD_FN} – eigenständige Funktionsdatei</div>
+                Einmal im HMI-Projekt als JavaScript-Funktion <code>{KEYBOARD_FN}</code> anlegen und diesen Code einfügen (wie {NUMPAD_FN}). Bildschirmtastatur für Texteingaben, ohne Eingabefeld und ohne Fokus – die Panel-Tastatur bleibt zu. Umschalter zum {NUMPAD_FN}, wenn dieser geladen ist.
+                <div style={{ marginTop: 8 }}>Aufruf als JavaScript-Action:</div>
+                <pre style={{ background: T.code, borderRadius: 6, padding: 10, margin: "6px 0 0", fontSize: 11.5, color: "#c8d0e0", overflow: "auto", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>{`TcHmi.Functions.AC_HMI.${KEYBOARD_FN}({
+    symbol: 'ADS.PLC1.GVL.sName',
+    title: 'Bezeichnung',
+    maxLength: 32            // leer = ohne Begrenzung
+});`}</pre>
+              </div>
+              <pre style={{ background: T.code, border: `1px solid ${T.border}`, borderRadius: 10, padding: 16, margin: 0, fontSize: 11.5, lineHeight: 1.5, color: "#c8d0e0", overflow: "auto", maxHeight: 560, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>
+                {keyboardCode}
               </pre>
             </div>
           )}
