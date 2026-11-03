@@ -42,6 +42,7 @@ const tap = (td) => td._listeners.click[0]({ target: td, stopPropagation() {} })
   let td = cell(H, 1);
   let { tx, ind } = parts(td);
   assertEqual(tx.textContent, LONG, "voller Text im inneren Span");
+  assertEqual([ind.textContent, ind.style.borderColor], ["", "transparent transparent transparent currentColor"], "Pfeil zugeklappt (Dreieck nach rechts, ohne Schriftzeichen)");
   assert(/white-space:nowrap;overflow:hidden;text-overflow:ellipsis/.test(tx.style.cssText), "zugeklappt: einzeilig mit Ellipse");
   assertEqual([td.style.width, td.style.maxWidth, td.style.minWidth], ["100%", "0", "calc(5ch + 1.2em + 20px)"], "Restbreite: width 100% + max-width 0 + min 10ch");
 
@@ -51,7 +52,8 @@ const tap = (td) => td._listeners.click[0]({ target: td, stopPropagation() {} })
   td = cell(H, 1);
   ({ tx, ind } = parts(td));
   assert(/white-space:pre-wrap/.test(tx.style.cssText), "Tippen klappt auf (mehrzeilig)");
-  assertEqual(ind.textContent, String.fromCharCode(9662), "Pfeil zeigt aufgeklappt");
+  // Pfeil ist ein CSS-Dreieck (kein Schriftzeichen, Panel-Schrift ohne U+25xx): aufgeklappt = Spitze nach unten
+  assertEqual([ind.textContent, ind.style.borderColor], ["", "currentColor transparent transparent transparent"], "Pfeil zeigt aufgeklappt (Dreieck nach unten)");
 
   // zweite Zelle zusaetzlich aufklappen -> beide offen
   const td0 = cell(H, 0); const p0 = parts(td0); p0.tx.clientWidth = 10; p0.tx.scrollWidth = 50;

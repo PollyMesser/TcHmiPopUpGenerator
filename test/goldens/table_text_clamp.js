@@ -445,7 +445,6 @@
             // so viele Zeichen bleiben mindestens sichtbar (+1ch fuer die Ellipse, +1.2em Pfeil, +20px Zellen-Padding).
             function clampMinW(col, pad) { return 'calc(' + (col.cmin + 1) + 'ch + 1.2em' + (pad ? ' + 20px' : '') + ')'; }
             // Der Zustand liegt in expanded[] statt im DOM, weil renderBody() bei jeder Wertaenderung neu aufbaut.
-            var CL_CLOSED = String.fromCharCode(9656), CL_OPEN = String.fromCharCode(9662);
             function clampText(td, r, ci) {
                 var col = TCOLS[ci];
                 var key = r + ':' + ci;
@@ -461,8 +460,8 @@
                 tx.textContent = txt;
                 tx.style.cssText = 'flex:1 1 auto;min-width:0;' + (open ? 'white-space:pre-wrap;overflow-wrap:anywhere;' : 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;');
                 var ind = document.createElement('span');
-                ind.textContent = open ? CL_OPEN : CL_CLOSED;
-                ind.style.cssText = 'flex:0 0 auto;opacity:.55;font-size:.8em;line-height:1.6;';
+                ind.style.cssText = 'flex:0 0 auto;opacity:.55;font-size:.8em;margin-top:.55em;';
+                acTri(ind, open ? 'down' : 'right', 1);
                 box.appendChild(tx);
                 box.appendChild(ind);
                 td.appendChild(box);
@@ -618,12 +617,21 @@
                 updateSortIndicators();
                 renderBody();
             }
-            var ARR_UP = String.fromCharCode(9650), ARR_DN = String.fromCharCode(9660), ARR_NEUTRAL = String.fromCharCode(9652);
+            // Pfeil-Dreieck per CSS-Rahmen statt Schriftzeichen: Symbolzeichen (U+25xx) fehlen in der
+            // Panel-Schrift und erscheinen dort als Quadrat. Groesse folgt der Schriftgroesse (em), Farbe = Textfarbe.
+            function acTri(el, dir, k) {
+                var f = k || 1, a = (0.34 * f) + 'em', b = (0.6 * f) + 'em', t = 'transparent', c = 'currentColor';
+                el.textContent = '';
+                el.style.width = '0'; el.style.height = '0'; el.style.borderStyle = 'solid'; el.style.verticalAlign = 'middle';
+                if (dir === 'down') { el.style.borderWidth = b + ' ' + a + ' 0 ' + a; el.style.borderColor = c + ' ' + t + ' ' + t + ' ' + t; }
+                else if (dir === 'right') { el.style.borderWidth = a + ' 0 ' + a + ' ' + b; el.style.borderColor = t + ' ' + t + ' ' + t + ' ' + c; }
+                else { el.style.borderWidth = '0 ' + a + ' ' + b + ' ' + a; el.style.borderColor = t + ' ' + t + ' ' + c + ' ' + t; }
+            }
             function updateSortIndicators() {
                 for (var i = 0; i < sortThs.length; i++) {
                     var s = sortThs[i];
-                    if (s.col === sortCol) { s.el.textContent = sortDir === 'desc' ? ARR_DN : ARR_UP; s.el.style.opacity = '.9'; }
-                    else { s.el.textContent = ARR_NEUTRAL; s.el.style.opacity = '.3'; }
+                    if (s.col === sortCol) { acTri(s.el, sortDir === 'desc' ? 'down' : 'up', 1); s.el.style.opacity = '.9'; }
+                    else { acTri(s.el, 'up', 0.7); s.el.style.opacity = '.3'; }
                 }
             }
             function renderBody() {

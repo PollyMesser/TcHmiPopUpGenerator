@@ -378,8 +378,8 @@ ${REF}
                     k.style.opacity = on ? '1' : '0.35';
                     k.style.cursor = on ? 'pointer' : 'not-allowed';
                 }
-                // Rücktaste als SVG: das Zeichen U+232B fehlt in der Schrift mancher Panels (Quadrat)
-                function bsIcon() {
+                // Symboltasten als SVG: Zeichen wie U+232B/U+2190 fehlen in der Panel-Schrift (Quadrat)
+                function keyIcon(paths) {
                     var NS = 'http://www.w3.org/2000/svg';
                     var svg = document.createElementNS(NS, 'svg');
                     svg.setAttribute('viewBox', '0 0 24 24');
@@ -387,7 +387,7 @@ ${REF}
                     svg.setAttribute('height', '26');
                     svg.setAttribute('aria-hidden', 'true');
                     svg.style.cssText = 'display:block;margin:0 auto;pointer-events:none;';
-                    var d = ['M21 5H8.5L2 12l6.5 7H21a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1z', 'M11.5 9l6 6', 'M17.5 9l-6 6'];
+                    var d = paths;
                     for (var i = 0; i < d.length; i++) {
                         var pth = document.createElementNS(NS, 'path');
                         pth.setAttribute('d', d[i]);
@@ -484,10 +484,12 @@ ${REF}
                     r.appendChild(k1); r.appendChild(k2);
                     return r;
                 }
-                var leftKey = mkKey('←', function () { moveCaret(-1); });
-                var rightKey = mkKey('→', function () { moveCaret(1); });
+                var leftKey = mkKey('', function () { moveCaret(-1); });
+                leftKey.appendChild(keyIcon(['M19 12H5', 'M11 6l-6 6 6 6']));
+                var rightKey = mkKey('', function () { moveCaret(1); });
+                rightKey.appendChild(keyIcon(['M5 12h14', 'M13 6l6 6-6 6']));
                 var bsKey = mkKey('', backspace);
-                bsKey.appendChild(bsIcon());
+                bsKey.appendChild(keyIcon(['M21 5H8.5L2 12l6.5 7H21a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1z', 'M11.5 9l6 6', 'M17.5 9l-6 6']));
                 var delKey = mkKey('DEL', clearAll, null, null, '15px');
                 leftKey.title = loc('L_NumPad_Left', 'Cursor links');
                 rightKey.title = loc('L_NumPad_Right', 'Cursor rechts');

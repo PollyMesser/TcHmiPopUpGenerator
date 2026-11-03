@@ -727,12 +727,21 @@
                 updateSortIndicators();
                 renderBody();
             }
-            var ARR_UP = String.fromCharCode(9650), ARR_DN = String.fromCharCode(9660), ARR_NEUTRAL = String.fromCharCode(9652);
+            // Pfeil-Dreieck per CSS-Rahmen statt Schriftzeichen: Symbolzeichen (U+25xx) fehlen in der
+            // Panel-Schrift und erscheinen dort als Quadrat. Groesse folgt der Schriftgroesse (em), Farbe = Textfarbe.
+            function acTri(el, dir, k) {
+                var f = k || 1, a = (0.34 * f) + 'em', b = (0.6 * f) + 'em', t = 'transparent', c = 'currentColor';
+                el.textContent = '';
+                el.style.width = '0'; el.style.height = '0'; el.style.borderStyle = 'solid'; el.style.verticalAlign = 'middle';
+                if (dir === 'down') { el.style.borderWidth = b + ' ' + a + ' 0 ' + a; el.style.borderColor = c + ' ' + t + ' ' + t + ' ' + t; }
+                else if (dir === 'right') { el.style.borderWidth = a + ' 0 ' + a + ' ' + b; el.style.borderColor = t + ' ' + t + ' ' + t + ' ' + c; }
+                else { el.style.borderWidth = '0 ' + a + ' ' + b + ' ' + a; el.style.borderColor = t + ' ' + t + ' ' + c + ' ' + t; }
+            }
             function updateSortIndicators() {
                 for (var i = 0; i < sortThs.length; i++) {
                     var s = sortThs[i];
-                    if (s.col === sortCol) { s.el.textContent = sortDir === 'desc' ? ARR_DN : ARR_UP; s.el.style.opacity = '.9'; }
-                    else { s.el.textContent = ARR_NEUTRAL; s.el.style.opacity = '.3'; }
+                    if (s.col === sortCol) { acTri(s.el, sortDir === 'desc' ? 'down' : 'up', 1); s.el.style.opacity = '.9'; }
+                    else { acTri(s.el, 'up', 0.7); s.el.style.opacity = '.3'; }
                 }
             }
             function renderBody() {

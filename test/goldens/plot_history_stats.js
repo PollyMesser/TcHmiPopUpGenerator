@@ -525,7 +525,7 @@
             statsWrap.style.cssText = 'margin-top:8px;border:1px solid ' + pp.border + ';border-radius:8px;overflow:hidden;';
             var stHead = document.createElement('div');
             stHead.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 10px;cursor:pointer;font-size:16px;font-weight:600;color:' + pp.bodyText + ';';
-            var stArrow = document.createElement('span'); stArrow.textContent = '▾'; stArrow.style.cssText = 'flex:0 0 auto;transition:transform .15s;';
+            var stArrow = document.createElement('span'); stArrow.style.cssText = 'flex:0 0 auto;width:0;height:0;border-style:solid;border-width:.42em .3em 0 .3em;border-color:currentColor transparent transparent transparent;transition:transform .15s;'; // Dreieck per CSS (Panel-Schrift ohne U+25BE)
             var stTitle = document.createElement('span'); stTitle.textContent = locP('L_Stat_Title', 'Statistik'); stTitle.style.cssText = 'flex:1 1 auto;';
             var stRangeLbl = document.createElement('span'); stRangeLbl.style.cssText = 'flex:0 0 auto;font-weight:400;opacity:.75;'; stRangeLbl.textContent = locP('L_Stat_Range', 'Zeitraum') + ':';
             statsRangeEl = document.createElement('span'); statsRangeEl.style.cssText = 'flex:0 0 auto;font-variant-numeric:tabular-nums;';
