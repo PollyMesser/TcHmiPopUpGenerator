@@ -25,6 +25,10 @@ assert(parsed, "NumPad-Code ist syntaktisch gültiges JS (Babel)");
 assertEqual((code.match(/\\/g) || []).length, 0, "NumPad-Code ist backslash-frei");
 assertEqual((code.match(/registerFunctionEx\(/g) || []).length, 1, "genau eine Registrierung");
 assertEqual(generateNumPad(), code, "Ausgabe ist deterministisch (konfigurationsunabhängig)");
+// Panel-Tastatur: kein Eingabeelement, kein Fokus (Test am Christ-Panel 03.11.: nur so bleibt die Tastatur zu)
+assertEqual((code.match(/createElement\('input'\)/g) || []).length, 0, "NumPad erzeugt kein input-Element");
+assertEqual((code.match(/\.focus\(/g) || []).length, 0, "NumPad ruft nie focus() auf");
+assertEqual((code.match(/contentEditable|contenteditable/g) || []).length, 0, "NumPad nutzt kein contenteditable");
 
 const hookLine = `AC_HMI.${NUMPAD_FN} = ${NUMPAD_FN};`;
 assert(code.includes(hookLine), "Export-Zeile für Hook vorhanden");

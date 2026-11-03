@@ -52,7 +52,12 @@ ${REF}
  * Lokalisierung (optional): L_NumPad_Title, L_NumPad_Min, L_NumPad_Max, L_NumPad_Ok,
  * L_NumPad_TooLow, L_NumPad_TooHigh, L_NumPad_Invalid, L_NumPad_Decimals, L_NumPad_Integer,
  * L_NumPad_Empty, L_NumPad_Loading, L_NumPad_LimitError, L_NumPad_Writing,
- * L_NumPad_WriteError, L_Cancel, L_OK, L_Close
+ * L_NumPad_WriteError, L_Cancel, L_Apply, L_Close
+ *
+ * Panel-Tastatur: Die Anzeige ist KEIN Eingabefeld (div mit eigenem Cursor), das NumPad
+ * setzt nie den Fokus. Damit öffnet keine Betriebssystem-Bildschirmtastatur (Linux-Panel
+ * ignoriert inputmode="none"). Physische Tastatur wirkt über einen keydown-Listener,
+ * solange das NumPad offen ist.
  */
 (function (/** @type {globalThis.TcHmi} */ TcHmi) {
     var Functions;
@@ -262,7 +267,7 @@ ${REF}
 
                 var header = document.createElement('div');
                 header.style.cssText = 'display:flex;align-items:flex-start;justify-content:space-between;' +
-                   'padding:14px 20px;background:' + p.headerBg + ';border-radius:12px 12px 0 0;' +
+                    'padding:14px 20px;background:' + p.headerBg + ';border-radius:12px 12px 0 0;' +
                     'flex:0 0 auto;font-size:15px;font-weight:600;color:' + p.titleColor + ';';
                 var titleEl = document.createElement('span');
                 titleEl.style.cssText = 'flex:1 1 auto;min-width:0;white-space:normal;overflow-wrap:anywhere;line-height:1.35;' +
@@ -302,16 +307,58 @@ ${REF}
                 var maxBox = mkLimitBox('L_NumPad_Max', 'Max', 'left');
                 var field = document.createElement('div');
                 field.style.cssText = 'flex:1 1 auto;min-width:0;display:flex;align-items:center;gap:6px;';
-                var input = document.createElement('input');
-                input.type = 'text';
-                input.setAttribute('inputmode', 'none');
-                input.setAttribute('autocomplete', 'off');
-                input.setAttribute('spellcheck', 'false');
-                input.placeholder = '…';
-                input.style.cssText = 'flex:1 1 auto;min-width:0;width:100%;box-sizing:border-box;padding:10px 12px;border-radius:8px;' +
-                    'font-size:24px;font-weight:600;text-align:right;outline:none;font-variant-numeric:tabular-nums;' +
-                    'border:2px solid ' + p.border + ';background:' + p.inputBg + ';color:' + p.bodyText + ';transition:border-color .12s;';
-                field.appendChild(input);
+                // Anzeige ohne Eingabeelement: Panel-Tastatur bleibt zu (kein bearbeitbares Element, kein Fokus)
+                var disp = document.createElement('div');
+                disp.setAttribute('role', 'textbox');
+                disp.setAttribute('aria-readonly', 'true');
+                disp.style.cssText = 'flex:1 1 auto;min-width:0;width:100%;box-sizing:border-box;height:52px;padding:10px 12px;border-radius:8px;' +
+                    'font-size:24px;font-weight:600;line-height:28px;text-align:right;white-space:pre;overflow:hidden;font-variant-numeric:tabular-nums;' +
+                    'border:2px solid ' + p.border + ';background:' + p.inputBg + ';color:' + p.bodyText + ';transition:border-color .12s;' +
+                    'user-select:none;-webkit-user-select:none;cursor:default;';
+                // Editor-Zustand mit derselben Schnittstelle wie ein input (value, selectionStart/End, setSelectionRange)
+                var input = {
+                    value: '', selectionStart: 0, selectionEnd: 0, style: disp.style,
+                    setSelectionRange: function (a, b) {
+                        var n = this.value.length;
+                        this.selectionStart = Math.max(0, Math.min(n, a));
+                        this.selectionEnd = Math.max(this.selectionStart, Math.min(n, b));
+                        renderDisp();
+                    }
+                };
+                function renderDisp() {
+                    var v = input.value, a = input.selectionStart, b = input.selectionEnd;
+                    while (disp.firstChild) disp.removeChild(disp.firstChild);
+                    if (a > v.length) a = v.length;
+                    if (b > v.length) b = v.length;
+                    disp.appendChild(document.createTextNode(v.slice(0, a)));
+                    if (a === b) {
+                        var car = document.createElement('span');
+                        car.className = 'ac-np-caret';
+                        car.style.cssText = 'display:inline-block;width:2px;height:28px;vertical-align:top;margin:0 -1px;background:' + p.bodyText + ';';
+                        disp.appendChild(car);
+                        if (!v.length) {
+                            var ph = document.createElement('span');
+                            ph.style.cssText = 'color:' + p.muted + ';font-weight:400;';
+                            ph.textContent = '…';
+                            disp.appendChild(ph);
+                        }
+                    } else {
+                        var sel = document.createElement('span');
+                        sel.style.cssText = 'background:#3b82f6;color:#ffffff;border-radius:3px;';
+                        sel.textContent = v.slice(a, b);
+                        disp.appendChild(sel);
+                    }
+                    disp.appendChild(document.createTextNode(v.slice(b)));
+                }
+                if (!document.getElementById('AC_NumPad_Style')) {
+                    var st = document.createElement('style');
+                    st.id = 'AC_NumPad_Style';
+                    st.textContent = '@keyframes ac-np-blink { 0%, 49% { opacity: 1 } 50%, 100% { opacity: 0 } } ' +
+                        '.ac-np-caret { animation: ac-np-blink 1.06s step-end infinite; } ' +
+                        '@media (prefers-reduced-motion: reduce) { .ac-np-caret { animation: none; } }';
+                    document.head.appendChild(st);
+                }
+                field.appendChild(disp);
                 if (o.unit) {
                     var unitEl = document.createElement('span');
                     unitEl.style.cssText = 'flex:0 0 auto;font-size:14px;color:' + p.bodyText + ';opacity:0.75;';
@@ -359,8 +406,7 @@ ${REF}
                     return [s, t];
                 }
                 function setCaret(a, b) {
-                    try { input.focus(); } catch (e) {}
-                    try { input.setSelectionRange(a, b === undefined ? a : b); } catch (e) {}
+                    input.setSelectionRange(a, b === undefined ? a : b);
                 }
                 function changed() { touched = true; failMsg = ''; refresh(); }
                 function insert(ch) {
@@ -526,6 +572,7 @@ ${REF}
                 function close(written) {
                     if (closed) return;
                     closed = true;
+                    document.removeEventListener('keydown', onKey, true);
                     for (var i = 0; i < watchers.length; i++) { try { watchers[i](); } catch (e) {} }
                     for (var j = 0; j < symbols.length; j++) { try { symbols[j].destroy(); } catch (e) {} }
                     watchers = []; symbols = [];
@@ -555,29 +602,36 @@ ${REF}
                     } catch (e) {}
                 }
 
-                // ── Physische Tastatur: Ziffern/Komma/Punkt/Minus, Enter = OK, Esc = Abbrechen ──
-                input.addEventListener('keydown', function (e) {
-                    e.stopPropagation();
+                // ── Physische Tastatur (solange offen): Ziffern/Komma/Punkt/Minus, Pfeile, Rücktaste, Entf,
+                //    Enter = OK, Esc = Abbrechen. Ohne Fokus auf einem Eingabeelement.
+                function onKey(e) {
+                    if (closed) return;
                     var k = e.key;
-                    if (k === 'Enter') { e.preventDefault(); commit(); return; }
-                    if (k === 'Escape') { e.preventDefault(); close(false); return; }
                     if (e.ctrlKey || e.metaKey || e.altKey) return;
-                    if (k && k.length === 1) {
-                        e.preventDefault();
-                        if (busy) return;
+                    var handled = true;
+                    if (k === 'Enter') commit();
+                    else if (k === 'Escape') close(false);
+                    else if (busy) handled = (k && k.length === 1);
+                    else if (k === 'ArrowLeft') moveCaret(-1);
+                    else if (k === 'ArrowRight') moveCaret(1);
+                    else if (k === 'Home') setCaret(0);
+                    else if (k === 'End') setCaret(input.value.length);
+                    else if (k === 'Backspace') backspace();
+                    else if (k === 'Delete') clearAll();
+                    else if (k && k.length === 1) {
                         if (k >= '0' && k <= '9') insert(k);
                         else if (k === '.' || k === ',') insert('.');
                         else if (k === '-') { if (!signKey.disabled) toggleSign(); }
-                    }
-                });
-                input.addEventListener('input', function () { changed(); });
-                input.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
-                overlay.addEventListener('keydown', function (e) {
-                    if (e.key === 'Escape') { e.stopPropagation(); close(false); }
-                });
+                    } else handled = false;
+                    if (handled) { e.preventDefault(); e.stopPropagation(); }
+                }
+                document.addEventListener('keydown', onKey, true);
+                disp.addEventListener('pointerdown', function (e) { e.preventDefault(); e.stopPropagation(); });
                 overlay.addEventListener('pointerdown', function (e) {
-                    if (e.target === overlay) { e.preventDefault(); setCaret(getSel()[0], getSel()[1]); }
+                    if (e.target === overlay) e.preventDefault();
                 });
+                // Fokus eines Seitenfelds lösen (sonst bleibt eine offene Panel-Tastatur stehen)
+                try { var ae = document.activeElement; if (ae && ae !== document.body && ae.blur) ae.blur(); } catch (e) {}
 
                 document.body.appendChild(overlay);
                 makeDraggable(box, header);
