@@ -909,4 +909,25 @@ const compactCopy = (src) => {
 add("table_sort_filter_compact", compactCopy("table_sort_filter"));
 add("keypad_table_static_compact", compactCopy("keypad_table_static"));
 
+// ── Keypad (AC_NumPad): Zeit-Eingabefeld (TIME), Eingabe in s bzw. min, Symbol- und UC-Modus ──
+add("keypad_time_input", {
+  mode: "registered",
+  fnName: "AC_KeypadTime",
+  blocks: [
+    { ...newBlock("input"), label: "Haltezeit", symbol: "ADS.AF_PLC.GVL.stLeak::tHold", dataType: "time", unit: "HH:MM:SS",
+      keypad: true, kpTimeUnit: "s", kpMin: "0", kpMax: "600", kpDecimals: "0" },
+    { ...newBlock("input"), label: "Timeout", symbol: "ADS.AF_PLC.GVL.tTimeout", dataType: "time",
+      keypad: true, kpTimeUnit: "min", kpMin: "", kpMax: "ADS.AF_PLC.GVL.fMaxMin", kpDecimals: "1",
+      trigSym: "ADS.AF_PLC.GVL.xApply", trigMode: "pulse", trigMs: 300 },
+  ],
+});
+add("keypad_time_uc", {
+  mode: "usercontrol",
+  fnName: "AC_KeypadTimeUc",
+  hostSuffix: ".btn_PopUp",
+  blocks: [
+    { ...newBlock("input"), label: "Dauer", symbol: "Duration", dataType: "time", keypad: true, kpTimeUnit: "s", kpMin: "0", kpMax: "MaxSec", kpDecimals: "0" },
+  ],
+});
+
 export { CONFIGS };

@@ -823,8 +823,8 @@ function BlockCard({ b, opts, ui, actions }) {
                   {(b.rowFilters || []).map((f) => (
                     <div key={f.id} style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 4 }}>
                       <div style={{ flex: 2 }}><Select value={f.colIndex} onChange={(e) => patchRowFilter(b.id, f.id, { colIndex: parseInt(e.target.value) })} options={(b.columns || []).map((cl, ci) => ({ value: ci, label: `Spalte ${ci + 1}${cl.header ? " – " + cl.header : ""}` }))} /></div>
-                      <div style={{ width: 140 }}><Select value={f.op} onChange={(e) => patchRowFilter(b.id, f.id, { op: e.target.value })} options={[{ value: "notZero", label: "≠ 0 / nicht leer" }, { value: "notEmpty", label: "nicht leer" }, { value: "==", label: "=" }, { value: "!=", label: "≠" }, { value: ">", label: ">" }, { value: ">=", label: "≥" }, { value: "<", label: "<" }, { value: "<=", label: "≤" }]} /></div>
-                      {(f.op !== "notEmpty" && f.op !== "notZero") && <div style={{ width: 90 }}><TextInput value={f.value} onChange={(e) => patchRowFilter(b.id, f.id, { value: e.target.value })} placeholder="Wert" /></div>}
+                      <div style={{ width: 140 }}><Select value={f.op} onChange={(e) => patchRowFilter(b.id, f.id, { op: e.target.value })} options={[{ value: "notZero", label: "≠ 0 / nicht leer" }, { value: "notEmpty", label: "nicht leer" }, { value: "==", label: "=" }, { value: "!=", label: "≠" }, { value: ">", label: ">" }, { value: ">=", label: "≥" }, { value: "<", label: "<" }, { value: "<=", label: "≤" }, { value: "in", label: "in Liste" }]} /></div>
+                      {(f.op !== "notEmpty" && f.op !== "notZero") && <div style={{ width: f.op === "in" ? 220 : 90 }}><TextInput value={f.value} onChange={(e) => patchRowFilter(b.id, f.id, { value: e.target.value })} placeholder={f.op === "in" ? "z. B. 202, 203, 204" : "Wert"} /></div>}
                       <IconBtn danger title="Filter entfernen" onClick={() => removeRowFilter(b.id, f.id)}><Trash2 size={12} /></IconBtn>
                     </div>
                   ))}

@@ -155,10 +155,13 @@ function tableBlockConfig(b) {
   // Sichtbarkeitsregeln (Zeilenfilter): Zeile nur zeigen, wenn ALLE Regeln erfuellt sind.
   // op 'notEmpty' = nicht leer/null/'' ; 'notZero' = nicht 0 und nicht leer ; sonst
   // Standard-Operator gegen v. Nur setzen, wenn Regeln existieren (Golden-neutral).
+  // op 'in' = Wert in Liste (Komma/Semikolon-getrennt), v = Array von Strings.
   const filtersOut = (b.rowFilters || []).map((u) => ({
     c: Math.max(0, parseInt(u.colIndex) || 0),
-    op: (u.op === "notEmpty" || u.op === "notZero") ? u.op : (u.op || "!="),
-    v: parseRuleVal(u.value),
+    op: (u.op === "notEmpty" || u.op === "notZero" || u.op === "in") ? u.op : (u.op || "!="),
+    v: u.op === "in"
+      ? String(u.value == null ? "" : u.value).split(/[;,]/).map((x) => x.trim()).filter((x) => x !== "")
+      : parseRuleVal(u.value),
   }));
   const J = (o) => JSON.stringify(o, null, 4);
   return {
@@ -659,6 +662,10 @@ function emitTable(parent, b) {
   const watchSetSrc = hasRowFmt ? `if (bd.m) setX(bd.m, bd.r, v); else setVal(bd.r, bd.c, v);` : `setVal(bd.r, bd.c, v);`;
   const batchXSrc = hasRowFmt ? `
                     if (bd.m) { if (!xVals[bd.m]) xVals[bd.m] = []; xVals[bd.m][bd.r] = cmd.readValue; continue; }` : "";
+  // Zeilenfilter 'in' (Wert in Liste): nur erzeugen, wenn genutzt (Golden-neutral).
+  const filterInSrc = (b.rowFilters || []).some((u) => u.op === "in")
+    ? `\n            else if (f.op === 'in') { if (f.v.indexOf(String(a === undefined || a === null ? '' : a).trim()) < 0) return false; }`
+    : "";
   // Keypad-Spalten (AC_NumPad): Zusatzlogik nur erzeugen, wenn genutzt (Golden-neutral).
   const hasKeypad = c.colsArr.some((cc) => cc.kp);
   const kpHelpers = hasKeypad ? `    // ── Keypad (${NUMPAD_FN}): Zelle oeffnet das Zahleneingabe-Popup ──
@@ -967,7 +974,7 @@ ${fmtReadSrc}
             var f = TFILTERS[i];
             var a = vals[r] ? vals[r][f.c] : undefined;
             if (f.op === 'notEmpty') { if (isEmptyVal(a)) return false; }
-            else if (f.op === 'notZero') { if (isZeroVal(a)) return false; }
+            else if (f.op === 'notZero') { if (isZeroVal(a)) return false; }${filterInSrc}
             else { if (!cmpT(a, f.op, f.v)) return false; }
         }
         return true;

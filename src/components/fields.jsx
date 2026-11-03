@@ -153,7 +153,7 @@ function KeypadFields({ cfg, onPatch, uc }) {
 }
 function InputFields({ cfg, onPatch, mode }) {
   const sm = symMeta(mode);
-  const kpPossible = cfg.dataType !== "text" && cfg.dataType !== "time";
+  const kpPossible = cfg.dataType !== "text";
   const kp = kpPossible && !!cfg.keypad;
   return (
     <>
@@ -172,6 +172,12 @@ function InputFields({ cfg, onPatch, mode }) {
         <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, fontWeight: 600, color: T.muted, cursor: "pointer", marginBottom: 6 }}>
           <input type="checkbox" checked={!!cfg.keypad} onChange={(e) => onPatch({ keypad: e.target.checked })} /> KEYPAD ({NUMPAD_FN}) – EINGABE ÜBER ZAHLENFELD-POPUP
         </label>
+      )}
+      {kp && cfg.dataType === "time" && (
+        <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
+          <div style={{ width: 160 }}><Field label="EINGABE IN"><Select value={cfg.kpTimeUnit || "s"} onChange={(e) => onPatch({ kpTimeUnit: e.target.value })} options={[{ value: "s", label: "Sekunden" }, { value: "min", label: "Minuten" }, { value: "h", label: "Stunden" }]} /></Field></div>
+          <div style={{ flex: 1, fontSize: 11, color: T.muted, lineHeight: 1.5, marginBottom: 8 }}>Anzeige HH:MM:SS, NumPad-Eingabe als Zahl in dieser Einheit. MIN/MAX in derselben Einheit (Zahl oder Symbol mit Zahlenwert).</div>
+        </div>
       )}
       {kp && <KeypadFields cfg={cfg} onPatch={onPatch} uc={isUC(mode)} />}
       {kp && <TriggerFields cfg={cfg} onPatch={onPatch} mode={mode} />}

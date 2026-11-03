@@ -679,7 +679,10 @@ TcHmi.Functions.registerFunctionEx('${NUMPAD_FN}', 'TcHmi.Functions.AC_HMI', TcH
 const isNumStr = (s) => { s = String(s == null ? "" : s).trim().replace(",", "."); return s !== "" && !isNaN(Number(s)) && isFinite(Number(s)); };
 const numLit = (s) => String(Number(String(s).trim().replace(",", ".")));
 const kpDecimals = (b) => { const t = String(b.kpDecimals == null ? "" : b.kpDecimals).trim(); if (t === "") return -1; const n = parseInt(t, 10); return isNaN(n) || n < 0 ? -1 : n; };
-const usesKeypad = (b) => !!b.keypad && b.dataType !== "text" && b.dataType !== "time";
+// Zeit (TIME, ISO-Dauer) ist mit Keypad erlaubt: Eingabe als Zahl in b.kpTimeUnit (s|min|h), siehe emitInputKeypadTime.
+const usesKeypad = (b) => !!b.keypad && b.dataType !== "text";
+const TIME_UNITS = { s: 1, min: 60, h: 3600 };
+const kpTimeUnit = (b) => (TIME_UNITS[b.kpTimeUnit] ? b.kpTimeUnit : "s");
 
 // Grenze im Symbol-Modus: Zahl -> Literal, Text -> Symbolpfad, leer -> null
 function kpLimitSym(src) {
@@ -696,6 +699,7 @@ function kpLimitUC(src) {
 
 // trig = Trigger-Code der Bestands-Emitter ("; pulseSymbol(...)" bzw. "; pulse(...)") oder ""
 function emitInputKeypad(parent, b, mb, uc, trig) {
+  if (b.dataType === "time") return emitInputKeypadTime(parent, b, mb, uc, trig);
   const dec = kpDecimals(b);
   const unit = (b.unit || "").trim();
   const fmt = dec >= 0
@@ -720,6 +724,39 @@ function emitInputKeypad(parent, b, mb, uc, trig) {
   }
   const what = uc ? `${attrName(b.symbol)} (Attribut)` : b.symbol;
   return `${I}// Eingabefeld (Keypad ${NUMPAD_FN}): ${what}\n${I}(function () {\n${I}    var wrap = document.createElement('div');\n${I}    wrap.style.cssText = 'margin-bottom:${mb};';\n${I}    var lbl = document.createElement('div');\n${I}    lbl.style.cssText = 'font-size:13px;color:' + p.bodyText + ';margin-bottom:6px;';\n${I}    lbl.textContent = ${locExpr(b.loc, b.label)};\n${I}    var line = document.createElement('div');\n${I}    line.style.cssText = 'display:flex;gap:8px;align-items:stretch;';\n${I}    var input = document.createElement('input');\n${I}    input.type = 'text';\n${I}    input.readOnly = true;\n${I}    input.setAttribute('inputmode', 'none');\n${I}    input.style.cssText = 'flex:1;min-width:0;box-sizing:border-box;padding:9px 10px;border-radius:8px;font-size:14px;outline:none;text-align:right;cursor:pointer;font-variant-numeric:tabular-nums;' +\n${I}        'border:1px solid ' + p.border + ';background:' + p.boxBg + ';color:' + p.bodyText + ';';\n${I}    input.addEventListener('pointerdown', function (e) { e.stopPropagation(); });${readSrc}\n${I}    function openPad() {\n${I}        if (input.disabled) return;\n${I}        var fns = (typeof TcHmi !== 'undefined' && TcHmi.Functions) ? TcHmi.Functions.AC_HMI : null;\n${I}        var f = fns ? fns.${NUMPAD_FN} : null;\n${I}        if (typeof f !== 'function') { if (window.console) console.warn('${NUMPAD_FN}: Funktionsdatei nicht geladen.'); return; }\n${I}        f({\n${I}            ${src}\n${I}            unit: ${jsStr(unit)},\n${I}            decimals: ${dec},\n${I}            title: ${locExpr(b.loc, b.label)}${onWritten}\n${I}        });\n${I}    }\n${I}    input.addEventListener('click', function (e) { e.stopPropagation(); openPad(); });${unitEl}\n${I}    line.appendChild(input);${unitAppend}\n${I}    wrap.appendChild(lbl); wrap.appendChild(line);\n${I}    ${parent}.appendChild(wrap);\n${I}})();`;
+}
+
+
+// Zeit-Eingabefeld mit Keypad: Anzeige HH:MM:SS, Eingabe im NumPad als Zahl in kpTimeUnit
+// (s/min/h), geschrieben als ISO-Dauer 'PT<Sekunden>S'. Grenzen (Zahl oder Symbol/Attribut)
+// gelten in derselben Einheit; ein Symbol muss eine Zahl liefern (z. B. REAL in s), kein TIME.
+function emitInputKeypadTime(parent, b, mb, uc, trig) {
+  const dec = kpDecimals(b);
+  const tu = kpTimeUnit(b);
+  const fac = TIME_UNITS[tu];
+  const unit = (b.unit || "").trim();
+  const onWritten = trig ? `,\n${I}            onWritten: function () { ${trig.replace(/^; /, "")}; }` : "";
+  const unitEl = unit
+    ? `\n${I}    var unitEl = document.createElement('span');\n${I}    unitEl.style.cssText = 'flex:0 0 auto;align-self:center;font-size:13px;color:' + p.bodyText + ';opacity:0.75;';\n${I}    unitEl.textContent = ${jsStr(unit)};`
+    : "";
+  const unitAppend = unit ? `\n${I}    line.appendChild(unitEl);` : "";
+  const helpers = `\n${I}    var curSec = NaN;\n${I}    function isoToSec(iso) {\n${I}        if (typeof iso === 'number') return iso / 1000; // ms (Zahl) -> s\n${I}        iso = String(iso == null ? '' : iso).trim().toUpperCase();\n${I}        if (iso.charAt(0) !== 'P') return NaN;\n${I}        var sec = 0, num = '', inTime = false;\n${I}        for (var k = 1; k < iso.length; k++) {\n${I}            var ch = iso.charAt(k);\n${I}            if (ch === 'T') { inTime = true; num = ''; continue; }\n${I}            if (ch === '.' || ch === ',') { num += '.'; continue; }\n${I}            if (ch >= '0' && ch <= '9') { num += ch; continue; }\n${I}            var val = parseFloat(num || '0'); num = '';\n${I}            if (ch === 'D') sec += val * 86400;\n${I}            else if (ch === 'H') sec += val * 3600;\n${I}            else if (ch === 'M') { if (inTime) sec += val * 60; }\n${I}            else if (ch === 'S') sec += val;\n${I}        }\n${I}        return sec;\n${I}    }\n${I}    function secToHMS(t) {\n${I}        if (isNaN(t)) return '';\n${I}        var ms = Math.round((t - Math.floor(t)) * 1000), s = Math.floor(t);\n${I}        function p2(n) { return (n < 10 ? '0' : '') + n; }\n${I}        var out = p2(Math.floor(s / 3600)) + ':' + p2(Math.floor((s % 3600) / 60)) + ':' + p2(s % 60);\n${I}        if (ms > 0) { var mstr = String(ms); while (mstr.length < 3) mstr = '0' + mstr; out += '.' + mstr; }\n${I}        return out;\n${I}    }\n${I}    function show(v) { curSec = isoToSec(v); input.value = secToHMS(curSec); }`;
+  let readSrc, writeSrc, limMin, limMax;
+  if (uc) {
+    const a = jsStr(attrName(b.symbol));
+    const wa = jsStr(attrName((b.writeSym || "").trim() ? b.writeSym : b.symbol));
+    readSrc = `\n${I}    updaters.push(function () { show(gv(${a}, '')); });`;
+    writeSrc = `sv(${wa}, iso);`;
+    limMin = kpLimitUC(b.kpMin); limMax = kpLimitUC(b.kpMax);
+  } else {
+    const sym = jsStr(wrapSym(b.symbol));
+    const wsym = jsStr(wrapSym((b.writeSym || "").trim() ? b.writeSym : b.symbol));
+    readSrc = `\n${I}    subscribe(${sym}, function (v) { show(v); });`;
+    writeSrc = `writeSymbol(${wsym}, iso);`;
+    limMin = kpLimitSym(b.kpMin); limMax = kpLimitSym(b.kpMax);
+  }
+  const what = uc ? `${attrName(b.symbol)} (Attribut)` : b.symbol;
+  return `${I}// Zeit-Eingabefeld (Keypad ${NUMPAD_FN}, Eingabe in ${tu}): ${what}\n${I}(function () {\n${I}    var wrap = document.createElement('div');\n${I}    wrap.style.cssText = 'margin-bottom:${mb};';\n${I}    var lbl = document.createElement('div');\n${I}    lbl.style.cssText = 'font-size:13px;color:' + p.bodyText + ';margin-bottom:6px;';\n${I}    lbl.textContent = ${locExpr(b.loc, b.label)};\n${I}    var line = document.createElement('div');\n${I}    line.style.cssText = 'display:flex;gap:8px;align-items:stretch;';\n${I}    var input = document.createElement('input');\n${I}    input.type = 'text';\n${I}    input.readOnly = true;\n${I}    input.setAttribute('inputmode', 'none');\n${I}    input.placeholder = 'HH:MM:SS';\n${I}    input.style.cssText = 'flex:1;min-width:0;box-sizing:border-box;padding:9px 10px;border-radius:8px;font-size:14px;outline:none;text-align:center;cursor:pointer;font-variant-numeric:tabular-nums;' +\n${I}        'border:1px solid ' + p.border + ';background:' + p.boxBg + ';color:' + p.bodyText + ';';\n${I}    input.addEventListener('pointerdown', function (e) { e.stopPropagation(); });${helpers}${readSrc}\n${I}    function openPad() {\n${I}        if (input.disabled) return;\n${I}        var fns = (typeof TcHmi !== 'undefined' && TcHmi.Functions) ? TcHmi.Functions.AC_HMI : null;\n${I}        var f = fns ? fns.${NUMPAD_FN} : null;\n${I}        if (typeof f !== 'function') { if (window.console) console.warn('${NUMPAD_FN}: Funktionsdatei nicht geladen.'); return; }\n${I}        f({\n${I}            value: isNaN(curSec) ? '' : curSec / ${fac},\n${I}            write: function (val) { var iso = 'PT' + (Math.round(Number(val) * ${fac} * 1000) / 1000) + 'S'; ${writeSrc} },\n${I}            min: ${limMin},\n${I}            max: ${limMax},\n${I}            unit: ${jsStr(tu)},\n${I}            decimals: ${dec},\n${I}            title: ${locExpr(b.loc, b.label)}${onWritten}\n${I}        });\n${I}    }\n${I}    input.addEventListener('click', function (e) { e.stopPropagation(); openPad(); });${unitEl}\n${I}    line.appendChild(input);${unitAppend}\n${I}    wrap.appendChild(lbl); wrap.appendChild(line);\n${I}    ${parent}.appendChild(wrap);\n${I}})();`;
 }
 
 export { NUMPAD_FN, generateNumPad, usesKeypad, emitInputKeypad, isNumStr, numLit };
