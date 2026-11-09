@@ -930,4 +930,46 @@ add("keypad_time_uc", {
   ],
 });
 
+// ── Button-Aktion "fn": registrierte AC_HMI-Funktion aufrufen (Klick, Halten-Bestätigen, UC, mit Berechtigung) ──
+add("button_fn_event", {
+  mode: "event",
+  fnName: "AC_ButtonFnEvent",
+  blocks: [
+    {
+      ...newBlock("button"),
+      buttons: [
+        { ...mkButton(), label: "Alle Ventile Auto", fnName: "AC_ValveResetAll", writeMode: "fn", color: "yellow", closeAfter: false,
+          access: mkAcc({ operate: { Admin: "Allow", Service: "Allow", Process_Engineer: "Deny", Operator: "Deny" } }) },
+        { ...mkButton(), label: "Halten", fnName: "AC_DoIt", writeMode: "holdConfirm", confirmAction: "fn", confirmMs: 2000, color: "red" },
+      ],
+    },
+  ],
+});
+add("button_fn_uc", {
+  mode: "usercontrol",
+  fnName: "AC_ButtonFnUc",
+  hostSuffix: ".btn_Fn",
+  blocks: [
+    { ...newBlock("button"), buttons: [{ ...mkButton(), label: "Reset", fnName: "AC_ValveResetAll", writeMode: "fn", color: "blue" }] },
+  ],
+});
+
+// ── holdConfirm mit Füllfarbe und Bestätigungshaken (Symbol- und UC-Modus) ──
+add("button_confirm_done", {
+  mode: "event",
+  fnName: "AC_ButtonConfirmDone",
+  blocks: [
+    { ...newBlock("text"), text: "Hinweis", visSym: "ADS.AF_PLC.Globale_Variablen.bManual" },
+    { ...newBlock("button"), buttons: [{ ...mkButton(), label: "Alle Ventile Auto", fnName: "AC_ValveResetAll", writeMode: "holdConfirm", confirmAction: "fn", confirmMs: 3000, confirmFill: "green", doneSym: "ADS.AF_PLC.Globale_Variablen.bManual", doneVal: "false", closeAfter: false, color: "yellow" }] },
+  ],
+});
+add("button_confirm_done_uc", {
+  mode: "usercontrol",
+  fnName: "AC_ButtonConfirmDoneUc",
+  hostSuffix: ".btn_Done",
+  blocks: [
+    { ...newBlock("button"), buttons: [{ ...mkButton(), label: "Quittieren", symbol: "Ack", writeMode: "holdConfirm", confirmFill: "green", doneSym: "Acked", doneVal: "true" }] },
+  ],
+});
+
 export { CONFIGS };

@@ -4,6 +4,13 @@ const wrapSym = (s) => { s = (s || "").trim(); if (!s) return ""; return s.inclu
 const locExpr = (key, text) => { const k = (key || "").trim(); return k ? `loc(${jsStr(k)}, ${jsStr(text)})` : jsStr(text); };
 const sanitizeFn = (s) => { const c = (s || "").replace(/[^A-Za-z0-9_$]/g, ""); return /^[A-Za-z_$]/.test(c) ? c : "AC_" + c; };
 
+// ── Button-Aktion "fn": registrierte Funktion TcHmi.Functions.AC_HMI[name]() ohne Parameter aufrufen ──
+// Fehlt die Funktion zur Laufzeit, nur Konsolenwarnung (kein Abbruch des Popups). Backslash-frei.
+const fnCallExpr = (name) => {
+  const n = jsStr(sanitizeFn(name));
+  return `(function () { try { var f = TcHmi.Functions.AC_HMI && TcHmi.Functions.AC_HMI[${n}]; if (typeof f === 'function') { f(); } else if (window.console) { console.warn('AC_PopUp: Funktion nicht gefunden: AC_HMI.' + ${n}); } } catch (err) { if (window.console) console.warn(err); } })()`;
+};
+
 // ── Plot-Helfer (aus dem ChartPop übernommen) ──
 // Marker-Symbole dürfen HMI-intern sein (%i%…%/i%): beginnt der Ausdruck mit '%', unverändert lassen.
 const wrapSymAny = (s) => { s = (s || "").trim(); if (!s) return ""; return s.charAt(0) === "%" ? s : "%s%" + s + "%/s%"; };
@@ -90,7 +97,7 @@ const durHelpers = (pad = I) =>
   `\n${pad}    }`;
 
 export {
-  jsStr, wrapSym, locExpr, sanitizeFn,
+  jsStr, wrapSym, locExpr, sanitizeFn, fnCallExpr,
   wrapSymAny, unitSuffix, indentLines,
   attrName, dedent, I,
   litValue, cmpExpr, condOp, condVal, REF, durHelpers,

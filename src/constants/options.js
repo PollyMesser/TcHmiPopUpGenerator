@@ -68,6 +68,7 @@ const WRITE_OPTS = [
   { value: "toggle", label: "Umschalten (toggle)" },
   { value: "hold", label: "Tippbetrieb (halten)" },
   { value: "holdConfirm", label: "Halten zum Bestätigen (Timer)" },
+  { value: "fn", label: "Funktion aufrufen (AC_HMI)" },
 ];
 const ITEM_KINDS = [
   { value: "read", label: "Wert lesen" },

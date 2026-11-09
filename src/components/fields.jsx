@@ -57,11 +57,17 @@ function ButtonItemFields({ it, onPatch, mode, onAddCond, onRemoveCond, onPatchC
   const sm = symMeta(mode);
   return (
     <>
-      <Field label={sm.label}><TextInput value={it.symbol} onChange={(e) => onPatch({ symbol: e.target.value })} placeholder={sm.ph} /></Field>
+      {!(it.writeMode === "fn" || (it.writeMode === "holdConfirm" && it.confirmAction === "fn")) && <Field label={sm.label}><TextInput value={it.symbol} onChange={(e) => onPatch({ symbol: e.target.value })} placeholder={sm.ph} /></Field>}
       <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
         <div style={{ flex: 1 }}><Field label="AKTION"><Select value={it.writeMode} onChange={(e) => onPatch({ writeMode: e.target.value })} options={WRITE_OPTS} /></Field></div>
         {(it.writeMode === "pulse" || (it.writeMode === "holdConfirm" && it.confirmAction !== "setTrue")) && <div style={{ width: 90 }}><Field label="EIN-DAUER (ms)"><TextInput type="number" value={it.pulseMs} onChange={(e) => onPatch({ pulseMs: e.target.value })} /></Field></div>}
       </div>
+      {(it.writeMode === "fn" || (it.writeMode === "holdConfirm" && it.confirmAction === "fn")) && (
+        <>
+          <Field label="FUNKTION (TcHmi.Functions.AC_HMI.…)"><TextInput value={it.fnName || ""} onChange={(e) => onPatch({ fnName: e.target.value })} placeholder="z.B. AC_ValveResetAll" /></Field>
+          <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5, margin: "-4px 0 8px" }}>Ruft die registrierte Funktion ohne Parameter auf. Fehlt sie zur Laufzeit, erscheint nur eine Konsolenwarnung.</div>
+        </>
+      )}
       {it.writeMode === "hold" && (
         <>
           <Field label={`RÜCKMELDESYMBOL (optional, ${mode === "usercontrol" ? "Attribut-Bool" : "Symbol-Bool"})`}>
@@ -74,11 +80,16 @@ function ButtonItemFields({ it, onPatch, mode, onAddCond, onRemoveCond, onPatchC
         <>
           <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
             <div style={{ width: 110 }}><Field label="HALTEZEIT (ms)"><TextInput type="number" value={it.confirmMs == null ? 3000 : it.confirmMs} onChange={(e) => onPatch({ confirmMs: e.target.value })} /></Field></div>
-            <div style={{ flex: 1 }}><Field label="NACH BESTÄTIGUNG"><Select value={it.confirmAction || "pulse"} onChange={(e) => onPatch({ confirmAction: e.target.value })} options={[{ value: "pulse", label: "Impuls (true → false)" }, { value: "setTrue", label: "Auf true setzen" }]} /></Field></div>
+            <div style={{ flex: 1 }}><Field label="NACH BESTÄTIGUNG"><Select value={it.confirmAction || "pulse"} onChange={(e) => onPatch({ confirmAction: e.target.value })} options={[{ value: "pulse", label: "Impuls (true → false)" }, { value: "setTrue", label: "Auf true setzen" }, { value: "fn", label: "Funktion aufrufen (AC_HMI)" }]} /></Field></div>
           </div>
           <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5, margin: "-4px 0 8px" }}>Erst nach durchgehendem Halten über die Haltezeit wird geschrieben (mit Fortschrittsanzeige im Button). Vorzeitiges Loslassen bricht ab, ohne zu schreiben.</div>
+          <Field label="FÜLLFARBE BEIM HALTEN"><Select value={it.confirmFill || ""} onChange={(e) => onPatch({ confirmFill: e.target.value })} options={[{ value: "", label: "Weiß, halbtransparent (Standard)" }, { value: "green", label: "Grün" }, { value: "blue", label: "Blau" }, { value: "yellow", label: "Gelb" }, { value: "red", label: "Rot" }, { value: "grey", label: "Grau" }]} /></Field>
         </>
       )}
+      <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
+        <div style={{ flex: 1 }}><Field label={`BESTÄTIGUNGSHAKEN (optional, ${mode === "usercontrol" ? "Attribut-Bool" : "Symbol-Bool"})`}><TextInput value={it.doneSym || ""} onChange={(e) => onPatch({ doneSym: e.target.value })} placeholder={mode === "usercontrol" ? "z.B. AllAuto (leer = kein Haken)" : "ADS.…::xDone (leer = kein Haken)"} /></Field></div>
+        {(it.doneSym || "").trim() && <div style={{ width: 130 }}><Field label="HAKEN BEI"><Select value={String(it.doneVal) === "false" ? "false" : "true"} onChange={(e) => onPatch({ doneVal: e.target.value })} options={[{ value: "true", label: "TRUE" }, { value: "false", label: "FALSE" }]} /></Field></div>}
+      </div>
       <Field label="FARBE"><ColorSwatches value={it.color} onChange={(cc) => onPatch({ color: cc })} /></Field>
       <div style={{ display: "flex", gap: 10, alignItems: "flex-start", marginTop: 4 }}>
         <div style={{ flex: 3 }}><Field label="SYMBOL (optional)"><IconPicker value={it.icon || ""} onChange={(k) => onPatch({ icon: k })} /></Field></div>

@@ -1,4 +1,4 @@
-import { jsStr, wrapSym, locExpr, unitSuffix, attrName, I, cmpExpr, condOp, condVal, durHelpers } from "./helpers.js";
+import { jsStr, wrapSym, locExpr, unitSuffix, attrName, I, cmpExpr, condOp, condVal, durHelpers, fnCallExpr } from "./helpers.js";
 import { COLORS, TEXT_BG, ICONS } from "../constants/palette.js";
 import { emitPlot } from "./emitPlot.js";
 import { emitBar } from "./emitBar.js";
@@ -141,6 +141,29 @@ function emitProgress(parent, b, mb) {
   const { col, mn, mx, dec, unitStr, showVal } = progressParams(b);
   return `${I}// Ladebalken: ${b.symbol}\n${I}(function () {\n${I}    var wrap = document.createElement('div');\n${I}    wrap.style.cssText = 'margin-bottom:${mb};';\n${I}    var head = document.createElement('div');\n${I}    head.style.cssText = 'display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:6px;';\n${I}    var lbl = document.createElement('span');\n${I}    lbl.style.cssText = 'font-size:14px;color:' + p.bodyText + ';';\n${I}    lbl.textContent = ${locExpr(b.loc, b.label)};\n${I}    var valEl = document.createElement('span');\n${I}    valEl.style.cssText = 'font-size:13px;font-weight:600;color:' + p.bodyText + ';font-variant-numeric:tabular-nums;';\n${I}    valEl.textContent = '–';\n${I}    head.appendChild(lbl);${showVal ? ` head.appendChild(valEl);` : ``}\n${I}    var track = document.createElement('div');\n${I}    track.style.cssText = 'position:relative;width:100%;height:14px;border-radius:7px;overflow:hidden;background:rgba(127,127,127,0.22);';\n${I}    var fill = document.createElement('div');\n${I}    fill.style.cssText = 'height:100%;width:0%;border-radius:7px;background:${col.bg};transition:width .25s ease;';\n${I}    track.appendChild(fill);\n${I}    wrap.appendChild(head); wrap.appendChild(track);\n${I}    ${parent}.appendChild(wrap);\n${I}    var MIN = ${mn}, MAX = ${mx};\n${I}    subscribe(${sym}, function (v) {\n${I}        var num = Number(v); if (isNaN(num)) return;\n${I}        var span = (MAX - MIN) || 1;\n${I}        var pct = (num - MIN) / span * 100;\n${I}        if (pct < 0) pct = 0; if (pct > 100) pct = 100;\n${I}        fill.style.width = pct.toFixed(1) + '%';\n${I}        valEl.textContent = num.toFixed(${dec}) + ${jsStr(unitStr)};\n${I}    });\n${I}})();`;
 }
+// ── Button-Zusatz: Füllfarbe beim Halten (holdConfirm) und grüner Bestätigungshaken ──
+// confirmFill: Palettenschlüssel (z. B. "green"); leer = bisheriges halbtransparentes Weiß (Byte-Identität).
+// doneSym/doneVal: Haken rechts im Button, solange Symbol (UC: Attribut) == doneVal ("true"/"false").
+function fillBg(btn) {
+  const k = (btn && btn.confirmFill) || "";
+  return COLORS[k] ? COLORS[k].bg : "rgba(255,255,255,0.35)";
+}
+const CHECK_SVG = "<svg viewBox='0 0 24 24' width='16' height='16' fill='none' stroke='#16a34a' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'><polyline points='20 6 9 17 4 12'/></svg>";
+// Bei deckender Füllfarbe Beschriftung über die Füllung legen (sonst verdeckt der Balken den Text)
+function labelOverFill(v, btn) {
+  if (!((btn && btn.confirmFill) && COLORS[btn.confirmFill])) return "";
+  return `\n${I}    var lab_${v} = document.createElement('span');\n${I}    lab_${v}.style.cssText = 'position:relative;z-index:1;pointer-events:none;';\n${I}    while (${v}.firstChild) { lab_${v}.appendChild(${v}.firstChild); }\n${I}    ${v}.appendChild(lab_${v});`;
+}
+function doneCheck(v, btn, uc) {
+  const ds = ((btn && btn.doneSym) || "").trim();
+  if (!ds) return "";
+  const want = String(btn.doneVal) === "false" ? "false" : "true";
+  const upd = `done_${v}.style.display = ((!!x) === ${want}) ? 'inline-flex' : 'none';`;
+  const watch = uc
+    ? `updaters.push(function () { var x = gv(${jsStr(attrName(ds))}, null); if (x === null || x === undefined) { done_${v}.style.display = 'none'; return; } ${upd} });`
+    : `subscribe(${jsStr(wrapSym(ds))}, function (x) { ${upd} });`;
+  return `\n${I}    ${v}.style.position = 'relative';\n${I}    var done_${v} = document.createElement('span');\n${I}    done_${v}.style.cssText = 'position:absolute;right:10px;top:50%;transform:translateY(-50%);display:none;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:#ffffff;pointer-events:none;z-index:2;';\n${I}    done_${v}.innerHTML = ${jsStr(CHECK_SVG)};\n${I}    ${v}.appendChild(done_${v});\n${I}    ${watch}`;
+}
 function emitButtons(parent, b, mb) {
   const btns = (b.buttons || []).slice(0, 2);
   const lines = btns.map((btn, idx) => {
@@ -152,7 +175,9 @@ function emitButtons(parent, b, mb) {
     else if (btn.writeMode === "setTrue") action = `writeSymbol(${sym}, true)`;
     else if (btn.writeMode === "setFalse") action = `writeSymbol(${sym}, false)`;
     else if (btn.writeMode === "toggle") action = `toggleSymbol(${sym})`;
-    const confirmAction = btn.confirmAction === "setTrue" ? `writeSymbol(${sym}, true)` : `pulseSymbol(${sym}, ${parseInt(btn.pulseMs) || 500})`;
+  else if (btn.writeMode === "fn") action = fnCallExpr(btn.fnName);
+    else if (btn.writeMode === "fn") action = fnCallExpr(btn.fnName);
+    const confirmAction = btn.confirmAction === "fn" ? fnCallExpr(btn.fnName) : btn.confirmAction === "setTrue" ? `writeSymbol(${sym}, true)` : `pulseSymbol(${sym}, ${parseInt(btn.pulseMs) || 500})`;
     const col = COLORS[btn.color] || COLORS.blue;
     const close = btn.closeAfter ? `\n${I}        hideDialog();` : "";
     const v = "btn" + idx;
@@ -176,11 +201,11 @@ function emitButtons(parent, b, mb) {
       clickHandler = `\n${I}    var held_${v} = false; // hold: Loslassen schreibt immer FALSE, auch wenn der Button inzwischen gesperrt ist\n${I}    ${v}.addEventListener('pointerdown', function () { if (${v}.disabled) return; held_${v} = true; writeSymbol(${sym}, true); });\n${I}    var release_${v} = function () { if (!held_${v}) return; held_${v} = false; writeSymbol(${sym}, false);${close} };\n${I}    ${v}.addEventListener('pointerup', release_${v});\n${I}    ${v}.addEventListener('pointerleave', release_${v});\n${I}    ${v}.addEventListener('pointercancel', release_${v});\n${I}    teardowns.push(release_${v}); // Popup schließt während gedrückt -> FALSE`;
     } else if (isConfirm) {
       const ms = parseInt(btn.confirmMs) || 3000;
-      clickHandler = `\n${I}    ${v}.style.position = 'relative';\n${I}    ${v}.style.overflow = 'hidden';\n${I}    var fill_${v} = document.createElement('div');\n${I}    fill_${v}.style.cssText = 'position:absolute;left:0;top:0;bottom:0;width:0%;background:rgba(255,255,255,0.35);pointer-events:none;';\n${I}    ${v}.appendChild(fill_${v});\n${I}    var timer_${v} = null;\n${I}    function cancel_${v}() {\n${I}        if (timer_${v}) { clearTimeout(timer_${v}); timer_${v} = null; }\n${I}        fill_${v}.style.transition = 'none';\n${I}        fill_${v}.style.width = '0%';\n${I}    }\n${I}    ${v}.addEventListener('pointerdown', function () {\n${I}        if (${v}.disabled) return;\n${I}        cancel_${v}();\n${I}        void fill_${v}.offsetWidth;\n${I}        requestAnimationFrame(function () {\n${I}            fill_${v}.style.transition = 'width ${ms}ms linear';\n${I}            fill_${v}.style.width = '100%';\n${I}        });\n${I}        timer_${v} = setTimeout(function () {\n${I}            timer_${v} = null;\n${I}            if (${v}.disabled) return;\n${I}            ${confirmAction};${close}\n${I}            fill_${v}.style.transition = 'none';\n${I}            fill_${v}.style.width = '0%';\n${I}        }, ${ms});\n${I}    });\n${I}    ${v}.addEventListener('pointerup', cancel_${v});\n${I}    ${v}.addEventListener('pointerleave', cancel_${v});`;
+      clickHandler = `\n${I}    ${v}.style.position = 'relative';\n${I}    ${v}.style.overflow = 'hidden';\n${I}    var fill_${v} = document.createElement('div');\n${I}    fill_${v}.style.cssText = 'position:absolute;left:0;top:0;bottom:0;width:0%;background:${fillBg(btn)};pointer-events:none;';${labelOverFill(v, btn)}\n${I}    ${v}.appendChild(fill_${v});\n${I}    var timer_${v} = null;\n${I}    function cancel_${v}() {\n${I}        if (timer_${v}) { clearTimeout(timer_${v}); timer_${v} = null; }\n${I}        fill_${v}.style.transition = 'none';\n${I}        fill_${v}.style.width = '0%';\n${I}    }\n${I}    ${v}.addEventListener('pointerdown', function () {\n${I}        if (${v}.disabled) return;\n${I}        cancel_${v}();\n${I}        void fill_${v}.offsetWidth;\n${I}        requestAnimationFrame(function () {\n${I}            fill_${v}.style.transition = 'width ${ms}ms linear';\n${I}            fill_${v}.style.width = '100%';\n${I}        });\n${I}        timer_${v} = setTimeout(function () {\n${I}            timer_${v} = null;\n${I}            if (${v}.disabled) return;\n${I}            ${confirmAction};${close}\n${I}            fill_${v}.style.transition = 'none';\n${I}            fill_${v}.style.width = '0%';\n${I}        }, ${ms});\n${I}    });\n${I}    ${v}.addEventListener('pointerup', cancel_${v});\n${I}    ${v}.addEventListener('pointerleave', cancel_${v});`;
     } else {
       clickHandler = `\n${I}    ${v}.onclick = function (e) { e.stopPropagation(); ${action};${close} };`;
     }
-    const head = `${I}    // ${btn.writeMode}: ${btn.symbol}\n${I}    var ${v} = document.createElement('button');\n${I}    ${v}.style.cssText = 'flex:1;padding:12px 0;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;background:${col.bg};color:${col.text};';\n${I}    ${btnLabelCode(v, locExpr(btn.loc, btn.label), btn)}\n${I}    ${v}.addEventListener('pointerdown', function (e) { e.stopPropagation(); });${clickHandler}${vis}${fb}${press}${enable}`;
+    const head = `${I}    // ${btn.writeMode}: ${(btn.writeMode === "fn" || (btn.writeMode === "holdConfirm" && btn.confirmAction === "fn")) ? "AC_HMI." + (btn.fnName || "") : btn.symbol}\n${I}    var ${v} = document.createElement('button');\n${I}    ${v}.style.cssText = 'flex:1;padding:12px 0;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;background:${col.bg};color:${col.text};';\n${I}    ${btnLabelCode(v, locExpr(btn.loc, btn.label), btn)}\n${I}    ${v}.addEventListener('pointerdown', function (e) { e.stopPropagation(); });${clickHandler}${vis}${fb}${press}${enable}${doneCheck(v, btn, false)}`;
     return gateButton(head, `${I}    row.appendChild(${v});`, btn.access, v);
   }).join("\n");
   return `${I}// Buttons\n${I}(function () {\n${I}    var row = document.createElement('div');\n${I}    row.style.cssText = 'display:flex;gap:10px;margin-bottom:${mb};';\n${lines}\n${I}    ${parent}.appendChild(row);\n${I}})();`;
@@ -194,7 +219,8 @@ function emitButtonItem(parent, it) {
   else if (it.writeMode === "setTrue") action = `writeSymbol(${sym}, true)`;
   else if (it.writeMode === "setFalse") action = `writeSymbol(${sym}, false)`;
   else if (it.writeMode === "toggle") action = `toggleSymbol(${sym})`;
-  const confirmAction = it.confirmAction === "setTrue" ? `writeSymbol(${sym}, true)` : `pulseSymbol(${sym}, ${parseInt(it.pulseMs) || 500})`;
+  else if (it.writeMode === "fn") action = fnCallExpr(it.fnName);
+  const confirmAction = it.confirmAction === "fn" ? fnCallExpr(it.fnName) : it.confirmAction === "setTrue" ? `writeSymbol(${sym}, true)` : `pulseSymbol(${sym}, ${parseInt(it.pulseMs) || 500})`;
   const col = COLORS[it.color] || COLORS.blue;
   const close = it.closeAfter ? `\n${I}        hideDialog();` : "";
   const vis = (it.visSym || "").trim()
@@ -217,11 +243,11 @@ function emitButtonItem(parent, it) {
     clickHandler = `\n${I}    var held_btn = false; // hold: Loslassen schreibt immer FALSE, auch wenn der Button inzwischen gesperrt ist\n${I}    btn.addEventListener('pointerdown', function () { if (btn.disabled) return; held_btn = true; writeSymbol(${sym}, true); });\n${I}    var release_btn = function () { if (!held_btn) return; held_btn = false; writeSymbol(${sym}, false);${close} };\n${I}    btn.addEventListener('pointerup', release_btn);\n${I}    btn.addEventListener('pointerleave', release_btn);\n${I}    btn.addEventListener('pointercancel', release_btn);\n${I}    teardowns.push(release_btn); // Popup schließt während gedrückt -> FALSE`;
   } else if (isConfirm) {
     const ms = parseInt(it.confirmMs) || 3000;
-    clickHandler = `\n${I}    btn.style.position = 'relative';\n${I}    btn.style.overflow = 'hidden';\n${I}    var fill_btn = document.createElement('div');\n${I}    fill_btn.style.cssText = 'position:absolute;left:0;top:0;bottom:0;width:0%;background:rgba(255,255,255,0.35);pointer-events:none;';\n${I}    btn.appendChild(fill_btn);\n${I}    var timer_btn = null;\n${I}    function cancel_btn() {\n${I}        if (timer_btn) { clearTimeout(timer_btn); timer_btn = null; }\n${I}        fill_btn.style.transition = 'none';\n${I}        fill_btn.style.width = '0%';\n${I}    }\n${I}    btn.addEventListener('pointerdown', function () {\n${I}        if (btn.disabled) return;\n${I}        cancel_btn();\n${I}        void fill_btn.offsetWidth;\n${I}        requestAnimationFrame(function () {\n${I}            fill_btn.style.transition = 'width ${ms}ms linear';\n${I}            fill_btn.style.width = '100%';\n${I}        });\n${I}        timer_btn = setTimeout(function () {\n${I}            timer_btn = null;\n${I}            if (btn.disabled) return;\n${I}            ${confirmAction};${close}\n${I}            fill_btn.style.transition = 'none';\n${I}            fill_btn.style.width = '0%';\n${I}        }, ${ms});\n${I}    });\n${I}    btn.addEventListener('pointerup', cancel_btn);\n${I}    btn.addEventListener('pointerleave', cancel_btn);`;
+    clickHandler = `\n${I}    btn.style.position = 'relative';\n${I}    btn.style.overflow = 'hidden';\n${I}    var fill_btn = document.createElement('div');\n${I}    fill_btn.style.cssText = 'position:absolute;left:0;top:0;bottom:0;width:0%;background:${fillBg(it)};pointer-events:none;';${labelOverFill("btn", it)}\n${I}    btn.appendChild(fill_btn);\n${I}    var timer_btn = null;\n${I}    function cancel_btn() {\n${I}        if (timer_btn) { clearTimeout(timer_btn); timer_btn = null; }\n${I}        fill_btn.style.transition = 'none';\n${I}        fill_btn.style.width = '0%';\n${I}    }\n${I}    btn.addEventListener('pointerdown', function () {\n${I}        if (btn.disabled) return;\n${I}        cancel_btn();\n${I}        void fill_btn.offsetWidth;\n${I}        requestAnimationFrame(function () {\n${I}            fill_btn.style.transition = 'width ${ms}ms linear';\n${I}            fill_btn.style.width = '100%';\n${I}        });\n${I}        timer_btn = setTimeout(function () {\n${I}            timer_btn = null;\n${I}            if (btn.disabled) return;\n${I}            ${confirmAction};${close}\n${I}            fill_btn.style.transition = 'none';\n${I}            fill_btn.style.width = '0%';\n${I}        }, ${ms});\n${I}    });\n${I}    btn.addEventListener('pointerup', cancel_btn);\n${I}    btn.addEventListener('pointerleave', cancel_btn);`;
   } else {
     clickHandler = `\n${I}    btn.onclick = function (e) { e.stopPropagation(); ${action};${close} };`;
   }
-  return `${I}// Button (Zeilen-Element): ${it.writeMode}: ${it.symbol}\n${I}(function () {\n${I}    var btn = document.createElement('button');\n${I}    btn.style.cssText = 'width:100%;padding:12px 0;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;background:${col.bg};color:${col.text};';\n${I}    ${btnLabelCode("btn", locExpr(it.loc, it.label), it)}\n${I}    btn.addEventListener('pointerdown', function (e) { e.stopPropagation(); });${clickHandler}${vis}${fb}${press}${enable}\n${I}    ${parent}.appendChild(btn);\n${I}})();`;
+  return `${I}// Button (Zeilen-Element): ${it.writeMode}: ${(it.writeMode === "fn" || (it.writeMode === "holdConfirm" && it.confirmAction === "fn")) ? "AC_HMI." + (it.fnName || "") : it.symbol}\n${I}(function () {\n${I}    var btn = document.createElement('button');\n${I}    btn.style.cssText = 'width:100%;padding:12px 0;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;background:${col.bg};color:${col.text};';\n${I}    ${btnLabelCode("btn", locExpr(it.loc, it.label), it)}\n${I}    btn.addEventListener('pointerdown', function (e) { e.stopPropagation(); });${clickHandler}${vis}${fb}${press}${enable}${doneCheck("btn", it, false)}\n${I}    ${parent}.appendChild(btn);\n${I}})();`;
 }
 function emitButtonItemUC(parent, it) {
   const a = jsStr(attrName(it.symbol));
@@ -232,7 +258,8 @@ function emitButtonItemUC(parent, it) {
   else if (it.writeMode === "setTrue") action = `sv(${a}, true)`;
   else if (it.writeMode === "setFalse") action = `sv(${a}, false)`;
   else if (it.writeMode === "toggle") action = `sv(${a}, !gv(${a}, false))`;
-  const confirmAction = it.confirmAction === "setTrue" ? `sv(${a}, true)` : `pulse(${a}, ${parseInt(it.pulseMs) || 500})`;
+  else if (it.writeMode === "fn") action = fnCallExpr(it.fnName);
+  const confirmAction = it.confirmAction === "fn" ? fnCallExpr(it.fnName) : it.confirmAction === "setTrue" ? `sv(${a}, true)` : `pulse(${a}, ${parseInt(it.pulseMs) || 500})`;
   const col = COLORS[it.color] || COLORS.blue;
   const close = it.closeAfter ? `\n${I}        hideDialog();` : "";
   const vis = (it.visSym || "").trim()
@@ -253,11 +280,11 @@ function emitButtonItemUC(parent, it) {
     clickHandler = `\n${I}    var held_btn = false; // hold: Loslassen schreibt immer FALSE, auch wenn der Button inzwischen gesperrt ist\n${I}    btn.addEventListener('pointerdown', function () { if (btn.disabled) return; held_btn = true; sv(${a}, true); });\n${I}    var release_btn = function () { if (!held_btn) return; held_btn = false; sv(${a}, false);${close} };\n${I}    btn.addEventListener('pointerup', release_btn);\n${I}    btn.addEventListener('pointerleave', release_btn);\n${I}    btn.addEventListener('pointercancel', release_btn);\n${I}    teardowns.push(release_btn); // Popup schließt während gedrückt -> FALSE`;
   } else if (isConfirm) {
     const ms = parseInt(it.confirmMs) || 3000;
-    clickHandler = `\n${I}    btn.style.position = 'relative';\n${I}    btn.style.overflow = 'hidden';\n${I}    var fill_btn = document.createElement('div');\n${I}    fill_btn.style.cssText = 'position:absolute;left:0;top:0;bottom:0;width:0%;background:rgba(255,255,255,0.35);pointer-events:none;';\n${I}    btn.appendChild(fill_btn);\n${I}    var timer_btn = null;\n${I}    function cancel_btn() {\n${I}        if (timer_btn) { clearTimeout(timer_btn); timer_btn = null; }\n${I}        fill_btn.style.transition = 'none';\n${I}        fill_btn.style.width = '0%';\n${I}    }\n${I}    btn.addEventListener('pointerdown', function () {\n${I}        if (btn.disabled) return;\n${I}        cancel_btn();\n${I}        void fill_btn.offsetWidth;\n${I}        requestAnimationFrame(function () {\n${I}            fill_btn.style.transition = 'width ${ms}ms linear';\n${I}            fill_btn.style.width = '100%';\n${I}        });\n${I}        timer_btn = setTimeout(function () {\n${I}            timer_btn = null;\n${I}            if (btn.disabled) return;\n${I}            ${confirmAction};${close}\n${I}            fill_btn.style.transition = 'none';\n${I}            fill_btn.style.width = '0%';\n${I}        }, ${ms});\n${I}    });\n${I}    btn.addEventListener('pointerup', cancel_btn);\n${I}    btn.addEventListener('pointerleave', cancel_btn);`;
+    clickHandler = `\n${I}    btn.style.position = 'relative';\n${I}    btn.style.overflow = 'hidden';\n${I}    var fill_btn = document.createElement('div');\n${I}    fill_btn.style.cssText = 'position:absolute;left:0;top:0;bottom:0;width:0%;background:${fillBg(it)};pointer-events:none;';${labelOverFill("btn", it)}\n${I}    btn.appendChild(fill_btn);\n${I}    var timer_btn = null;\n${I}    function cancel_btn() {\n${I}        if (timer_btn) { clearTimeout(timer_btn); timer_btn = null; }\n${I}        fill_btn.style.transition = 'none';\n${I}        fill_btn.style.width = '0%';\n${I}    }\n${I}    btn.addEventListener('pointerdown', function () {\n${I}        if (btn.disabled) return;\n${I}        cancel_btn();\n${I}        void fill_btn.offsetWidth;\n${I}        requestAnimationFrame(function () {\n${I}            fill_btn.style.transition = 'width ${ms}ms linear';\n${I}            fill_btn.style.width = '100%';\n${I}        });\n${I}        timer_btn = setTimeout(function () {\n${I}            timer_btn = null;\n${I}            if (btn.disabled) return;\n${I}            ${confirmAction};${close}\n${I}            fill_btn.style.transition = 'none';\n${I}            fill_btn.style.width = '0%';\n${I}        }, ${ms});\n${I}    });\n${I}    btn.addEventListener('pointerup', cancel_btn);\n${I}    btn.addEventListener('pointerleave', cancel_btn);`;
   } else {
     clickHandler = `\n${I}    btn.onclick = function (e) { e.stopPropagation(); ${action};${close} };`;
   }
-  return `${I}// Button (Zeilen-Element, Attribut): ${it.writeMode}: ${attrName(it.symbol)}\n${I}(function () {\n${I}    var btn = document.createElement('button');\n${I}    btn.style.cssText = 'width:100%;padding:12px 0;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;background:${col.bg};color:${col.text};';\n${I}    ${btnLabelCode("btn", locExpr(it.loc, it.label), it)}\n${I}    btn.addEventListener('pointerdown', function (e) { e.stopPropagation(); });${clickHandler}${vis}${fb}${press}${enable}\n${I}    ${parent}.appendChild(btn);\n${I}})();`;
+  return `${I}// Button (Zeilen-Element, Attribut): ${it.writeMode}: ${attrName(it.symbol)}\n${I}(function () {\n${I}    var btn = document.createElement('button');\n${I}    btn.style.cssText = 'width:100%;padding:12px 0;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;background:${col.bg};color:${col.text};';\n${I}    ${btnLabelCode("btn", locExpr(it.loc, it.label), it)}\n${I}    btn.addEventListener('pointerdown', function (e) { e.stopPropagation(); });${clickHandler}${vis}${fb}${press}${enable}${doneCheck("btn", it, true)}\n${I}    ${parent}.appendChild(btn);\n${I}})();`;
 }
 function emitItem(parent, it, mb) {
   if (it.kind === "read") return emitRead(parent, it, mb);
@@ -351,4 +378,4 @@ function emitBlockSym(b, parent) {
   return "";
 }
 
-export { emitText, emitRead, emitBool, emitCheck, trigActionSym, trigActionUC, emitInput, progressParams, emitProgress, emitButtons, emitButtonItem, emitButtonItemUC, emitItem, emitRow, emitEnum, emitEnumSet, emitStatus, blockCodeSym };
+export { fillBg, doneCheck, labelOverFill, emitText, emitRead, emitBool, emitCheck, trigActionSym, trigActionUC, emitInput, progressParams, emitProgress, emitButtons, emitButtonItem, emitButtonItemUC, emitItem, emitRow, emitEnum, emitEnumSet, emitStatus, blockCodeSym };
