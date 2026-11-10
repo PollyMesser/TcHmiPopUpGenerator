@@ -43,6 +43,7 @@ function ReadBoolFields({ cfg, onPatch, mode }) {
         <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
           <div style={{ flex: 1 }}><Field label={sm.label}><TextInput value={cfg.symbol} onChange={(e) => onPatch({ symbol: e.target.value })} placeholder={sm.ph} /></Field></div>
           <div style={{ width: 96 }}><Field label="EINHEIT (optional)"><TextInput value={cfg.unit || ""} onChange={(e) => onPatch({ unit: e.target.value })} placeholder="z.B. bar" /></Field></div>
+          <div style={{ width: 96 }}><Field label="NACHKOMMA"><TextInput value={cfg.decimals == null ? "" : String(cfg.decimals)} onChange={(e) => onPatch({ decimals: e.target.value.replace(/[^0-9]/g, "").slice(0, 1) })} placeholder="roh" /></Field></div>
         </div>
       ) : (
         <>

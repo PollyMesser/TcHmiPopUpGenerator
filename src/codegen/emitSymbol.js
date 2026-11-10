@@ -72,9 +72,23 @@ function emitText(parent, b, mb) {
   // Ohne Symbol: cntT == elT (unveraendertes Layout, stabile Ausgabe fuer Bestands-Popups)
   return `${I}// Text\n${I}(function () {\n${I}    var elT = document.createElement('div');\n${I}    elT.style.cssText = 'margin-bottom:${mb};${bgCss}';\n${I}    var cntT = elT;${headingBlock}${bodyBlock}\n${I}    ${parent}.appendChild(elT);\n${I}})();`;
 }
+// Nachkommastellen fuer 'Wert lesen' (optional, b.decimals 0..6). Leer = bisheriges
+// Verhalten String(v) -> Bestandscode byte-identisch (Golden-neutral).
+function readDecOf(b) {
+  const t = String(b.decimals == null ? "" : b.decimals).trim();
+  if (t === "") return -1;
+  const n = parseInt(t, 10);
+  return isNaN(n) || n < 0 ? -1 : Math.min(6, n);
+}
+// Ausdruck fuer den angezeigten Wert: mit Nachkommastellen nur fuer endliche Zahlen (kein BOOL/Text)
+function readValExpr(vExpr, dec) {
+  if (dec < 0) return `String(${vExpr})`;
+  return `(function (x) { var n = Number(x); return (typeof x !== 'boolean' && x !== '' && x != null && isFinite(n)) ? n.toFixed(${dec}) : String(x); })(${vExpr})`;
+}
 function emitRead(parent, b, mb) {
   const uStr = unitSuffix(b.unit);
-  return `${I}// Wert lesen: ${b.symbol}\n${I}(function () {\n${I}    var row = document.createElement('div');\n${I}    row.style.cssText = 'display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:${mb};';\n${I}    var lbl = document.createElement('span');\n${I}    lbl.style.cssText = 'font-size:14px;color:' + p.bodyText + ';';\n${I}    lbl.textContent = ${locExpr(b.loc, b.label)};\n${I}    var valEl = document.createElement('span');\n${I}    valEl.style.cssText = 'font-size:14px;font-weight:500;color:' + p.bodyText + ';text-align:right;font-variant-numeric:tabular-nums;';\n${I}    valEl.textContent = '…';\n${I}    row.appendChild(lbl); row.appendChild(valEl);\n${I}    ${parent}.appendChild(row);\n${I}    subscribe(${jsStr(wrapSym(b.symbol))}, function (v) { valEl.textContent = String(v) + ${jsStr(uStr)}; });\n${I}})();`;
+  const dec = readDecOf(b);
+  return `${I}// Wert lesen: ${b.symbol}\n${I}(function () {\n${I}    var row = document.createElement('div');\n${I}    row.style.cssText = 'display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:${mb};';\n${I}    var lbl = document.createElement('span');\n${I}    lbl.style.cssText = 'font-size:14px;color:' + p.bodyText + ';';\n${I}    lbl.textContent = ${locExpr(b.loc, b.label)};\n${I}    var valEl = document.createElement('span');\n${I}    valEl.style.cssText = 'font-size:14px;font-weight:500;color:' + p.bodyText + ';text-align:right;font-variant-numeric:tabular-nums;';\n${I}    valEl.textContent = '…';\n${I}    row.appendChild(lbl); row.appendChild(valEl);\n${I}    ${parent}.appendChild(row);\n${I}    subscribe(${jsStr(wrapSym(b.symbol))}, function (v) { valEl.textContent = ${readValExpr("v", dec)} + ${jsStr(uStr)}; });\n${I}})();`;
 }
 function emitBool(parent, b, mb) {
   return `${I}// Boolean-Anzeige: ${b.symbol}\n${I}(function () {\n${I}    var row = document.createElement('div');\n${I}    row.style.cssText = 'display:flex;align-items:center;gap:10px;margin-bottom:${mb};';\n${I}    var dot = document.createElement('span');\n${I}    dot.style.cssText = 'width:18px;height:18px;border-radius:50%;flex:0 0 auto;background:' + p.inactive + ';transition:background .15s;';\n${I}    var lbl = document.createElement('span');\n${I}    lbl.style.cssText = 'font-size:14px;color:' + p.bodyText + ';';\n${I}    lbl.textContent = ${locExpr(b.loc, b.label)};\n${I}    row.appendChild(dot); row.appendChild(lbl);\n${I}    ${parent}.appendChild(row);\n${I}    subscribe(${jsStr(wrapSym(b.symbol))}, function (v) { dot.style.background = v ? p.active : p.inactive; });\n${I}})();`;
@@ -378,4 +392,4 @@ function emitBlockSym(b, parent) {
   return "";
 }
 
-export { fillBg, doneCheck, labelOverFill, emitText, emitRead, emitBool, emitCheck, trigActionSym, trigActionUC, emitInput, progressParams, emitProgress, emitButtons, emitButtonItem, emitButtonItemUC, emitItem, emitRow, emitEnum, emitEnumSet, emitStatus, blockCodeSym };
+export { fillBg, doneCheck, labelOverFill, emitText, readDecOf, readValExpr, emitRead, emitBool, emitCheck, trigActionSym, trigActionUC, emitInput, progressParams, emitProgress, emitButtons, emitButtonItem, emitButtonItemUC, emitItem, emitRow, emitEnum, emitEnumSet, emitStatus, blockCodeSym };

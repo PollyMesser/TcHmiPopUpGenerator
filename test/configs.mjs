@@ -972,4 +972,22 @@ add("button_confirm_done_uc", {
   ],
 });
 
+// ── Wert lesen mit Nachkommastellen (Symbol- und UC-Modus) ──
+add("read_decimals", {
+  mode: "event",
+  fnName: "AC_ReadDecimals",
+  blocks: [
+    { ...newBlock("read"), label: "Druck", symbol: "ADS.AF_PLC.GVL_MBClient.S1_fFiltPress", unit: "bar", decimals: "2" },
+    { ...newBlock("read"), label: "Roh", symbol: "ADS.AF_PLC.GVL_MBClient.S1_fNStep" },
+  ],
+});
+add("read_decimals_uc", {
+  mode: "usercontrol",
+  fnName: "AC_ReadDecimalsUc",
+  hostSuffix: ".btn_Read",
+  blocks: [
+    { ...newBlock("read"), label: "Druck", symbol: "Pressure", unit: "bar", decimals: "1" },
+  ],
+});
+
 export { CONFIGS };

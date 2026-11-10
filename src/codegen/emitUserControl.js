@@ -1,6 +1,6 @@
 import { jsStr, locExpr, unitSuffix, attrName, I, cmpExpr, condOp, condVal, durHelpers, fnCallExpr } from "./helpers.js";
 import { COLORS } from "../constants/palette.js";
-import { emitText, emitButtonItemUC, progressParams, trigActionUC, fillBg, doneCheck, labelOverFill } from "./emitSymbol.js";
+import { emitText, emitButtonItemUC, progressParams, trigActionUC, fillBg, doneCheck, labelOverFill, readDecOf, readValExpr } from "./emitSymbol.js";
 import { emitPlot } from "./emitPlot.js";
 import { emitBar } from "./emitBar.js";
 import { emitGauge } from "./emitGauge.js";
@@ -16,7 +16,8 @@ import { usesKeypad, emitInputKeypad } from "./emitNumPad.js";
 function emitReadUC(parent, b, mb) {
   const a = jsStr(attrName(b.symbol));
   const uStr = unitSuffix(b.unit);
-  return `${I}// Wert lesen (Attribut): ${attrName(b.symbol)}\n${I}(function () {\n${I}    var row = document.createElement('div');\n${I}    row.style.cssText = 'display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:${mb};';\n${I}    var lbl = document.createElement('span');\n${I}    lbl.style.cssText = 'font-size:14px;color:' + p.bodyText + ';';\n${I}    lbl.textContent = ${locExpr(b.loc, b.label)};\n${I}    var valEl = document.createElement('span');\n${I}    valEl.style.cssText = 'font-size:14px;font-weight:500;color:' + p.bodyText + ';text-align:right;font-variant-numeric:tabular-nums;';\n${I}    valEl.textContent = '…';\n${I}    row.appendChild(lbl); row.appendChild(valEl);\n${I}    ${parent}.appendChild(row);\n${I}    updaters.push(function () { valEl.textContent = String(gv(${a}, '')) + ${jsStr(uStr)}; });\n${I}})();`;
+  const dec = readDecOf(b);
+  return `${I}// Wert lesen (Attribut): ${attrName(b.symbol)}\n${I}(function () {\n${I}    var row = document.createElement('div');\n${I}    row.style.cssText = 'display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:${mb};';\n${I}    var lbl = document.createElement('span');\n${I}    lbl.style.cssText = 'font-size:14px;color:' + p.bodyText + ';';\n${I}    lbl.textContent = ${locExpr(b.loc, b.label)};\n${I}    var valEl = document.createElement('span');\n${I}    valEl.style.cssText = 'font-size:14px;font-weight:500;color:' + p.bodyText + ';text-align:right;font-variant-numeric:tabular-nums;';\n${I}    valEl.textContent = '…';\n${I}    row.appendChild(lbl); row.appendChild(valEl);\n${I}    ${parent}.appendChild(row);\n${I}    updaters.push(function () { valEl.textContent = ${readValExpr(`gv(${a}, '')`, dec)} + ${jsStr(uStr)}; });\n${I}})();`;
 }
 function emitBoolUC(parent, b, mb) {
   const a = jsStr(attrName(b.symbol));
