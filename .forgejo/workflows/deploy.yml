@@ -1,0 +1,49 @@
+# Deploy auf dock3: Image direkt auf dem Docker-Host bauen (Runner cs-dock3
+# mit Docker-Socket) und den Portainer-Stack per Webhook neu starten.
+#
+# Gilt nur für Forgejo. Solange .forgejo/workflows existiert, ignoriert
+# Forgejo .github/workflows (GitHub Pages bleibt davon unberührt).
+#
+# Repo-Secret (optional, nach dem ersten Anlegen des Stacks):
+#   PORTAINER_WEBHOOK  Webhook-URL des Stacks cs-popupgenerator
+name: Deploy dock3
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  APP_NAME: popupgenerator   # = Pfad im Gateway, Kleinbuchstaben
+
+jobs:
+  deploy:
+    runs-on: docker
+    container:
+      image: docker:cli
+      options: -v /var/run/docker.sock:/var/run/docker.sock
+    steps:
+      - name: Werkzeuge installieren
+        run: apk add --no-cache nodejs git curl
+
+      - uses: actions/checkout@v4
+
+      - name: Image bauen
+        run: |
+          docker build \
+            -f deploy/Dockerfile \
+            --build-arg BASE_PATH="/$APP_NAME/" \
+            -t "$APP_NAME-web:latest" \
+            .
+
+      - name: Alte Images dieser App aufräumen
+        run: docker image prune -f --filter "label=de.aquachem.app=$APP_NAME"
+
+      - name: Portainer-Stack neu starten
+        run: |
+          WEBHOOK="${{ secrets.PORTAINER_WEBHOOK }}"
+          if [ -z "$WEBHOOK" ]; then
+            echo "Secret PORTAINER_WEBHOOK fehlt: Image ist gebaut, Stack bitte in Portainer neu deployen."
+            exit 0
+          fi
+          curl -fsS -X POST "$WEBHOOK"

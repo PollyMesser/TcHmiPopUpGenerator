@@ -1,0 +1,23 @@
+# Portainer-Stack "cs-popupgenerator" (Umgebung dock3, Build method: Repository)
+# Compose path: docker-compose.portainer.yml
+#
+# Erreichbar nur über das Gateway: http://10.32.128.63/popupgenerator/
+# Kein Port, keine eigene IP.
+#
+# Das Image baut der Forgejo-Workflow (.forgejo/workflows/deploy.yml)
+# direkt auf dock3. Vor dem ersten Anlegen des Stacks muss der Workflow
+# einmal gelaufen sein, sonst existiert das Image noch nicht.
+services:
+  web:
+    image: popupgenerator-web:latest
+    # Lokal gebautes Image, nicht aus einer Registry ziehen
+    pull_policy: never
+    restart: unless-stopped
+    networks:
+      proxy-net:
+        # Unter diesem Namen spricht das Gateway den Container an
+        aliases: [popupgenerator-web]
+
+networks:
+  proxy-net:
+    external: true

@@ -1,0 +1,13 @@
+# Nur das, was der Build braucht, geht in den Docker-Kontext
+node_modules
+dist
+.git
+.github
+.forgejo
+.claude
+Claude outputs
+src-tauri
+test
+analytics/test
+analytics/demo
+*.log
