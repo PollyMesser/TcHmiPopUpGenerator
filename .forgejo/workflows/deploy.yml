@@ -6,6 +6,8 @@
 #
 # Repo-Secret (optional, nach dem ersten Anlegen des Stacks):
 #   PORTAINER_WEBHOOK  Webhook-URL des Stacks cs-popupgenerator
+# Repo-Variable (zusammen mit dem Secret):
+#   PORTAINER_PUBKEY   SHA-256 des Portainer-Schlüssels (Base64, siehe gateway/README.md)
 name: Deploy dock3
 
 on:
@@ -39,11 +41,21 @@ jobs:
       - name: Alte Images dieser App aufräumen
         run: docker image prune -f --filter "label=de.aquachem.app=$APP_NAME"
 
+      # Portainer (:9443) hat ein selbst signiertes Zertifikat. -k schaltet
+      # nur die CA-Prüfung ab; --pinnedpubkey akzeptiert ausschließlich den
+      # Schlüssel aus der Variable PORTAINER_PUBKEY (sonst Abbruch, Fehler 90).
       - name: Portainer-Stack neu starten
         run: |
           WEBHOOK="${{ secrets.PORTAINER_WEBHOOK }}"
+          PUBKEY="${{ vars.PORTAINER_PUBKEY }}"
           if [ -z "$WEBHOOK" ]; then
             echo "Secret PORTAINER_WEBHOOK fehlt: Image ist gebaut, Stack bitte in Portainer neu deployen."
             exit 0
           fi
-          curl -fsS -X POST "$WEBHOOK"
+          if [ -z "$PUBKEY" ]; then
+            echo "Variable PORTAINER_PUBKEY fehlt (siehe gateway/README.md, Abschnitt Portainer)."
+            exit 1
+          fi
+          # Wert mit oder ohne Präfix "sha256//" zulassen
+          PUBKEY="sha256//${PUBKEY#sha256//}"
+          curl -fsS -k --pinnedpubkey "$PUBKEY" -X POST "$WEBHOOK"
