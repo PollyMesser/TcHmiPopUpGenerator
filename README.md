@@ -200,32 +200,62 @@ Zu jedem Popup, Baustein, Button und **jeder Tabellenspalte** lässt sich option
 
 Die Auflösung erfolgt zur Laufzeit über `TcHmi.Server.getCurrentUserConfig().userIsInGroups` (Whitelist, „Allow gewinnt"). Feiner gesetzte Berechtigungen (Baustein/Button/Spalte) überschreiben die popup-weite. Ohne aktivierte Berechtigung wird **kein** zusätzlicher Code erzeugt – bestehende Popups bleiben unverändert.
 
+## Erreichbar unter
+
+- Firmennetz: http://10.32.128.63/popupgenerator/ (über das App-Gateway, siehe „Betrieb auf dock3“)
+- GitHub Pages: https://pollymesser.github.io/TcHmiPopUpGenerator/
+
 ## Voraussetzungen
 
-- [Node.js](https://nodejs.org/) (LTS empfohlen)
-- npm
+- [Node.js](https://nodejs.org/) (LTS empfohlen) mit npm
+- Nur für den Desktop-Build: Rust-Toolchain für Tauri (siehe „Desktop-App“)
 
 ## Installation & Start
 
 ```bash
-# Vite-Projekt anlegen
-npm create vite@latest ac-popup -- --template react
+git clone http://forgejo.aquachem.local:3000/CSpannbauer/PopUpGenerator.git ac-popup
 cd ac-popup
-
-# Abhängigkeiten installieren
-npm install
-npm install lucide-react
-
-# App-Code einsetzen: Inhalt des Generators nach src/App.jsx kopieren
-# (ersetzt die vom Template gelieferte App.jsx komplett)
-
-# Entwicklungsserver starten
-npm run dev
+npm ci
+npm run dev        # Entwicklungsserver unter http://localhost:5173/TcHmiPopUpGenerator/
 ```
+
+Weitere Befehle:
+
+```bash
+npm run build      # Produktions-Build → dist/
+npm run preview    # Produktions-Build lokal ansehen
+npm run lint       # ESLint
+npm test           # alle Tests (Golden-Master des Codegens, Logik-Tests, analytics)
+npm run test:record    # Golden-Master-Referenzen neu aufnehmen (nur nach bewusster Änderung am Codegen)
+npm run gen:runtime    # analytics/plots/runtimeSource.generated.js neu erzeugen
+npm run gen:demo       # Demo-JSONs in analytics/demo/ erzeugen
+```
+
+`base` in `vite.config.js` ist `/TcHmiPopUpGenerator/` (Pfad auf GitHub Pages). Server- und Desktop-Build überschreiben ihn per `--base`.
 
 Das Tool nutzt ausschließlich Inline-Styles – **kein Tailwind oder weiteres Styling-Setup** nötig. Einzige externe Abhängigkeit der Generator-Oberfläche ist `lucide-react` für die Icons. Für die **erzeugten** Plot-Popups muss im HMI-Projekt zusätzlich `plotly-3.6.0.min.js` unter `Assets/` liegen (Pfad im Plot-Code anpassbar).
 
-> **Hinweis:** Die von Vite mitgelieferte `src/index.css` zentriert den Body und begrenzt die Breite von `#root`. Falls die Oberfläche eingequetscht wirkt, die entsprechenden Regeln (`body { display:flex; place-items:center }` und `max-width` auf `#root`) entfernen oder die Datei leeren.
+> **Zeilenenden:** `.gitattributes` erzwingt LF. Die Golden-Master-Tests vergleichen byte-genau gegen die LF-Ausgabe des Codegens; mit CRLF brechen sie.
+
+## Projektstruktur
+
+```
+src/
+  App.jsx                  Generator-Oberfläche und Zustand
+  codegen/                 Erzeugung des TcHMI-JavaScript-Codes
+  components/              Oberflächen-Bausteine
+  constants/               Konstanten
+  model/                   Datenmodell der Popup-Konfiguration
+analytics/                 Auswerte-Widgets (Filtrationskurven, Schrittdauern, Verlaufsplot),
+                           übertragen aus der Maschinendaten-App; eigenes README
+test/                      Golden-Master- und Logik-Tests (npm test)
+public/                    statische Dateien
+src-tauri/                 Desktop-App (Tauri, Windows-MSI)
+deploy/                    Dockerfile und nginx.conf für den Betrieb hinter dem Gateway
+docker-compose.portainer.yml   Portainer-Stack cs-popupgenerator
+.forgejo/workflows/deploy.yml  Deploy auf dock3 (läuft nur in Forgejo)
+.github/workflows/deploy.yml   GitHub Pages (läuft nur auf GitHub)
+```
 
 ## Benutzung
 
@@ -286,6 +316,45 @@ Wichtig: Geladen wird die eingebettete Konfiguration, nicht der umgebende JavaSc
 - Plotly (im erzeugten Plot-Popup, aus `Assets/plotly-3.6.0.min.js`)
 - Zielumgebung des erzeugten Codes: Beckhoff TwinCAT HMI Framework (getestet gegen Framework-Version 14.3.500)
 
+## Remotes
+
+| Remote    | Ziel |
+|-----------|------|
+| `origin`  | GitHub: `https://github.com/PollyMesser/TcHmiPopUpGenerator.git` (GitHub Pages, `main` trackt origin) |
+| `forgejo` | Forgejo: `http://forgejo.aquachem.local:3000/CSpannbauer/PopUpGenerator.git` (Deploy auf dock3) |
+
+```bash
+git push                # GitHub → GitHub Pages
+git push forgejo main   # Forgejo → Deploy auf dock3
+```
+
+Beide Workflows liegen im selben Repo und stören sich nicht: Forgejo führt nur `.forgejo/workflows` aus, solange der Ordner existiert, GitHub nur `.github/workflows`.
+
+## Betrieb auf dock3
+
+Die App läuft als Container hinter dem App-Gateway unter http://10.32.128.63/popupgenerator/. Aufbau, Runner, Portainer und Fehlersuche stehen im README des Gateway-Repos (`CSpannbauer/gateway`).
+
+- **Ablauf:** Push auf `main` nach Forgejo → Workflow „Deploy dock3“ (`.forgejo/workflows/deploy.yml`) baut auf dock3 das Image `popupgenerator-web:latest` aus `deploy/Dockerfile` (`BASE_PATH=/popupgenerator/`) → Webhook startet den Portainer-Stack `cs-popupgenerator` neu.
+- **Image-Inhalt:** nur `index.html`, `vite.config.js`, `public/`, `src/` und `analytics/` (Tests, Tauri, Demo-Daten sind per `.dockerignore` ausgeschlossen).
+- **Stack:** `docker-compose.portainer.yml`, ohne Port und eigene IP, Alias `popupgenerator-web` im Netz `proxy-net`, `pull_policy: never` (lokal gebautes Image, keine Registry).
+- **Repo-Einstellungen in Forgejo** (Einstellungen → Actions):
+  - Secret `PORTAINER_WEBHOOK`: Webhook-URL des Stacks `cs-popupgenerator`
+  - Variable `PORTAINER_PUBKEY`: SHA-256 des Portainer-Schlüssels (selbst signiertes Zertifikat, Aufruf mit `curl -k --pinnedpubkey`)
+- **Lokal testen:**
+  ```bash
+  docker build -f deploy/Dockerfile --build-arg BASE_PATH=/popupgenerator/ -t popupgenerator-web:latest .
+  ```
+- **nginx im Container** (`deploy/nginx.conf`): `index.html` mit `no-cache`, `/assets/` 30 Tage `immutable`.
+
+## Desktop-App (Tauri)
+
+`src-tauri/` enthält eine Tauri-2-Hülle, die die gebaute Oberfläche als Windows-Programm (MSI) verpackt. Voraussetzung ist eine Rust-Toolchain.
+
+```bash
+npx tauri dev      # startet npm run dev und öffnet das Fenster
+npx tauri build    # baut mit --base=./ und erzeugt das MSI unter src-tauri/target/
+```
+
 ## Lizenz
 
-Dieses Projekt steht unter der MIT-Lizenz - siehe [LICENSE](LICENCE)
+Dieses Projekt steht unter der MIT-Lizenz – siehe [LICENSE](LICENSE).
